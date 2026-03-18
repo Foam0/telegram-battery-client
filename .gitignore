@@ -19,3 +19,4 @@ TMessagesProj/jni/ffmpeg/android/
 TMessagesProj/jni/ffmpeg/build/
 TMessagesProj/jni/boringssl/build/
 TMessagesProj/jni/dav1d/build/
+__pycache__/
