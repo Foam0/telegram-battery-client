@@ -73,15 +73,15 @@ import androidx.dynamicanimation.animation.FloatValueHolder;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
-import com.google.android.gms.common.api.Status;
-import com.google.android.gms.tasks.Task;
-import com.google.android.gms.wallet.AutoResolveHelper;
-import com.google.android.gms.wallet.IsReadyToPayRequest;
-import com.google.android.gms.wallet.PaymentData;
-import com.google.android.gms.wallet.PaymentDataRequest;
-import com.google.android.gms.wallet.PaymentsClient;
-import com.google.android.gms.wallet.Wallet;
-import com.google.android.gms.wallet.WalletConstants;
+import it.belloworld.mercurygram.compat.gms.common.Status;
+import it.belloworld.mercurygram.compat.gms.tasks.Task;
+import it.belloworld.mercurygram.compat.gms.wallet.AutoResolveHelper;
+import it.belloworld.mercurygram.compat.gms.wallet.IsReadyToPayRequest;
+import it.belloworld.mercurygram.compat.gms.wallet.PaymentData;
+import it.belloworld.mercurygram.compat.gms.wallet.PaymentDataRequest;
+import it.belloworld.mercurygram.compat.gms.wallet.PaymentsClient;
+import it.belloworld.mercurygram.compat.gms.wallet.Wallet;
+import it.belloworld.mercurygram.compat.gms.wallet.WalletConstants;
 import com.stripe.android.Stripe;
 import com.stripe.android.TokenCallback;
 import com.stripe.android.exception.APIConnectionException;
@@ -573,7 +573,9 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
         if (Build.VERSION.SDK_INT >= 23) {
             try {
                 if ((currentStep == STEP_PAYMENT_INFO || currentStep == STEP_SET_PASSWORD_EMAIL) && !paymentForm.invoice.test) {
-                    getParentActivity().getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+                    if (!SharedConfig.disableSecureFlags) {
+                        getParentActivity().getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+                    }
                     AndroidUtilities.logFlagSecure();
                 } else if (SharedConfig.passcodeHash.length() == 0 || SharedConfig.allowScreenCapture) {
                     getParentActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
