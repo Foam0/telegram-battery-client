@@ -144,6 +144,38 @@ public class SharedConfig {
                 .apply();
     }
 
+    public static void toggleMessageDetailsMenu() {
+        messageDetailsMenu = !messageDetailsMenu;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_messageDetailsMenu", messageDetailsMenu)
+                .apply();
+    }
+
+    public static void toggleDisableUnifiedPush() {
+        disableUnifiedPush = !disableUnifiedPush;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableUnifiedPush", disableUnifiedPush)
+                .commit();
+    }
+
+    public static void toggleDisableSecureFlags() {
+        disableSecureFlags = !disableSecureFlags;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableSecureFlags", disableSecureFlags)
+                .commit();
+    }
+
+    public static void setUnifiedPushGateway(String gateway) {
+        unifiedPushGateway = gateway;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putString("mg_unifiedPushGateway", unifiedPushGateway)
+                .apply();
+    }
+
     public static void toggleSurfaceInStories() {
         useSurfaceInStories = !useSurfaceInStories;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -207,9 +239,21 @@ public class SharedConfig {
     public final static int SAVE_TO_GALLERY_FLAG_CHANNELS = 4;
 
     @PushListenerController.PushType
-    public static int pushType = PushListenerController.PUSH_TYPE_FIREBASE;
+    public static int pushType = PushListenerController.PUSH_TYPE_SIMPLE;
     public static String pushString = "";
     public static String pushStringStatus = "";
+
+    // Mercurygram: UnifiedPush
+    public static boolean disableUnifiedPush = false;
+    public static String unifiedPushGateway = "https://push.mercurygram.it/";
+
+    // Mercurygram: UI settings
+    public static boolean messageDetailsMenu = false;
+    public static boolean disableSecureFlags = false;
+    public static boolean useRearRoundVideos = false;
+    public static boolean hideKeyboardOnScroll = false;
+    public static boolean hideAllTab = false;
+    public static boolean sendLargePhotos = false;
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
     public static boolean pushStatSent;
@@ -277,7 +321,7 @@ public class SharedConfig {
     private static final Object localIdSync = new Object();
 
 //    public static int saveToGalleryFlags;
-    public static int mapPreviewType = 2;
+    public static int mapPreviewType = 0;
     public static int searchEngineType = 0;
     public static String searchEngineCustomURLQuery, searchEngineCustomURLAutocomplete;
     public static boolean chatBubbles = Build.VERSION.SDK_INT >= 30;
@@ -488,6 +532,15 @@ public class SharedConfig {
                 editor.putBoolean("hasEmailLogin", hasEmailLogin);
                 editor.putBoolean("floatingDebugActive", isFloatingDebugActive);
                 editor.putBoolean("record_via_sco", recordViaSco);
+                // Mercurygram settings
+                editor.putBoolean("mg_messageDetailsMenu", messageDetailsMenu);
+                editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
+                editor.putString("mg_unifiedPushGateway", unifiedPushGateway);
+                editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
+                editor.putBoolean("mg_useRearRoundVideos", useRearRoundVideos);
+                editor.putBoolean("mg_hideKeyboardOnScroll", hideKeyboardOnScroll);
+                editor.putBoolean("mg_hideAllTab", hideAllTab);
+                editor.putBoolean("mg_sendLargePhotos", sendLargePhotos);
                 editor.apply();
             } catch (Exception e) {
                 FileLog.e(e);
@@ -587,7 +640,7 @@ public class SharedConfig {
 
             preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
             SaveToGallerySettingsHelper.load(preferences);
-            mapPreviewType = preferences.getInt("mapPreviewType", 2);
+            mapPreviewType = preferences.getInt("mapPreviewType", 0);
             searchEngineType = preferences.getInt("searchEngineType", 0);
             raiseToListen = preferences.getBoolean("raise_to_listen", true);
             raiseToSpeak = preferences.getBoolean("raise_to_speak", false);
@@ -676,6 +729,16 @@ public class SharedConfig {
             callEncryptionHintDisplayedCount = preferences.getInt("callEncryptionHintDisplayedCount", 0);
             debugVideoQualities = preferences.getBoolean("debugVideoQualities", false);
             shadowsInSections = preferences.getBoolean("shadowsInSections", false);
+
+            // Mercurygram settings
+            messageDetailsMenu = preferences.getBoolean("mg_messageDetailsMenu", false);
+            disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
+            unifiedPushGateway = preferences.getString("mg_unifiedPushGateway", "https://push.mercurygram.it/");
+            disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
+            useRearRoundVideos = preferences.getBoolean("mg_useRearRoundVideos", false);
+            hideKeyboardOnScroll = preferences.getBoolean("mg_hideKeyboardOnScroll", false);
+            hideAllTab = preferences.getBoolean("mg_hideAllTab", false);
+            sendLargePhotos = preferences.getBoolean("mg_sendLargePhotos", false);
 
             loadDebugConfig(preferences);
 
