@@ -12,11 +12,6 @@ import androidx.annotation.IntDef;
 import androidx.annotation.Keep;
 import androidx.collection.LongSparseArray;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GoogleApiAvailability;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.messaging.FirebaseMessaging;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.messenger.voip.VoIPGroupNotification;
@@ -24,22 +19,26 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.NativeByteBuffer;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
+import org.unifiedpush.android.connector.UnifiedPush;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 
 @Keep
 public class PushListenerController {
     public static final int PUSH_TYPE_FIREBASE = 2,
+        PUSH_TYPE_SIMPLE = 4,
         PUSH_TYPE_HUAWEI = 13;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
             PUSH_TYPE_FIREBASE,
+            PUSH_TYPE_SIMPLE,
             PUSH_TYPE_HUAWEI
     })
     public @interface PushType {}
@@ -67,7 +66,7 @@ public class PushListenerController {
                 if (userConfig.getClientUserId() != 0) {
                     final int currentAccount = a;
                     if (sendStat) {
-                        String tag = pushType == PUSH_TYPE_FIREBASE ? "fcm" : "hcm";
+                        String tag = pushType == PUSH_TYPE_FIREBASE ? "fcm" : (pushType == PUSH_TYPE_HUAWEI ? "hcm" : "up");
                         TLRPC.TL_help_saveAppLog req = new TLRPC.TL_help_saveAppLog();
                         TLRPC.TL_inputAppEvent event = new TLRPC.TL_inputAppEvent();
                         event.time = SharedConfig.pushStringGetTimeStart;
@@ -95,7 +94,7 @@ public class PushListenerController {
     }
 
     public static void processRemoteMessage(@PushType int pushType, String data, long time) {
-        String tag = pushType == PUSH_TYPE_FIREBASE ? "FCM" : "HCM";
+        String tag = pushType == PUSH_TYPE_FIREBASE ? "FCM" : (pushType == PUSH_TYPE_HUAWEI ? "HCM" : "UP");
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d(tag + " PRE START PROCESSING");
         }
@@ -1663,73 +1662,63 @@ public class PushListenerController {
         int getPushType();
     }
 
-    public final static class GooglePushListenerServiceProvider implements IPushListenerServiceProvider {
-        public final static GooglePushListenerServiceProvider INSTANCE = new GooglePushListenerServiceProvider();
+    public final static class UnifiedPushListenerServiceProvider implements IPushListenerServiceProvider {
+        public final static UnifiedPushListenerServiceProvider INSTANCE = new UnifiedPushListenerServiceProvider();
+        private final static UnifiedPushReceiver mReceiver = new UnifiedPushReceiver();
 
-        private Boolean hasServices;
-
-        private GooglePushListenerServiceProvider() {}
+        private UnifiedPushListenerServiceProvider() {}
 
         @Override
-        public String getLogTitle() {
-            return "Google Play Services";
+        public boolean hasServices() {
+            return !UnifiedPush.getDistributors(ApplicationLoader.applicationContext, new ArrayList<>()).isEmpty();
         }
 
         @Override
-        public int getPushType() {
-            return PUSH_TYPE_FIREBASE;
+        public String getLogTitle() {
+            return "UnifiedPush";
         }
 
         @Override
         public void onRequestPushToken() {
-            String currentPushString = SharedConfig.pushString;
-            if (!TextUtils.isEmpty(currentPushString)) {
-                if (BuildVars.DEBUG_PRIVATE_VERSION && BuildVars.LOGS_ENABLED) {
-                    FileLog.d("FCM regId = " + currentPushString);
-                }
+            if (SharedConfig.disableUnifiedPush) {
+                UnifiedPush.unregisterApp(ApplicationLoader.applicationContext, "default");
             } else {
-                if (BuildVars.LOGS_ENABLED) {
-                    FileLog.d("FCM Registration not found.");
+                String currentPushString = SharedConfig.pushString;
+                if (!TextUtils.isEmpty(currentPushString)) {
+                    if (BuildVars.DEBUG_PRIVATE_VERSION && BuildVars.LOGS_ENABLED) {
+                        FileLog.d("UnifiedPush endpoint = " + currentPushString);
+                    }
+                } else {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("No UnifiedPush string found");
+                    }
                 }
+                Utilities.globalQueue.postRunnable(() -> {
+                    try {
+                        SharedConfig.pushStringGetTimeStart = SystemClock.elapsedRealtime();
+                        SharedConfig.saveConfig();
+                        if (UnifiedPush.getAckDistributor(ApplicationLoader.applicationContext) == null) {
+                            List<String> distributors = UnifiedPush.getDistributors(ApplicationLoader.applicationContext, new ArrayList<>());
+                            if (!distributors.isEmpty()) {
+                                UnifiedPush.saveDistributor(ApplicationLoader.applicationContext, distributors.get(0));
+                            }
+                        }
+                        UnifiedPush.registerApp(
+                                ApplicationLoader.applicationContext,
+                                "default",
+                                new ArrayList<>(),
+                                "Telegram Simple Push"
+                        );
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                    }
+                });
             }
-            Utilities.globalQueue.postRunnable(() -> {
-                try {
-                    SharedConfig.pushStringGetTimeStart = SystemClock.elapsedRealtime();
-                    FirebaseApp.initializeApp(ApplicationLoader.applicationContext);
-                    FirebaseMessaging.getInstance().getToken()
-                            .addOnCompleteListener(task -> {
-                                SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
-                                if (!task.isSuccessful()) {
-                                    if (BuildVars.LOGS_ENABLED) {
-                                        FileLog.d("Failed to get regid");
-                                    }
-                                    SharedConfig.pushStringStatus = "__FIREBASE_FAILED__";
-                                    PushListenerController.sendRegistrationToServer(getPushType(), null);
-                                    return;
-                                }
-                                String token = task.getResult();
-                                if (!TextUtils.isEmpty(token)) {
-                                    PushListenerController.sendRegistrationToServer(getPushType(), token);
-                                }
-                            });
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                }
-            });
         }
 
         @Override
-        public boolean hasServices() {
-            if (hasServices == null) {
-                try {
-                    int resultCode = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ApplicationLoader.applicationContext);
-                    hasServices = resultCode == ConnectionResult.SUCCESS;
-                } catch (Exception e) {
-                    FileLog.e(e);
-                    hasServices = false;
-                }
-            }
-            return hasServices;
+        public int getPushType() {
+            return PUSH_TYPE_SIMPLE;
         }
     }
 }

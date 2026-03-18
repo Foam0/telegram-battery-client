@@ -1763,7 +1763,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             return;
         }
         if (res.type instanceof TLRPC.TL_auth_sentCodeTypeFirebaseSms && !res.type.verifiedFirebase && !isRequestingFirebaseSms) {
-            if (PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices()) {
+            if (false) {
                 TLRPC.TL_auth_sentCodeTypeFirebaseSms r = (TLRPC.TL_auth_sentCodeTypeFirebaseSms) res.type;
                 needShowProgress(0);
                 isRequestingFirebaseSms = true;
@@ -3074,7 +3074,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             TLRPC.TL_codeSettings settings = new TLRPC.TL_codeSettings();
             settings.allow_flashcall = simcardAvailable && allowCall && allowCancelCall && allowReadCallLog;
             settings.allow_missed_call = simcardAvailable && allowCall;
-            settings.allow_app_hash = settings.allow_firebase = PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices();
+            settings.allow_app_hash = settings.allow_firebase = false;
             if (forceDisableSafetyNet || TextUtils.isEmpty(BuildVars.SAFETYNET_KEY)) {
                 settings.allow_firebase = false;
             }
@@ -5959,9 +5959,11 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             signInWithGoogleView.setMaxLines(2);
 
             SpannableStringBuilder str = new SpannableStringBuilder("d ");
-            Drawable dr = ContextCompat.getDrawable(context, R.drawable.googleg_standard_color_18);
-            dr.setBounds(0, AndroidUtilities.dp(9), AndroidUtilities.dp(18), AndroidUtilities.dp(18 + 9));
-            str.setSpan(new ImageSpan(dr, ImageSpan.ALIGN_BOTTOM), 0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            Drawable dr = null;
+            if (dr != null) {
+                dr.setBounds(0, AndroidUtilities.dp(9), AndroidUtilities.dp(18), AndroidUtilities.dp(18 + 9));
+                str.setSpan(new ImageSpan(dr, ImageSpan.ALIGN_BOTTOM), 0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
             str.setSpan(new ReplacementSpan() {
                 @Override
                 public int getSize(@NonNull Paint paint, CharSequence text, int start, int end, @Nullable Paint.FontMetricsInt fm) {
@@ -6053,7 +6055,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             requestPhone = currentParams.getString("phoneFormated");
             phoneHash = currentParams.getString("phoneHash");
 
-            int v = params.getBoolean("googleSignInAllowed") && PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices() ? VISIBLE : GONE;
+            int v = params.getBoolean("googleSignInAllowed") && false ? VISIBLE : GONE;
             loginOrView.setVisibility(v);
             signInWithGoogleView.setVisibility(v);
 
@@ -6305,9 +6307,11 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             signInWithGoogleView.setMaxLines(2);
 
             SpannableStringBuilder str = new SpannableStringBuilder("d ");
-            Drawable dr = ContextCompat.getDrawable(context, R.drawable.googleg_standard_color_18);
-            dr.setBounds(0, AndroidUtilities.dp(9), AndroidUtilities.dp(18), AndroidUtilities.dp(18 + 9));
-            str.setSpan(new ImageSpan(dr, ImageSpan.ALIGN_BOTTOM), 0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            Drawable dr = null;
+            if (dr != null) {
+                dr.setBounds(0, AndroidUtilities.dp(9), AndroidUtilities.dp(18), AndroidUtilities.dp(18 + 9));
+                str.setSpan(new ImageSpan(dr, ImageSpan.ALIGN_BOTTOM), 0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
             str.setSpan(new ReplacementSpan() {
                 @Override
                 public int getSize(@NonNull Paint paint, CharSequence text, int start, int end, @Nullable Paint.FontMetricsInt fm) {
@@ -6668,7 +6672,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 confirmTextView.setText(AndroidUtilities.formatSpannable(getString(R.string.CheckYourEmailSubtitle), confirmText));
             }
 
-            int v = params.getBoolean("googleSignInAllowed") && PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices() ? VISIBLE : GONE;
+            int v = params.getBoolean("googleSignInAllowed") && false ? VISIBLE : GONE;
             loginOrView.setVisibility(v);
             signInWithGoogleView.setVisibility(v);
 
