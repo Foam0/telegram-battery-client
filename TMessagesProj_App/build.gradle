@@ -3,6 +3,8 @@ apply plugin: 'com.android.application'
 repositories {
     mavenCentral()
     google()
+    maven {
+    }
 }
 
 configurations {
@@ -10,19 +12,18 @@ configurations {
 }
 
 configurations.all {
-    exclude group: 'com.google.firebase', module: 'firebase-core'
     exclude group: 'androidx.recyclerview', module: 'recyclerview'
 }
 
 dependencies {
     implementation project(':TMessagesProj')
+    implementation 'androidx.multidex:multidex:2.0.1'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-    implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
 }
 
 android {
-    compileSdkVersion 35
-    buildToolsVersion '35.0.0'
+    compileSdkVersion 36
+    buildToolsVersion '36.0.0'
 
     defaultConfig.applicationId = APP_PACKAGE
 
@@ -154,7 +155,7 @@ android {
         }
     }
 
-    defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
+    defaultConfig.versionCode = Integer.parseInt(MG_VERSION_CODE)
 
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
@@ -173,8 +174,8 @@ android {
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion 35
-        versionName APP_VERSION_NAME
-        ndkVersion "21.4.7075529"
+        versionName MG_VERSION_NAME
+        ndkVersion "23.2.8568313"
 
         multiDexEnabled true
 
@@ -198,4 +199,3 @@ android {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
