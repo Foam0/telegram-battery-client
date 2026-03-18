@@ -588,6 +588,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private final static int edit_profile = 41;
     private final static int copy_link_profile = 42;
     private final static int set_username = 43;
+    private final static int show_admins = 200;
     private final static int bot_privacy = 44;
     private final static int delete_group = 45;
     private final static int enable_no_forwards = 46;
@@ -649,6 +650,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int userInfoRow;
     private int channelInfoRow;
     private int usernameRow;
+    private int idRow;
     private int notificationsDividerRow;
     private int notificationsRow;
     private int bizHoursRow;
@@ -2610,6 +2612,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }
                 } else if (id == report) {
                     ReportBottomSheet.openChat(ProfileActivity.this, getDialogId());
+                } else if (id == show_admins) {
+                    Bundle args = new Bundle();
+                    args.putLong("chat_id", chatId);
+                    args.putInt("type", ChatUsersActivity.TYPE_ADMIN);
+                    ChatUsersActivity fragment = new ChatUsersActivity(args);
+                    fragment.setInfo(chatInfo);
+                    presentFragment(fragment);
                 } else if (id == edit_channel) {
                     if (isTopic) {
                         presentFragment(TopicCreateFragment.create(chatId, topicId));
@@ -4268,7 +4277,27 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 return;
             }
             listView.stopScroll();
-            if (position == affiliateRow) {
+            if (position == idRow && did != 0) {
+                final long cdid;
+                if (dialogId != 0) {
+                    cdid = dialogId;
+                } else if (userId != 0) {
+                    cdid = userId;
+                } else if (ChatObject.isChannel(currentChat)) {
+                    cdid = -(1_000_000_000_000L + chatId);
+                } else {
+                    cdid = -chatId;
+                }
+                try {
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
+                    android.content.ClipData clip = android.content.ClipData.newPlainText("label", cdid + "");
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(getParentActivity(), LocaleController.getString("TextCopied", R.string.TextCopied), Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                return;
+            } else if (position == affiliateRow) {
                 TLRPC.User user = getMessagesController().getUser(userId);
                 if (userInfo != null && userInfo.starref_program != null) {
                     final long selfId = getUserConfig().getClientUserId();
@@ -4603,7 +4632,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                                 "Reload app config",
                                 !SharedConfig.forceForumTabs ? "Force Forum Tabs" : "Do Not Force Forum Tabs",
                             "Make Memory Dump",
-                                BuildVars.DEBUG_PRIVATE_VERSION ? (SharedConfig.fastWallpaperDisabled ? "enable wallpaper shader" : "disable wallpaper shader") : null
+                                BuildVars.DEBUG_PRIVATE_VERSION ? (SharedConfig.fastWallpaperDisabled ? "enable wallpaper shader" : "disable wallpaper shader") : null,
+                                // [MG] Mercurygram Debug items
+                                !SharedConfig.messageDetailsMenu ? "Enable Message Details menu" : "Disable Message Details menu",
+                                SharedConfig.disableUnifiedPush ? "Enable Unified Push" : "Disable Unified Push",
+                                SharedConfig.disableSecureFlags ? "Enable Secure Flags" : "Disable Secure Flags"
                         };
 
                         builder.setItems(items, (dialog, which) -> {
@@ -4899,6 +4932,18 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                                 FileLog.getInstance().dumpMemory(true);
                             } else if (which == 38) {
                                 SharedConfig.toggleFastWallpaperDisabled();
+                            } else if (which == 39) {
+                                SharedConfig.toggleMessageDetailsMenu();
+                            } else if (which == 40) {
+                                SharedConfig.toggleDisableUnifiedPush();
+                                Activity activity = AndroidUtilities.findActivity(context);
+                                final PackageManager pm = activity.getPackageManager();
+                                final Intent intent = pm.getLaunchIntentForPackage(activity.getPackageName());
+                                activity.finishAffinity();
+                                activity.startActivity(intent);
+                                System.exit(0);
+                            } else if (which == 41) {
+                                SharedConfig.toggleDisableSecureFlags();
                             }
                         });
                         builder.setNegativeButton(getString("Cancel", R.string.Cancel), null);
@@ -10308,6 +10353,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         locationRow = -1;
         channelInfoRow = -1;
         usernameRow = -1;
+        idRow = -1;
         settingsTimerRow = -1;
         settingsKeyRow = -1;
         notificationsDividerRow = -1;
@@ -10408,6 +10454,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 numberSectionRow = rowCount++;
                 numberRow = rowCount++;
                 setUsernameRow = rowCount++;
+                idRow = rowCount++;
                 bioRow = rowCount++;
 
                 settingsSectionRow = rowCount++;
@@ -10495,6 +10542,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
                 }
+                idRow = rowCount++;
                 if (userInfo != null) {
                     if (userInfo.birthday != null) {
                         birthdayRow = rowCount++;
@@ -10607,6 +10655,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
             }
             usernameRow = rowCount++;
+            idRow = rowCount++;
             if (actionsView == null) {
                 notificationsSimpleRow = rowCount++;
             }
@@ -11974,6 +12023,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     voiceChatAction = call != null || voiceChatAction;
                 }
                 if (chat.megagroup) {
+                    if (!chat.left && !chat.kicked) {
+                        otherItem.addSubItem(show_admins, R.drawable.msg_admins, LocaleController.getString(R.string.ChannelAdministrators));
+                    }
                     if (chatInfo == null || !chatInfo.participants_hidden || ChatObject.hasAdminRights(chat)) {
                         canSearchMembers = true;
                         otherItem.addSubItem(search_members, R.drawable.msg_search, LocaleController.getString(R.string.SearchMembers));
@@ -12048,6 +12100,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (!ChatObject.isKickedFromChat(chat) && !ChatObject.isLeftFromChat(chat)) {
                     if (chatInfo == null || !chatInfo.participants_hidden || ChatObject.hasAdminRights(chat)) {
                         canSearchMembers = true;
+                        otherItem.addSubItem(show_admins, R.drawable.msg_admins, LocaleController.getString(R.string.ChannelAdministrators));
                         otherItem.addSubItem(search_members, R.drawable.msg_search, LocaleController.getString(R.string.SearchMembers));
                     }
                 }
@@ -13225,6 +13278,20 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         isFragmentPhoneNumber = phoneNumber != null && phoneNumber.matches("888\\d{8}");
                         detailCell.setTextAndValue(text, LocaleController.getString(isFragmentPhoneNumber ? R.string.AnonymousNumber : R.string.PhoneMobile), false);
+                    } else if (position == idRow) {
+                        final long did;
+                        if (dialogId != 0) {
+                            did = dialogId;
+                        } else if (userId != 0) {
+                            did = userId;
+                        } else if (ChatObject.isChannel(currentChat)) {
+                            did = -(1_000_000_000_000L + chatId);
+                        } else {
+                            did = -chatId;
+                        }
+                        if (did != 0) {
+                            detailCell.setTextAndValue(did + "", "ID", false);
+                        }
                     } else if (position == noteRow) {
                         final TLRPC.UserFull userInfo = getMessagesController().getUserFull(userId);
                         if (userInfo == null) return;
@@ -13999,7 +14066,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             if (position == infoHeaderRow || position == membersHeaderRow || position == settingsSectionRow2 ||
                     position == numberSectionRow || position == helpHeaderRow || position == debugHeaderRow || position == botPermissionsHeader) {
                 return VIEW_TYPE_HEADER;
-            } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow) {
+            } else if (position == idRow || position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow) {
                 return VIEW_TYPE_TEXT_DETAIL;
             } else if (position == usernameRow || position == setUsernameRow) {
                 return VIEW_TYPE_TEXT_DETAIL_MULTILINE;
