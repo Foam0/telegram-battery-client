@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]*'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake golang-go gperf g++ libuv1 libuv1-dev make meson nasm ninja-build yasm
+
+      - name: Install NDK and build-tools
+        run: $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "ndk;23.2.8568313" "build-tools;36.0.0"
+
+      - name: Compute submodule hash
+        id: submodules
+        run: echo "hash=$(git submodule status --recursive | sha256sum | cut -c1-16)" >> $GITHUB_OUTPUT
+
+      - name: Cache native libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            TMessagesProj/jni/boringssl/build
+            TMessagesProj/jni/dav1d/build
+            TMessagesProj/jni/ffmpeg/build
+            TMessagesProj/jni/ffmpeg/include
+            TMessagesProj/jni/libvpx/build
+            TMessagesProj/jni/tde2e/build
+            TMessagesProj/jni/td/build-tde2e-arm64-v8a
+            TMessagesProj/jni/td/build-tde2e-armeabi-v7a
+            TMessagesProj/jni/td/build-tde2e-x86_64
+            TMessagesProj/jni/td/build-tde2e-x86
+            TMessagesProj/jni/td/build-tde2e-host
+          key: native-ndk23.2-${{ hashFiles('TMessagesProj/jni/build_*.sh', 'TMessagesProj/jni/patch_*.sh', 'TMessagesProj/jni/CMakeLists.txt') }}-${{ steps.submodules.outputs.hash }}
+
+      - name: Apply native source patches
+        run: |
+          cd TMessagesProj/jni
+          bash patch_boringssl.sh
+          bash patch_ffmpeg.sh
+
+      - name: Create API_KEYS
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_HASH: ${{ secrets.APP_HASH }}
+        run: printf 'APP_ID = %s\nAPP_HASH = %s\n' "$APP_ID" "$APP_HASH" > API_KEYS
+
+      - name: Build APKs
+        env:
+          NDK: ${{ env.ANDROID_SDK_ROOT }}/ndk/23.2.8568313
+          NINJA_PATH: /usr/bin/ninja
+        run: |
+          ./gradlew assembleAfatRelease assembleAfatDebug \
+            assembleAfatFdArm32Release assembleAfatFdArm64Release assembleAfatFdX86Release assembleAfatFdX86_64Release \
+            --no-daemon
+
+      - name: Sign APKs
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
+          KS_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > /tmp/release.jks
+
+          BUILD_TOOLS="${ANDROID_SDK_ROOT}/build-tools/36.0.0"
+          APK_DIR=TMessagesProj_App/build/outputs/apk
+
+          sign_apk() {
+            "${BUILD_TOOLS}/apksigner" sign \
+              --ks /tmp/release.jks \
+              --ks-pass "env:KS_PASS" \
+              --key-pass "env:KS_PASS" \
+              --out "$2" "$1"
+          }
+
+          sign_apk "$APK_DIR/afat/release/app.apk"                  "$APK_DIR/afat/release/app-release.apk"
+          sign_apk "$APK_DIR/afat/debug/app.apk"                    "$APK_DIR/afat/debug/app-debug.apk"
+          sign_apk "$APK_DIR/afatFdArm32/release/afatFdArm32.apk"   "$APK_DIR/Mercurygram-armeabi-v7a.apk"
+          sign_apk "$APK_DIR/afatFdArm64/release/afatFdArm64.apk"   "$APK_DIR/Mercurygram-arm64-v8a.apk"
+          sign_apk "$APK_DIR/afatFdX86/release/afatFdX86.apk"       "$APK_DIR/Mercurygram-x86.apk"
+          sign_apk "$APK_DIR/afatFdX86_64/release/afatFdX86_64.apk" "$APK_DIR/Mercurygram-x86_64.apk"
+
+          rm /tmp/release.jks
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            TMessagesProj_App/build/outputs/apk/afat/debug/app-debug.apk
+            TMessagesProj_App/build/outputs/apk/afat/release/app-release.apk
+            TMessagesProj_App/build/outputs/apk/Mercurygram-armeabi-v7a.apk
+            TMessagesProj_App/build/outputs/apk/Mercurygram-arm64-v8a.apk
+            TMessagesProj_App/build/outputs/apk/Mercurygram-x86.apk
+            TMessagesProj_App/build/outputs/apk/Mercurygram-x86_64.apk
