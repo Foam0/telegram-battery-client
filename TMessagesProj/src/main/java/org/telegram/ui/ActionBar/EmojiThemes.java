@@ -176,7 +176,7 @@ public class EmojiThemes {
         if (lastDayCustomTheme == null || Theme.getTheme(lastDayCustomTheme) == null) {
             lastDayCustomTheme = preferences.getString("lastDayTheme", "Blue");
             Theme.ThemeInfo themeInfo = Theme.getTheme(lastDayCustomTheme);
-            if (themeInfo == null) {
+            if (themeInfo == null || !themeInfo.hasAccentColors()) {
                 lastDayCustomTheme = "Blue";
                 dayAccentId = 99;
             } else {
@@ -199,7 +199,7 @@ public class EmojiThemes {
         if (lastDarkCustomTheme == null || Theme.getTheme(lastDarkCustomTheme) == null) {
             lastDarkCustomTheme = preferences.getString("lastDarkTheme", "Dark Blue");
             Theme.ThemeInfo themeInfo = Theme.getTheme(lastDarkCustomTheme);
-            if (themeInfo == null) {
+            if (themeInfo == null || !themeInfo.hasAccentColors()) {
                 lastDarkCustomTheme = "Dark Blue";
                 darkAccentId = 0;
             } else {
