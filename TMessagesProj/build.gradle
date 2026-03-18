@@ -6,6 +6,10 @@ repositories {
     mavenCentral()
     google()
     maven {
+        url 'https://www.jitpack.io'
+        content {
+            includeModule 'com.github.UnifiedPush', 'android-connector'
+        }
     }
 }
 
@@ -51,6 +55,7 @@ dependencies {
         }
     }
 
+    implementation 'com.github.UnifiedPush:android-connector:2.3.1'
     implementation 'org.osmdroid:osmdroid-android:6.1.14'
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
@@ -181,3 +186,49 @@ def getProps(String propName) {
         return "";
     }
 }
+
+// Build native libraries (libvpx, dav1d, ffmpeg, BoringSSL, tde2e) from source.
+// Skipped automatically when sentinel file exists (i.e. already built).
+// To force a rebuild: delete jni/tde2e/build/arm64-v8a/libtde2e.a and re-run.
+task buildNativeLibs(description: 'Build native libraries from source.') {
+    onlyIf { !file("${projectDir}/jni/tde2e/build/arm64-v8a/libtde2e.a").exists() }
+
+    doLast {
+        exec {
+            workingDir rootDir
+            commandLine 'git', 'submodule', 'update', '--init',
+                'TMessagesProj/jni/libvpx',
+                'TMessagesProj/jni/ffmpeg',
+                'TMessagesProj/jni/dav1d',
+                'TMessagesProj/jni/boringssl',
+                'TMessagesProj/jni/td'
+        }
+        def ndkDir = android.ndkDirectory
+        def ninjaPath = System.getenv('NINJA_PATH') ?: 'ninja'
+        for (script in ['build_libvpx_clang.sh', 'build_dav1d.sh', 'build_ffmpeg_clang.sh',
+                        'patch_ffmpeg.sh', 'patch_boringssl.sh', 'build_boringssl.sh',
+                        'build_tde2e.sh']) {
+            exec {
+                workingDir "${projectDir}/jni"
+                environment 'NDK', ndkDir.toString()
+                environment 'NINJA_PATH', ninjaPath
+                commandLine 'bash', script
+            }
+        }
+    }
+}
+
+preBuild.dependsOn buildNativeLibs
+
+// Prevent race condition: sourceSets.main.jniLibs.srcDirs = ['./jni/'] causes
+// merge*JniLibFolders tasks to snapshot all of jni/ as inputs. If those tasks
+// run in parallel with buildNativeLibs (which compiles into jni/), Gradle's
+// input snapshotting races with the compiler and produces NoSuchFileException
+// on intermediate .o.tmp files. Adding a direct dependency here ensures
+// buildNativeLibs fully completes before any merge task begins scanning jni/.
+afterEvaluate {
+    tasks.matching { it.name.matches('merge.*JniLibFolders') }.configureEach {
+        dependsOn buildNativeLibs
+    }
+}
+
