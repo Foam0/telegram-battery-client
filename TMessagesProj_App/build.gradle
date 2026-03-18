@@ -37,6 +37,11 @@ android {
 
     defaultConfig.applicationId = APP_PACKAGE
 
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     sourceSets.main.jniLibs.srcDirs = ['../TMessagesProj/jni/']
 
     lintOptions {

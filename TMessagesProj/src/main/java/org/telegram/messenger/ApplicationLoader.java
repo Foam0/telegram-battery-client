@@ -32,8 +32,6 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.json.JSONObject;
 import org.telegram.messenger.voip.VideoCapturerDevice;
@@ -91,7 +89,7 @@ public class ApplicationLoader extends Application {
     }
 
     protected ILocationServiceProvider onCreateLocationServiceProvider() {
-        return new GoogleLocationProvider();
+        return new AndroidLocationProvider();
     }
 
     public static IMapsProvider getMapsProvider() {
@@ -102,7 +100,7 @@ public class ApplicationLoader extends Application {
     }
 
     protected IMapsProvider onCreateMapsProvider() {
-        return new GoogleMapsProvider();
+        return new OsmdroidMapsProvider();
     }
 
     public static PushListenerController.IPushListenerServiceProvider getPushProvider() {
@@ -113,7 +111,7 @@ public class ApplicationLoader extends Application {
     }
 
     protected PushListenerController.IPushListenerServiceProvider onCreatePushProvider() {
-        return PushListenerController.GooglePushListenerServiceProvider.INSTANCE;
+        return PushListenerController.UnifiedPushListenerServiceProvider.INSTANCE;
     }
 
     public static String getApplicationId() {
@@ -145,7 +143,7 @@ public class ApplicationLoader extends Application {
     }
 
     protected boolean isStandalone() {
-        return false;
+        return true;
     }
 
     protected boolean isBeta() {
@@ -344,6 +342,16 @@ public class ApplicationLoader extends Application {
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
+
+        // Configure OSMDroid for FOSS maps
+        try {
+            PackageInfo pInfo = applicationContext.getPackageManager().getPackageInfo(applicationContext.getPackageName(), 0);
+            String versionName = pInfo.versionName;
+            org.osmdroid.config.Configuration.getInstance().setUserAgentValue("Mercurygram(F-Droid) " + versionName);
+            org.osmdroid.config.Configuration.getInstance().setOsmdroidBasePath(new java.io.File(getCacheDir(), "osmdroid"));
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
     }
 
     public static void startPushService() {
@@ -392,17 +400,7 @@ public class ApplicationLoader extends Application {
         }, 1000);
     }
 
-    private boolean checkPlayServices() {
-        try {
-            int resultCode = GooglePlayServicesUtil.isGooglePlayServicesAvailable(this);
-            return resultCode == ConnectionResult.SUCCESS;
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-        return true;
-    }
-
-    private static long lastNetworkCheck = -1;
+private static long lastNetworkCheck = -1;
     private static void ensureCurrentNetworkGet() {
         final long now = System.currentTimeMillis();
         ensureCurrentNetworkGet(now - lastNetworkCheck > 5000);
