@@ -12,6 +12,7 @@ TMessagesProj/jniRes/
 TMessagesProj/afat/
 TMessagesProj_App/afat/
 API_KEYS
+.env
 *.hprof
 TMessagesProj/.externalNativeBuild/
 TMessagesProj/jni/ffmpeg/android/
