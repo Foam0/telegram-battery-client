@@ -31,11 +31,12 @@ function build_one {
     local MESON_CPU="$3"
     local ANDROID_TRIPLE="$4"
     local NASM_OPTS="$5"
-
-    echo "Building dav1d for ${ARCH_NAME}..."
-
     local PREFIX="${SOURCE_DIR}/build/${ARCH_NAME}"
     local BUILD_DIR="${SOURCE_DIR}/build_tmp_${ARCH_NAME}"
+
+    [ -f "${PREFIX}/lib/libdav1d.a" ] && return
+
+    echo "Building dav1d for ${ARCH_NAME}..."
 
     mkdir -p "${PREFIX}"
     rm -rf "${BUILD_DIR}"

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 function build_one {
+	[ -f "${PREFIX}/lib/libavformat.a" ] && return
+
 	echo "Building ${ARCH}..."
 
 	PREBUILT=${NDK}/toolchains/${PREBUILT_ARCH}${PREBUILT_MIDDLE}-${VERSION}/prebuilt/${BUILD_PLATFORM}

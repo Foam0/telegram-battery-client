@@ -3,10 +3,12 @@
 set -e
 
 function build_one {
+	[ -f "${CPU}/libssl.a" ] && return
+
 	mkdir ${CPU}
 	cd ${CPU}
 
-	echo "Configuring..."
+	echo "Configuring ${CPU}..."
 	cmake \
 	-DANDROID_NATIVE_API_LEVEL=${API} \
 	-DANDROID_ABI=${CPU} \
@@ -16,7 +18,7 @@ function build_one {
 	-GNinja -DCMAKE_MAKE_PROGRAM=${NINJA_PATH} \
 	../..
 
-	echo "Building..."
+	echo "Building ${CPU}..."
 	cmake --build .
 
 	cd ..
@@ -46,8 +48,7 @@ checkPreRequisites
 
 cd boringssl
 
-rm -rf build
-mkdir build
+mkdir -p build
 cd build
 
 function build {

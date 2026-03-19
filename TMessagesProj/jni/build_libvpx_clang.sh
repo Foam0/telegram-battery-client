@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 function build_one {
+	[ -f "${PREFIX}/lib/libvpx.a" ] && return
+
 	echo "Building ${ARCH}..."
 
 	PREBUILT=${NDK}/toolchains/${PREBUILT_ARCH}-${VERSION}/prebuilt/${BUILD_PLATFORM}
@@ -132,7 +134,7 @@ function build {
 				OPTIMIZE_CFLAGS="-O3 -march=x86-64 -mtune=generic -msse4.2 -mpopcnt -m64 -fPIC"
 				TARGET="x86_64-android-gcc"
 				PREFIX=./build/$CPU
-                CPU_DETECT="--enable-runtime-cpu-detect"
+				CPU_DETECT="--enable-runtime-cpu-detect"
 				build_one
 			;;
 			x86)
