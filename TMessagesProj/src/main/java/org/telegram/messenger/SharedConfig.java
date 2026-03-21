@@ -230,6 +230,8 @@ public class SharedConfig {
     // Mercurygram: UnifiedPush
     public static boolean disableUnifiedPush = false;
     public static String unifiedPushGateway = "https://p2p.belloworld.it/";
+    // Mercurygram: UI settings
+    public static boolean sendLargePhotos = false;
 
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
@@ -512,6 +514,7 @@ public class SharedConfig {
                 // Mercurygram settings
                 editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
                 editor.putString("mg_unifiedPushGateway", unifiedPushGateway);
+                editor.putBoolean("mg_sendLargePhotos", sendLargePhotos);
                 editor.apply();
             } catch (Exception e) {
                 FileLog.e(e);
@@ -704,6 +707,7 @@ public class SharedConfig {
             // Mercurygram settings
             disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
             unifiedPushGateway = preferences.getString("mg_unifiedPushGateway", "https://p2p.belloworld.it/");
+            sendLargePhotos = preferences.getBoolean("mg_sendLargePhotos", false);
 
             loadDebugConfig(preferences);
 
