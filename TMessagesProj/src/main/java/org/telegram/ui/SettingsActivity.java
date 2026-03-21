@@ -1418,7 +1418,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 "Make Memory Dump",
                 BuildVars.DEBUG_PRIVATE_VERSION ? (SharedConfig.fastWallpaperDisabled ? "enable wallpaper shader" : "disable wallpaper shader") : null,
                 (SharedConfig.frameMetricsEnabled ? "hide frame metrics" : "show frame metrics"),
-                BuildVars.DEBUG_PRIVATE_VERSION ? (SharedConfig.shadowsInSections ? "disable shadows in settings" : "enable shadows in settings") : null
+                BuildVars.DEBUG_PRIVATE_VERSION ? (SharedConfig.shadowsInSections ? "disable shadows in settings" : "enable shadows in settings") : null,
+                // [MG] Mercurygram Debug items
+                !SharedConfig.messageDetailsMenu ? "Enable Message Details menu" : "Disable Message Details menu",
+                SharedConfig.disableUnifiedPush ? "Enable Unified Push" : "Disable Unified Push",
+                SharedConfig.disableSecureFlags ? "Enable Secure Flags" : "Disable Secure Flags"
         };
 
         builder.setItems(items, (dialog, which) -> {
@@ -1723,6 +1727,12 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             } else if (which == 40) {
                 final SharedPreferences prefs = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
                 prefs.edit().putBoolean("shadowsInSections", SharedConfig.shadowsInSections = !SharedConfig.shadowsInSections).apply();
+            } else if (which == 41) {
+                SharedConfig.toggleMessageDetailsMenu();
+            } else if (which == 42) {
+                SharedConfig.toggleDisableUnifiedPush();
+            } else if (which == 43) {
+                SharedConfig.toggleDisableSecureFlags();
             }
         });
         builder.setNegativeButton(getString(R.string.Cancel), null);

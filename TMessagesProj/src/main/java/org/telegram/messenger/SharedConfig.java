@@ -144,11 +144,27 @@ public class SharedConfig {
                 .apply();
     }
 
+    public static void toggleMessageDetailsMenu() {
+        messageDetailsMenu = !messageDetailsMenu;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_messageDetailsMenu", messageDetailsMenu)
+                .apply();
+    }
+
     public static void toggleDisableUnifiedPush() {
         disableUnifiedPush = !disableUnifiedPush;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_disableUnifiedPush", disableUnifiedPush)
+                .commit();
+    }
+
+    public static void toggleDisableSecureFlags() {
+        disableSecureFlags = !disableSecureFlags;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableSecureFlags", disableSecureFlags)
                 .commit();
     }
 
@@ -231,6 +247,8 @@ public class SharedConfig {
     public static boolean disableUnifiedPush = false;
     public static String unifiedPushGateway = "https://p2p.belloworld.it/";
     // Mercurygram: UI settings
+    public static boolean messageDetailsMenu = false;
+    public static boolean disableSecureFlags = false;
     public static boolean useRearRoundVideos = false;
     public static boolean hideKeyboardOnScroll = false;
     public static boolean hideAllTab = false;
@@ -515,8 +533,10 @@ public class SharedConfig {
                 editor.putBoolean("floatingDebugActive", isFloatingDebugActive);
                 editor.putBoolean("record_via_sco", recordViaSco);
                 // Mercurygram settings
+                editor.putBoolean("mg_messageDetailsMenu", messageDetailsMenu);
                 editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
                 editor.putString("mg_unifiedPushGateway", unifiedPushGateway);
+                editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
                 editor.putBoolean("mg_useRearRoundVideos", useRearRoundVideos);
                 editor.putBoolean("mg_hideKeyboardOnScroll", hideKeyboardOnScroll);
                 editor.putBoolean("mg_hideAllTab", hideAllTab);
@@ -711,8 +731,10 @@ public class SharedConfig {
             shadowsInSections = preferences.getBoolean("shadowsInSections", false);
 
             // Mercurygram settings
+            messageDetailsMenu = preferences.getBoolean("mg_messageDetailsMenu", false);
             disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
             unifiedPushGateway = preferences.getString("mg_unifiedPushGateway", "https://p2p.belloworld.it/");
+            disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
             useRearRoundVideos = preferences.getBoolean("mg_useRearRoundVideos", false);
             hideKeyboardOnScroll = preferences.getBoolean("mg_hideKeyboardOnScroll", false);
             hideAllTab = preferences.getBoolean("mg_hideAllTab", false);
