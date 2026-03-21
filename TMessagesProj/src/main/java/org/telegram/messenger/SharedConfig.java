@@ -144,6 +144,22 @@ public class SharedConfig {
                 .apply();
     }
 
+    public static void toggleDisableUnifiedPush() {
+        disableUnifiedPush = !disableUnifiedPush;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableUnifiedPush", disableUnifiedPush)
+                .commit();
+    }
+
+    public static void setUnifiedPushGateway(String gateway) {
+        unifiedPushGateway = gateway;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putString("mg_unifiedPushGateway", unifiedPushGateway)
+                .apply();
+    }
+
     public static void toggleSurfaceInStories() {
         useSurfaceInStories = !useSurfaceInStories;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -207,9 +223,14 @@ public class SharedConfig {
     public final static int SAVE_TO_GALLERY_FLAG_CHANNELS = 4;
 
     @PushListenerController.PushType
-    public static int pushType = PushListenerController.PUSH_TYPE_FIREBASE;
+    public static int pushType = PushListenerController.PUSH_TYPE_SIMPLE;
     public static String pushString = "";
     public static String pushStringStatus = "";
+
+    // Mercurygram: UnifiedPush
+    public static boolean disableUnifiedPush = false;
+    public static String unifiedPushGateway = "https://p2p.belloworld.it/";
+
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
     public static boolean pushStatSent;
@@ -488,6 +509,9 @@ public class SharedConfig {
                 editor.putBoolean("hasEmailLogin", hasEmailLogin);
                 editor.putBoolean("floatingDebugActive", isFloatingDebugActive);
                 editor.putBoolean("record_via_sco", recordViaSco);
+                // Mercurygram settings
+                editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
+                editor.putString("mg_unifiedPushGateway", unifiedPushGateway);
                 editor.apply();
             } catch (Exception e) {
                 FileLog.e(e);
@@ -676,6 +700,10 @@ public class SharedConfig {
             callEncryptionHintDisplayedCount = preferences.getInt("callEncryptionHintDisplayedCount", 0);
             debugVideoQualities = preferences.getBoolean("debugVideoQualities", false);
             shadowsInSections = preferences.getBoolean("shadowsInSections", false);
+
+            // Mercurygram settings
+            disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
+            unifiedPushGateway = preferences.getString("mg_unifiedPushGateway", "https://p2p.belloworld.it/");
 
             loadDebugConfig(preferences);
 
