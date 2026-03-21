@@ -13,12 +13,6 @@ afterEvaluate {
 repositories {
     mavenCentral()
     google()
-    maven {
-        url 'https://www.jitpack.io'
-        content {
-            includeModule 'com.github.UnifiedPush', 'android-connector'
-        }
-    }
 }
 
 configurations {

@@ -33,12 +33,14 @@ import java.util.concurrent.CountDownLatch;
 public class PushListenerController {
     public static final int PUSH_TYPE_FIREBASE = 2,
         PUSH_TYPE_SIMPLE = 4,
+        PUSH_TYPE_WEB = 10,
         PUSH_TYPE_HUAWEI = 13;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
             PUSH_TYPE_FIREBASE,
             PUSH_TYPE_SIMPLE,
+            PUSH_TYPE_WEB,
             PUSH_TYPE_HUAWEI
     })
     public @interface PushType {}
@@ -66,7 +68,7 @@ public class PushListenerController {
                 if (userConfig.getClientUserId() != 0) {
                     final int currentAccount = a;
                     if (sendStat) {
-                        String tag = pushType == PUSH_TYPE_FIREBASE ? "fcm" : (pushType == PUSH_TYPE_HUAWEI ? "hcm" : "up");
+                        String tag = pushType == PUSH_TYPE_FIREBASE ? "fcm" : (pushType == PUSH_TYPE_HUAWEI ? "hcm" : (pushType == PUSH_TYPE_WEB ? "wp" : "up"));
                         TLRPC.TL_help_saveAppLog req = new TLRPC.TL_help_saveAppLog();
                         TLRPC.TL_inputAppEvent event = new TLRPC.TL_inputAppEvent();
                         event.time = SharedConfig.pushStringGetTimeStart;
@@ -94,7 +96,7 @@ public class PushListenerController {
     }
 
     public static void processRemoteMessage(@PushType int pushType, String data, long time) {
-        String tag = pushType == PUSH_TYPE_FIREBASE ? "FCM" : (pushType == PUSH_TYPE_HUAWEI ? "HCM" : "UP");
+        String tag = pushType == PUSH_TYPE_FIREBASE ? "FCM" : (pushType == PUSH_TYPE_HUAWEI ? "HCM" : (pushType == PUSH_TYPE_WEB ? "WP" : "UP"));
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d(tag + " PRE START PROCESSING");
         }
@@ -1664,13 +1666,12 @@ public class PushListenerController {
 
     public final static class UnifiedPushListenerServiceProvider implements IPushListenerServiceProvider {
         public final static UnifiedPushListenerServiceProvider INSTANCE = new UnifiedPushListenerServiceProvider();
-        private final static UnifiedPushReceiver mReceiver = new UnifiedPushReceiver();
 
         private UnifiedPushListenerServiceProvider() {}
 
         @Override
         public boolean hasServices() {
-            return !UnifiedPush.getDistributors(ApplicationLoader.applicationContext, new ArrayList<>()).isEmpty();
+            return !UnifiedPush.getDistributors(ApplicationLoader.applicationContext).isEmpty();
         }
 
         @Override
@@ -1681,7 +1682,7 @@ public class PushListenerController {
         @Override
         public void onRequestPushToken() {
             if (SharedConfig.disableUnifiedPush) {
-                UnifiedPush.unregisterApp(ApplicationLoader.applicationContext, "default");
+                UnifiedPush.unregister(ApplicationLoader.applicationContext, "default");
             } else {
                 String currentPushString = SharedConfig.pushString;
                 if (!TextUtils.isEmpty(currentPushString)) {
@@ -1698,16 +1699,16 @@ public class PushListenerController {
                         SharedConfig.pushStringGetTimeStart = SystemClock.elapsedRealtime();
                         SharedConfig.saveConfig();
                         if (UnifiedPush.getAckDistributor(ApplicationLoader.applicationContext) == null) {
-                            List<String> distributors = UnifiedPush.getDistributors(ApplicationLoader.applicationContext, new ArrayList<>());
+                            List<String> distributors = UnifiedPush.getDistributors(ApplicationLoader.applicationContext);
                             if (!distributors.isEmpty()) {
                                 UnifiedPush.saveDistributor(ApplicationLoader.applicationContext, distributors.get(0));
                             }
                         }
-                        UnifiedPush.registerApp(
+                        UnifiedPush.register(
                                 ApplicationLoader.applicationContext,
                                 "default",
-                                new ArrayList<>(),
-                                "Telegram Simple Push"
+                                "Mercurygram WebPush",
+                                null
                         );
                     } catch (Throwable e) {
                         FileLog.e(e);
@@ -1718,7 +1719,7 @@ public class PushListenerController {
 
         @Override
         public int getPushType() {
-            return PUSH_TYPE_SIMPLE;
+            return PUSH_TYPE_WEB;
         }
     }
 }

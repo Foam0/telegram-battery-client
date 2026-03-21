@@ -826,7 +826,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 AtomicReference<Dialog> dialogRef = new AtomicReference<>();
                 LinearLayout linearLayout = new LinearLayout(context);
                 linearLayout.setOrientation(LinearLayout.VERTICAL);
-                List<String> distributors = UnifiedPush.getDistributors(ApplicationLoader.applicationContext, new ArrayList<>());
+                List<String> distributors = UnifiedPush.getDistributors(ApplicationLoader.applicationContext);
                 CharSequence[] items = distributors.toArray(new CharSequence[0]);
                 String distributor = UnifiedPush.getAckDistributor(ApplicationLoader.applicationContext);
                 for (int i = 0; i < items.length; ++i) {
@@ -839,7 +839,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     linearLayout.addView(cell);
                     cell.setOnClickListener(v -> {
                         UnifiedPush.saveDistributor(ApplicationLoader.applicationContext, items[index].toString());
-                        UnifiedPush.registerApp(ApplicationLoader.applicationContext, "default", new ArrayList<>(), "Telegram Simple Push");
+                        UnifiedPush.register(ApplicationLoader.applicationContext, "default", "Mercurygram WebPush", null);
                         updateUnifiedPushDistributor = true;
                         adapter.notifyItemChanged(position);
                         dialogRef.get().dismiss();
@@ -881,12 +881,15 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 if (UnifiedPushReceiver.getNumOfReceivedNotifications() == 0) {
                     txt = "You never received notifications with UnifiedPush since Mercurygram was started.";
                 } else {
-                    txt = String.format("The last received notification with UnifiedPush was %d seconds ago.\n" +
-                                        "You received %d notifications since Mercurygram was started.",
-                                        (SystemClock.elapsedRealtime() - UnifiedPushReceiver.getLastReceivedNotification()) / 1000,
-                                        UnifiedPushReceiver.getNumOfReceivedNotifications());
+                    long ago = (SystemClock.elapsedRealtime() - UnifiedPushReceiver.getLastReceivedNotification()) / 1000;
+                    long total = UnifiedPushReceiver.getNumOfReceivedNotifications();
+                    long ok = UnifiedPushReceiver.getNumDecryptSuccess();
+                    long fail = UnifiedPushReceiver.getNumDecryptFailed();
+                    txt = String.format("Last push: %ds ago\nReceived: %d (decrypted: %d, fallback: %d)",
+                                        ago, total, ok, fail);
                 }
-                txt += String.format("\n\nThe current UnifiedPush endpoint is: %s", SharedConfig.pushString);
+                txt += String.format("\n\nWebPush keys: %s", SharedConfig.webPushPublicKey != null ? "present" : "not generated");
+                txt += String.format("\nCurrent endpoint: %s", SharedConfig.pushString);
                 showDialog(new AlertDialog.Builder(getParentActivity())
                         .setTitle("UnifiedPush Notifications")
                         .setMessage(txt)

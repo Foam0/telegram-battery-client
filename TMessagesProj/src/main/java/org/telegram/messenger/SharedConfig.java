@@ -176,6 +176,44 @@ public class SharedConfig {
                 .apply();
     }
 
+    public static synchronized void ensureWebPushKeys() {
+        if (webPushPrivateKey != null && webPushPublicKey != null && webPushAuthSecret != null) {
+            return;
+        }
+        try {
+            java.security.KeyPairGenerator kpg = java.security.KeyPairGenerator.getInstance("EC");
+            kpg.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+            java.security.KeyPair keyPair = kpg.generateKeyPair();
+            java.security.interfaces.ECPublicKey ecPub = (java.security.interfaces.ECPublicKey) keyPair.getPublic();
+
+            // Extract raw 65-byte uncompressed P-256 point (04||X||Y)
+            java.security.spec.ECPoint w = ecPub.getW();
+            byte[] xb = w.getAffineX().toByteArray();
+            byte[] yb = w.getAffineY().toByteArray();
+            byte[] rawPub = new byte[65];
+            rawPub[0] = 0x04;
+            if (xb.length >= 32) System.arraycopy(xb, xb.length - 32, rawPub, 1, 32);
+            else System.arraycopy(xb, 0, rawPub, 1 + (32 - xb.length), xb.length);
+            if (yb.length >= 32) System.arraycopy(yb, yb.length - 32, rawPub, 33, 32);
+            else System.arraycopy(yb, 0, rawPub, 33 + (32 - yb.length), yb.length);
+
+            webPushPublicKey = rawPub;
+            webPushPrivateKey = keyPair.getPrivate().getEncoded(); // PKCS#8
+            byte[] secret = new byte[16];
+            new java.security.SecureRandom().nextBytes(secret);
+            webPushAuthSecret = secret;
+
+            ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                    .edit()
+                    .putString("mg_webPushPrivateKey", Base64.encodeToString(webPushPrivateKey, Base64.DEFAULT))
+                    .putString("mg_webPushPublicKey", Base64.encodeToString(webPushPublicKey, Base64.DEFAULT))
+                    .putString("mg_webPushAuthSecret", Base64.encodeToString(webPushAuthSecret, Base64.DEFAULT))
+                    .apply();
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
     public static void toggleSurfaceInStories() {
         useSurfaceInStories = !useSurfaceInStories;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -246,6 +284,10 @@ public class SharedConfig {
     // Mercurygram: UnifiedPush
     public static boolean disableUnifiedPush = false;
     public static String unifiedPushGateway = "https://p2p.belloworld.it/";
+    public static volatile byte[] webPushPrivateKey;    // PKCS#8-encoded P-256 private key
+    public static volatile byte[] webPushPublicKey;     // Raw 65-byte uncompressed P-256 point (04||X||Y)
+    public static volatile byte[] webPushAuthSecret;    // 16-byte random auth secret
+
     // Mercurygram: UI settings
     public static boolean messageDetailsMenu = false;
     public static boolean disableSecureFlags = false;
@@ -541,6 +583,9 @@ public class SharedConfig {
                 editor.putBoolean("mg_hideKeyboardOnScroll", hideKeyboardOnScroll);
                 editor.putBoolean("mg_hideAllTab", hideAllTab);
                 editor.putBoolean("mg_sendLargePhotos", sendLargePhotos);
+                editor.putString("mg_webPushPrivateKey", webPushPrivateKey != null ? Base64.encodeToString(webPushPrivateKey, Base64.DEFAULT) : "");
+                editor.putString("mg_webPushPublicKey", webPushPublicKey != null ? Base64.encodeToString(webPushPublicKey, Base64.DEFAULT) : "");
+                editor.putString("mg_webPushAuthSecret", webPushAuthSecret != null ? Base64.encodeToString(webPushAuthSecret, Base64.DEFAULT) : "");
                 editor.apply();
             } catch (Exception e) {
                 FileLog.e(e);
@@ -739,6 +784,12 @@ public class SharedConfig {
             hideKeyboardOnScroll = preferences.getBoolean("mg_hideKeyboardOnScroll", false);
             hideAllTab = preferences.getBoolean("mg_hideAllTab", false);
             sendLargePhotos = preferences.getBoolean("mg_sendLargePhotos", false);
+            String wpPriv = preferences.getString("mg_webPushPrivateKey", "");
+            if (!TextUtils.isEmpty(wpPriv)) webPushPrivateKey = Base64.decode(wpPriv, Base64.DEFAULT);
+            String wpPub = preferences.getString("mg_webPushPublicKey", "");
+            if (!TextUtils.isEmpty(wpPub)) webPushPublicKey = Base64.decode(wpPub, Base64.DEFAULT);
+            String wpAuth = preferences.getString("mg_webPushAuthSecret", "");
+            if (!TextUtils.isEmpty(wpAuth)) webPushAuthSecret = Base64.decode(wpAuth, Base64.DEFAULT);
 
             loadDebugConfig(preferences);
 
