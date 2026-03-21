@@ -839,7 +839,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     linearLayout.addView(cell);
                     cell.setOnClickListener(v -> {
                         UnifiedPush.saveDistributor(ApplicationLoader.applicationContext, items[index].toString());
-                        UnifiedPush.registerApp(ApplicationLoader.applicationContext, "default", new ArrayList<>(), "Telegram Simple Push");
+                        UnifiedPush.registerApp(ApplicationLoader.applicationContext, "default", new ArrayList<>(), "Mercurygram WebPush");
                         updateUnifiedPushDistributor = true;
                         adapter.notifyItemChanged(position);
                         dialogRef.get().dismiss();
@@ -882,11 +882,15 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     txt = "You never received notifications with UnifiedPush since Mercurygram was started.";
                 } else {
                     txt = String.format("The last received notification with UnifiedPush was %d seconds ago.\n" +
-                                        "You received %d notifications since Mercurygram was started.",
+                                        "You received %d notifications since Mercurygram was started.\n" +
+                                        "Decrypted: %d, failed: %d.",
                                         (SystemClock.elapsedRealtime() - UnifiedPushReceiver.getLastReceivedNotification()) / 1000,
-                                        UnifiedPushReceiver.getNumOfReceivedNotifications());
+                                        UnifiedPushReceiver.getNumOfReceivedNotifications(),
+                                        UnifiedPushReceiver.getNumDecryptSuccess(),
+                                        UnifiedPushReceiver.getNumDecryptFailed());
                 }
-                txt += String.format("\n\nThe current UnifiedPush endpoint is: %s", SharedConfig.pushString);
+                txt += String.format("\n\nWebPush keys: %s", SharedConfig.webPushPublicKey != null ? "present" : "not generated");
+                txt += String.format("\nCurrent endpoint: %s", SharedConfig.pushString);
                 showDialog(new AlertDialog.Builder(getParentActivity())
                         .setTitle("UnifiedPush Notifications")
                         .setMessage(txt)
