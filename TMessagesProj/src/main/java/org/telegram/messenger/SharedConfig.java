@@ -231,6 +231,9 @@ public class SharedConfig {
     public static boolean disableUnifiedPush = false;
     public static String unifiedPushGateway = "https://p2p.belloworld.it/";
     // Mercurygram: UI settings
+    public static boolean useRearRoundVideos = false;
+    public static boolean hideKeyboardOnScroll = false;
+    public static boolean hideAllTab = false;
     public static boolean sendLargePhotos = false;
 
     public static long pushStringGetTimeStart;
@@ -514,6 +517,9 @@ public class SharedConfig {
                 // Mercurygram settings
                 editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
                 editor.putString("mg_unifiedPushGateway", unifiedPushGateway);
+                editor.putBoolean("mg_useRearRoundVideos", useRearRoundVideos);
+                editor.putBoolean("mg_hideKeyboardOnScroll", hideKeyboardOnScroll);
+                editor.putBoolean("mg_hideAllTab", hideAllTab);
                 editor.putBoolean("mg_sendLargePhotos", sendLargePhotos);
                 editor.apply();
             } catch (Exception e) {
@@ -707,6 +713,9 @@ public class SharedConfig {
             // Mercurygram settings
             disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
             unifiedPushGateway = preferences.getString("mg_unifiedPushGateway", "https://p2p.belloworld.it/");
+            useRearRoundVideos = preferences.getBoolean("mg_useRearRoundVideos", false);
+            hideKeyboardOnScroll = preferences.getBoolean("mg_hideKeyboardOnScroll", false);
+            hideAllTab = preferences.getBoolean("mg_hideAllTab", false);
             sendLargePhotos = preferences.getBoolean("mg_sendLargePhotos", false);
 
             loadDebugConfig(preferences);
