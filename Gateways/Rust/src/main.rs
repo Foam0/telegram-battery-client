@@ -11,8 +11,10 @@ use axum::{
 use axum::body::Bytes;
 use axum::http::HeaderMap;
 use axum_macros::debug_handler;
+use listenfd::ListenFd;
 use reqwest::Client;
 use serde::Deserialize;
+use std::time::Duration;
 
 /// PUT /<url> — original PUT-to-POST proxy (kept for backward compatibility)
 #[debug_handler]
@@ -127,14 +129,27 @@ async fn forward(
 
 #[tokio::main]
 async fn main() {
-    let client = Client::new();
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap();
     let app = Router::new()
         .route("/aesgcm", post(aesgcm))
         .route("/{*path}", put(put_proxy))
         .layer(DefaultBodyLimit::max(65536)) // 64 KiB — push payloads are small
         .with_state(client);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8001").await.unwrap();
+    let listener = {
+        let mut listenfd = ListenFd::from_env();
+        match listenfd.take_tcp_listener(0).unwrap() {
+            Some(std_listener) => {
+                std_listener.set_nonblocking(true).unwrap();
+                tokio::net::TcpListener::from_std(std_listener).unwrap()
+            }
+            None => tokio::net::TcpListener::bind("127.0.0.1:8001").await.unwrap(),
+        }
+    };
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }

@@ -27,7 +27,7 @@ async def topic(request):
     })
 
     # Forward the request to the target URL
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         upstream_response = await client.post(
             url=path,
             data=body,
@@ -69,7 +69,7 @@ async def aesgcm(request):
         + body
     )
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         upstream_response = await client.post(
             url=endpoint,
             data=new_body,
