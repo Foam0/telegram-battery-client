@@ -126,10 +126,12 @@ public class UnifiedPushReceiver extends PushService {
                 }
                 // Background thread: processRemoteMessage() blocks via static
                 // countDownLatch.await() — calling from main thread deadlocks.
+                // Pass System.currentTimeMillis() (not elapsedRealtime) because
+                // processRemoteMessage() uses it as messageOwner.date (Unix epoch).
                 Utilities.globalQueue.postRunnable(() -> {
                     try {
                         PushListenerController.processRemoteMessage(
-                                PushListenerController.PUSH_TYPE_WEB, encoded, receiveTime);
+                                PushListenerController.PUSH_TYPE_WEB, encoded, System.currentTimeMillis());
                     } finally {
                         releaseWakeLock();
                     }

@@ -172,7 +172,7 @@ public class SharedConfig {
         unifiedPushGateway = gateway;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
                 .edit()
-                .putString("mg_unifiedPushGateway", unifiedPushGateway)
+                .putString("mg_unifiedPushGateway2", unifiedPushGateway)
                 .apply();
     }
 
@@ -577,7 +577,7 @@ public class SharedConfig {
                 // Mercurygram settings
                 editor.putBoolean("mg_messageDetailsMenu", messageDetailsMenu);
                 editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
-                editor.putString("mg_unifiedPushGateway", unifiedPushGateway);
+                editor.putString("mg_unifiedPushGateway2", unifiedPushGateway);
                 editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
                 editor.putBoolean("mg_useRearRoundVideos", useRearRoundVideos);
                 editor.putBoolean("mg_hideKeyboardOnScroll", hideKeyboardOnScroll);
@@ -778,7 +778,7 @@ public class SharedConfig {
             // Mercurygram settings
             messageDetailsMenu = preferences.getBoolean("mg_messageDetailsMenu", false);
             disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
-            unifiedPushGateway = preferences.getString("mg_unifiedPushGateway", "https://p2p.belloworld.it/");
+            unifiedPushGateway = preferences.getString("mg_unifiedPushGateway2", "https://p2p.belloworld.it/");
             disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
             useRearRoundVideos = preferences.getBoolean("mg_useRearRoundVideos", false);
             hideKeyboardOnScroll = preferences.getBoolean("mg_hideKeyboardOnScroll", false);
