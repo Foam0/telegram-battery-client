@@ -17,10 +17,19 @@ if [[ ! -d "$TD_DIR" ]] || [[ -z "$(ls -A "$TD_DIR" 2>/dev/null)" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$BORINGSSL_DIR/build/arm64-v8a/ssl/libssl.a" ]]; then
-    echo "Error: BoringSSL not built. Run build_boringssl.sh first."
-    exit 1
+if [[ $# -eq 0 ]]; then
+    ABIS_TO_BUILD=(arm64-v8a armeabi-v7a x86_64 x86)
+else
+    ABIS_TO_BUILD=("$@")
 fi
+
+for _abi in "${ABIS_TO_BUILD[@]}"; do
+    if [[ ! -f "$BORINGSSL_DIR/build/$_abi/ssl/libssl.a" ]]; then
+        echo "Error: BoringSSL not built for $_abi. Run build_boringssl.sh first."
+        exit 1
+    fi
+done
+unset _abi
 
 if [[ -z "$NDK" ]]; then
     echo "Error: NDK environment variable is not set."
@@ -52,7 +61,7 @@ fi
 # so cmake's FindOpenSSL.cmake uses them without searching (bypassing the NDK
 # toolchain's CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY restriction).
 
-for ABI in arm64-v8a armeabi-v7a x86_64 x86; do
+for ABI in "${ABIS_TO_BUILD[@]}"; do
     BUILD_DIR="$TD_DIR/build/$ABI"
 
     [ -f "$BUILD_DIR/tde2e/libtde2e.a" ] && continue

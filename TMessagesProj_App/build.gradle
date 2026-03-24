@@ -1,12 +1,19 @@
 apply plugin: 'com.android.application'
 
-// Prevent race condition: sourceSets.main.jniLibs.srcDirs = ['../TMessagesProj/jni/'] causes
-// merge*JniLibFolders tasks to snapshot all of jni/ as inputs. If those tasks
-// run in parallel with :TMessagesProj:buildNativeLibs, Gradle's input snapshotting
-// races with the compiler and produces NoSuchFileException on intermediate .o.tmp files.
+// Wire each variant's merge*JniLibFolders task to the matching per-ABI native build task.
+// F-Droid per-ABI flavors only need one ABI compiled; fat flavors need all four.
 afterEvaluate {
-    tasks.matching { it.name.matches('merge.*JniLibFolders') }.configureEach {
-        dependsOn project(':TMessagesProj').tasks.named('buildNativeLibs')
+    def flavorToNativeTask = [
+        'AfatFdArm64'  : 'buildNativeLibsArm64',
+        'AfatFdArm32'  : 'buildNativeLibsArm32',
+        'AfatFdX86_64' : 'buildNativeLibsX86_64',
+        'AfatFdX86'    : 'buildNativeLibsX86',
+    ]
+    tasks.matching { it.name.matches('merge.*JniLibFolders') }.configureEach { task ->
+        def matched = flavorToNativeTask.find { flavor, _ -> task.name.contains(flavor) }
+        dependsOn project(':TMessagesProj').tasks.named(
+            matched ? matched.value : 'buildNativeLibs'
+        )
     }
 }
 

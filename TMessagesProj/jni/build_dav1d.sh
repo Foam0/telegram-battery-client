@@ -87,9 +87,25 @@ EOF
 
 cd "${SOURCE_DIR}"
 
-build_one "arm64-v8a"   "aarch64" "armv8-a"  "aarch64-linux-android"
-build_one "armeabi-v7a" "arm"     "armv7"    "armv7a-linux-androideabi"
-build_one "x86"         "x86"     "i686"     "i686-linux-android"
-build_one "x86_64"      "x86_64"  "x86_64"   "x86_64-linux-android"
+build_abi() {
+    case "$1" in
+        arm64-v8a)   build_one "arm64-v8a"   "aarch64" "armv8-a" "aarch64-linux-android" ;;
+        armeabi-v7a) build_one "armeabi-v7a" "arm"     "armv7"   "armv7a-linux-androideabi" ;;
+        x86)         build_one "x86"         "x86"     "i686"    "i686-linux-android" ;;
+        x86_64)      build_one "x86_64"      "x86_64"  "x86_64"  "x86_64-linux-android" ;;
+        *) echo "Unknown ABI: $1" >&2; exit 1 ;;
+    esac
+}
 
-echo "dav1d build complete for all ABIs."
+if [ $# -eq 0 ]; then
+    build_abi arm64-v8a
+    build_abi armeabi-v7a
+    build_abi x86
+    build_abi x86_64
+else
+    for abi in "$@"; do
+        build_abi "$abi"
+    done
+fi
+
+echo "dav1d build complete."

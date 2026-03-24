@@ -183,8 +183,10 @@ def getProps(String propName) {
     }
 }
 
-// Build native libraries (libvpx, dav1d, ffmpeg, BoringSSL, tde2e) from source.
-task buildNativeLibs(description: 'Build native libraries from source.') {
+// Shared first step: init submodules and apply source-tree patches (idempotent).
+// All per-ABI tasks depend on this so patches are applied exactly once.
+task patchNativeSources {
+    description = 'Init native submodules and apply source patches.'
     doLast {
         exec {
             workingDir rootDir
@@ -195,14 +197,12 @@ task buildNativeLibs(description: 'Build native libraries from source.') {
                 'TMessagesProj/jni/boringssl',
                 'TMessagesProj/jni/td'
         }
-        def ndkDir = android.ndkDirectory
+        def ndkDir = android.ndkDirectory.toString()
         def ninjaPath = System.getenv('NINJA_PATH') ?: 'ninja'
-        for (script in ['build_libvpx_clang.sh', 'build_dav1d.sh', 'build_ffmpeg_clang.sh',
-                        'patch_ffmpeg.sh', 'patch_boringssl.sh', 'build_boringssl.sh',
-                        'patch_td.sh', 'build_tde2e.sh']) {
+        for (script in ['patch_boringssl.sh', 'patch_td.sh']) {
             exec {
                 workingDir "${projectDir}/jni"
-                environment 'NDK', ndkDir.toString()
+                environment 'NDK', ndkDir
                 environment 'NINJA_PATH', ninjaPath
                 commandLine 'bash', script
             }
@@ -210,20 +210,79 @@ task buildNativeLibs(description: 'Build native libraries from source.') {
     }
 }
 
-preBuild.dependsOn buildNativeLibs
+// Mapping from Android ABI name to the short name used by libvpx/ffmpeg/boringssl scripts.
+def androidToScriptAbi = [
+    'arm64-v8a'   : 'arm64',
+    'armeabi-v7a' : 'arm',
+    'x86_64'      : 'x86_64',
+    'x86'         : 'x86',
+]
 
-// Prevent race conditions when multiple variants are built in one Gradle
-// invocation. Both merge*JniLibFolders and the module's CMake/native tasks read
-// files produced by buildNativeLibs under jni/*/build and ffmpeg/include/.
-// Without an explicit dependency, Gradle can start those consumers in parallel
-// with buildNativeLibs and intermittently fail on missing or half-written files.
+// Register one build task per ABI. Each task compiles only for its ABI.
+// Scripts that accept positional ABI args (libvpx, ffmpeg, boringssl) receive the
+// short internal name; dav1d, patch_ffmpeg, tde2e use the Android ABI name directly.
+['buildNativeLibsArm64'  : ['arm64-v8a'],
+ 'buildNativeLibsArm32'  : ['armeabi-v7a'],
+ 'buildNativeLibsX86_64' : ['x86_64'],
+ 'buildNativeLibsX86'    : ['x86'],
+].each { taskName, androidAbis ->
+    tasks.register(taskName) {
+        description = "Build native libraries for ${androidAbis}."
+        dependsOn patchNativeSources
+        doLast {
+            def ndkDir = android.ndkDirectory.toString()
+            def ninjaPath = System.getenv('NINJA_PATH') ?: 'ninja'
+            def scriptAbis = androidAbis.collect { androidToScriptAbi[it] ?: it }
+            [['build_libvpx_clang.sh', scriptAbis],
+             ['build_dav1d.sh',        androidAbis],
+             ['build_ffmpeg_clang.sh', scriptAbis],
+             ['patch_ffmpeg.sh',       androidAbis],
+             ['build_boringssl.sh',    scriptAbis],
+             ['build_tde2e.sh',        androidAbis],
+            ].each { script, abis ->
+                exec {
+                    workingDir "${projectDir}/jni"
+                    environment 'NDK', ndkDir
+                    environment 'NINJA_PATH', ninjaPath
+                    commandLine(['bash', script] + abis)
+                }
+            }
+        }
+    }
+}
+
+// Ensure sequential execution when all 4 per-ABI tasks run together (fat builds),
+// avoiding races in patch scripts that write shared source files.
+tasks.named('buildNativeLibsArm32').configure  { mustRunAfter 'buildNativeLibsArm64'  }
+tasks.named('buildNativeLibsX86_64').configure { mustRunAfter 'buildNativeLibsArm32'  }
+tasks.named('buildNativeLibsX86').configure    { mustRunAfter 'buildNativeLibsX86_64' }
+
+// Combined task for fat/bundle builds (all 4 ABIs).
+task buildNativeLibs(description: 'Build native libraries for all ABIs.') {
+    dependsOn 'buildNativeLibsArm64', 'buildNativeLibsArm32',
+              'buildNativeLibsX86_64', 'buildNativeLibsX86'
+}
+
+// Wire each CMake/JniLibFolders task to the matching per-ABI native build task.
+// CMake task names include the ABI in brackets, e.g. configureCMakeRelease[arm64-v8a].
+// merge*JniLibFolders tasks don't include the ABI but snapshot jni/; they depend on
+// the full buildNativeLibs to ensure all .so/.a files are present before snapshotting.
 afterEvaluate {
+    def abiToTask = [
+        'arm64-v8a'   : 'buildNativeLibsArm64',
+        'armeabi-v7a' : 'buildNativeLibsArm32',
+        'x86_64'      : 'buildNativeLibsX86_64',
+        'x86'         : 'buildNativeLibsX86',
+    ]
     tasks.matching {
-        it.name.matches('merge.*JniLibFolders') ||
-            it.name.matches('configureCMake.*') ||
+        it.name.matches('configureCMake.*') ||
             it.name.matches('buildCMake.*') ||
             it.name.matches('externalNativeBuild.*')
-    }.configureEach {
-        dependsOn buildNativeLibs
+    }.configureEach { task ->
+        def matched = abiToTask.find { abi, _ -> task.name.contains(abi) }
+        dependsOn tasks.named(matched ? matched.value : 'buildNativeLibs')
+    }
+    tasks.matching { it.name.matches('merge.*JniLibFolders') }.configureEach {
+        dependsOn tasks.named('buildNativeLibs')
     }
 }
