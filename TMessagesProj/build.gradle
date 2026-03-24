@@ -229,26 +229,48 @@ def getProps(String propName) {
         return "";
     }
 }
-apply plugin: 'com.google.gms.google-services'
 
-task checkVisibility {
-    doFirst {
-        def isPrivateBuild = project.gradle.startParameter.taskNames.find {
-            it.contains("HA_private") || it.contains("HA_hardcore") || it.contains("Debug") || it.contains("Release")
-        }
-        def isPublicAllowed = !project.hasProperty("IS_PRIVATE") || !project.property("IS_PRIVATE").toBoolean()
-        if (!isPrivateBuild && !isPublicAllowed) {
-            throw new GradleException("Building public version of private code!")
-        }
-    }
+// Build native libraries (libvpx, dav1d, ffmpeg, BoringSSL, tde2e) from source.
+task buildNativeLibs(description: 'Build native libraries from source.') {
     doLast {
-        if (project.gradle.startParameter.taskNames.find { it.contains("HA_public") }) {
-            def privateBuild = file("${projectDir}_AppHockeyApp/afat/HA_private/Telegram-Beta.apk")
-            if (privateBuild.exists()) {
-                privateBuild.delete()
+        exec {
+            workingDir rootDir
+            commandLine 'git', 'submodule', 'update', '--init',
+                'TMessagesProj/jni/libvpx',
+                'TMessagesProj/jni/ffmpeg',
+                'TMessagesProj/jni/dav1d',
+                'TMessagesProj/jni/boringssl',
+                'TMessagesProj/jni/td'
+        }
+        def ndkDir = android.ndkDirectory
+        def ninjaPath = System.getenv('NINJA_PATH') ?: 'ninja'
+        for (script in ['build_libvpx_clang.sh', 'build_dav1d.sh', 'build_ffmpeg_clang.sh',
+                        'patch_ffmpeg.sh', 'patch_boringssl.sh', 'build_boringssl.sh',
+                        'patch_td.sh', 'build_tde2e.sh']) {
+            exec {
+                workingDir "${projectDir}/jni"
+                environment 'NDK', ndkDir.toString()
+                environment 'NINJA_PATH', ninjaPath
+                commandLine 'bash', script
             }
         }
     }
 }
 
-preBuild.dependsOn checkVisibility
+preBuild.dependsOn buildNativeLibs
+
+// Prevent race conditions when multiple variants are built in one Gradle
+// invocation. Both merge*JniLibFolders and the module's CMake/native tasks read
+// files produced by buildNativeLibs under jni/*/build and ffmpeg/include/.
+// Without an explicit dependency, Gradle can start those consumers in parallel
+// with buildNativeLibs and intermittently fail on missing or half-written files.
+afterEvaluate {
+    tasks.matching {
+        it.name.matches('merge.*JniLibFolders') ||
+            it.name.matches('configureCMake.*') ||
+            it.name.matches('buildCMake.*') ||
+            it.name.matches('externalNativeBuild.*')
+    }.configureEach {
+        dependsOn buildNativeLibs
+    }
+}
