@@ -2,8 +2,8 @@
 
 set -e
 
-# Apply patches to ffmpeg source (idempotent)
-if ! grep -q ff_mov_get_lpcm_codec_id ffmpeg/libavformat/isom.h 2>/dev/null; then
+# Apply patches to ffmpeg source (idempotent: skip if already applied)
+if grep -q ff_mov_get_lpcm_codec_id ffmpeg/libavformat/isom.h 2>/dev/null; then
     patch -d ffmpeg -p1 < patches/ffmpeg/0001-compilation-magic.patch
     patch -d ffmpeg -p1 < patches/ffmpeg/0002-compilation-magic-2.patch
 fi

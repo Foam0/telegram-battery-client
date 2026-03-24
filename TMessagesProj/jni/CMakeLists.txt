@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10.2)
 
-set(CMAKE_CXX_FLAGS "-std=c++14 -DANDROID")
+set(CMAKE_CXX_FLAGS "-std=c++17 -DANDROID -Wno-register")
 set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1")
 set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
@@ -359,7 +359,10 @@ target_include_directories(breakpad PUBLIC
 
 
 #voip
+set(_cxx_flags_before_voip "${CMAKE_CXX_FLAGS}")
 include(${CMAKE_HOME_DIRECTORY}/voip/CMakeLists.txt)
+set(CMAKE_CXX_FLAGS "${_cxx_flags_before_voip}")
+unset(_cxx_flags_before_voip)
 
 set(NATIVE_LIB "tmessages.49")
 
