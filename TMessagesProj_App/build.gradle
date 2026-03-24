@@ -40,6 +40,10 @@ android {
         includeInBundle = false
     }
 
+    aaptOptions {
+        cruncherEnabled = false
+    }
+
     sourceSets.main.jniLibs.srcDirs = ['../TMessagesProj/jni/']
 
     lintOptions {
