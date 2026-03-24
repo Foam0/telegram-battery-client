@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.6.0)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 -DANDROID")
+set(CMAKE_CXX_FLAGS "-std=c++17 -DANDROID -ffile-prefix-map=${CMAKE_SOURCE_DIR}/=")
 
 #tgvoip
 add_library(tgvoip STATIC

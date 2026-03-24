@@ -9,12 +9,15 @@ function build_one {
 	cd ${CPU}
 
 	echo "Configuring ${CPU}..."
+	BORINGSSL_SRC=$(realpath ../..)
 	cmake \
 	-DANDROID_NATIVE_API_LEVEL=${API} \
 	-DANDROID_ABI=${CPU} \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DANDROID_NDK=${NDK} \
 	-DCMAKE_TOOLCHAIN_FILE=${NDK}/build/cmake/android.toolchain.cmake \
+	-DCMAKE_C_FLAGS="-ffile-prefix-map=${BORINGSSL_SRC}/=" \
+	-DCMAKE_CXX_FLAGS="-ffile-prefix-map=${BORINGSSL_SRC}/=" \
 	-GNinja -DCMAKE_MAKE_PROGRAM=${NINJA_PATH} \
 	../..
 

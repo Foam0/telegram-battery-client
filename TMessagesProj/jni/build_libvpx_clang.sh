@@ -65,6 +65,10 @@ function build_one {
 	--enable-vp9 \
 	--disable-webm-io
 
+	# Normalize absolute NDK path in vpx_config for reproducible builds.
+	NDK_VERSION=$(basename "${NDK}")
+	find . -name "vpx_config.*" -exec sed -i "s|${NDK}|/opt/android-sdk/ndk/${NDK_VERSION}|g" {} +
+
 	make -j$COMPILATION_PROC_COUNT install
 
 	if [ "x86" = ${ARCH} ]; then

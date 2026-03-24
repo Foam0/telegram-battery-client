@@ -5,6 +5,9 @@ set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1")
 set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
+# Strip absolute build paths from __FILE__ macros for reproducible builds
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffile-prefix-map=${CMAKE_SOURCE_DIR}/=")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffile-prefix-map=${CMAKE_SOURCE_DIR}/=")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--build-id=none -Wl,--hash-style=gnu -Wl,-Bsymbolic -Wl,--exclude-libs,libtgvoip.a,libtgcalls.a,libtgcalls_tp.a,libtgnet.a,libflac.a,librlottie.a,libsqlite.a,
 ${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libswscale.a,
 ${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libavformat.a,
