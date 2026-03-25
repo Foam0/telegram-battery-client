@@ -205,6 +205,40 @@ The public gateway at `https://p2p.belloworld.it/` short-circuits `ntfy.sh` endp
 
 ---
 
+## Reproducible Builds
+
+F-Droid verifies reproducibility by building from source and comparing the unsigned APK contents against the developer-signed release APK (signature files are stripped for comparison). Several measures ensure the native `.so` and other build artifacts are identical regardless of where the build runs.
+
+### Native library reproducibility
+
+All native libraries are compiled from source. The following sources of non-determinism are addressed:
+
+| Source | Fix | Files |
+|---|---|---|
+| `__FILE__` macro paths (653 strings from voip, BoringSSL, tde2e, exoplayer) | `-Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__` | `CMakeLists.txt`, `voip/CMakeLists.txt`, `build_boringssl.sh`, `build_tde2e.sh`, `build_dav1d.sh` |
+| ffmpeg configure string (embeds absolute NDK path) | `sed` on `config.h` after configure | `build_ffmpeg_clang.sh` |
+| libvpx configure string (embeds absolute NDK path) | `sed` on `vpx_config.*` after configure | `build_libvpx_clang.sh` |
+| ffmpeg version string (shallow clones lack tags → git hash) | Replace `ffbuild/version.sh` with fixed-output script | `build_ffmpeg_clang.sh` |
+
+**Why `-D__FILE__=__FILE_NAME__`**: NDK r21e uses clang 9.0.9 which does NOT support `-fmacro-prefix-map` (requires clang 10+). The `__FILE_NAME__` builtin (clang 9+) returns just the filename without the directory path, producing identical strings regardless of build directory.
+
+### JDK version
+
+The F-Droid production build server (Ubuntu) uses JDK 17 via `openjdk-17-jdk-headless`. DEX files, baseline profiles, and VectorDrawable PNG rasterization are all JDK-version-sensitive. For local reproducibility testing with the fdroid Docker container (Debian 13 Trixie, which lacks JDK 17 in repos), install Temurin JDK 17:
+
+```bash
+# In the container's sh -c command, before running fdroid build:
+apt-get install -y wget apt-transport-https gpg
+wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg
+echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(. /etc/os-release; echo $VERSION_CODENAME) main" > /etc/apt/sources.list.d/adoptium.list
+apt-get update && apt-get install -y temurin-17-jdk
+update-alternatives --set java /usr/lib/jvm/temurin-17-jdk-amd64/bin/java
+update-alternatives --set javac /usr/lib/jvm/temurin-17-jdk-amd64/bin/javac
+export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+```
+
+---
+
 ## Known Limitations
 
 - **Passkeys**: Android Passkey support is disabled by setting `BuildVars.SUPPORTS_PASSKEYS = false`. Telegram servers verify the APK signature against the official app, which causes verification to fail for unofficial forks.

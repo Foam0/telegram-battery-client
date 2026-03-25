@@ -57,7 +57,7 @@ sys_root = '${SYSROOT}'
 needs_exe_wrapper = true
 
 [built-in options]
-c_args = ['-fPIC', '-DANDROID', '-D_LARGEFILE_SOURCE=1']
+c_args = ['-fPIC', '-DANDROID', '-D_LARGEFILE_SOURCE=1', '-Wno-builtin-macro-redefined', '-D__FILE__=__FILE_NAME__']
 c_link_args = ['-fPIC']
 
 [binaries]

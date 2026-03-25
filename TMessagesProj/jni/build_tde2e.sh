@@ -81,6 +81,8 @@ for ABI in "${ABIS_TO_BUILD[@]}"; do
           -DOPENSSL_INCLUDE_DIR="$BORINGSSL_DIR/include" \
           -DOPENSSL_CRYPTO_LIBRARY="$BORINGSSL_DIR/build/$ABI/crypto/libcrypto.a" \
           -DOPENSSL_SSL_LIBRARY="$BORINGSSL_DIR/build/$ABI/ssl/libssl.a" \
+          "-DCMAKE_C_FLAGS=-Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__" \
+          "-DCMAKE_CXX_FLAGS=-Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__" \
           -GNinja -DCMAKE_MAKE_PROGRAM="$NINJA_PATH" \
           "$TD_DIR"
 

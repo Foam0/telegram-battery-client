@@ -15,6 +15,8 @@ function build_one {
 	-DCMAKE_BUILD_TYPE=Release \
 	-DANDROID_NDK=${NDK} \
 	-DCMAKE_TOOLCHAIN_FILE=${NDK}/build/cmake/android.toolchain.cmake \
+	"-DCMAKE_C_FLAGS=-Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__" \
+	"-DCMAKE_CXX_FLAGS=-Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__" \
 	-GNinja -DCMAKE_MAKE_PROGRAM=${NINJA_PATH} \
 	../..
 
