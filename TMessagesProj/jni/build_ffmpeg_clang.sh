@@ -100,6 +100,11 @@ function build_one {
 	--enable-hwaccels \
 	$ADDITIONAL_CONFIGURE_FLAG
 
+	# Normalize absolute NDK path in config.h for reproducible builds.
+	# ffmpeg embeds the full configure command (including NDK paths) in libavutil.
+	NDK_VERSION=$(basename "${NDK}")
+	sed -i "s|${NDK}|/opt/android-sdk/ndk/${NDK_VERSION}|g" config.h
+
 	#echo "continue?"
 	#read
 	make -j$COMPILATION_PROC_COUNT
