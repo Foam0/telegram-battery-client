@@ -16,8 +16,8 @@ function build_one {
 	-DCMAKE_BUILD_TYPE=Release \
 	-DANDROID_NDK=${NDK} \
 	-DCMAKE_TOOLCHAIN_FILE=${NDK}/build/cmake/android.toolchain.cmake \
-	-DCMAKE_C_FLAGS="-ffile-prefix-map=${BORINGSSL_SRC}/=" \
-	-DCMAKE_CXX_FLAGS="-ffile-prefix-map=${BORINGSSL_SRC}/=" \
+	-DCMAKE_C_FLAGS="-fmacro-prefix-map=${BORINGSSL_SRC}/=" \
+	-DCMAKE_CXX_FLAGS="-fmacro-prefix-map=${BORINGSSL_SRC}/=" \
 	-GNinja -DCMAKE_MAKE_PROGRAM=${NINJA_PATH} \
 	../..
 
