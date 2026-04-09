@@ -176,6 +176,14 @@ public class SharedConfig {
                 .commit();
     }
 
+    public static void toggleDisableAutoUpdate() {
+        disableAutoUpdate = !disableAutoUpdate;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableAutoUpdate", disableAutoUpdate)
+                .apply();
+    }
+
     public static void setUnifiedPushGateway(String gateway) {
         unifiedPushGateway = gateway;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -323,6 +331,7 @@ public class SharedConfig {
     public static boolean messageDetailsMenu = false;
     public static boolean disableSecureFlags = false;
     public static boolean removeAdsAndProxySponsor = false;
+    public static boolean disableAutoUpdate = false;
 
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
@@ -444,6 +453,10 @@ public class SharedConfig {
     public static TLRPC.TL_help_appUpdate pendingAppUpdate;
     public static int pendingAppUpdateBuildVersion;
     public static long lastUpdateCheckTime;
+
+    public static String mgPendingUpdate = null;
+    public static long mgLastUpdateCheckTime;
+    public static String mgUpdateApkPath = null;
 
     public static boolean hasEmailLogin;
 
@@ -609,9 +622,21 @@ public class SharedConfig {
                 editor.putString("mg_unifiedPushGateway2", unifiedPushGateway);
                 editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
                 editor.putBoolean("mg_removeAdsAndProxySponsor", removeAdsAndProxySponsor);
+                editor.putBoolean("mg_disableAutoUpdate", disableAutoUpdate);
                 editor.putString("mg_webPushPrivateKey", webPushPrivateKey != null ? Base64.encodeToString(webPushPrivateKey, Base64.DEFAULT) : "");
                 editor.putString("mg_webPushPublicKey", webPushPublicKey != null ? Base64.encodeToString(webPushPublicKey, Base64.DEFAULT) : "");
                 editor.putString("mg_webPushAuthSecret", webPushAuthSecret != null ? Base64.encodeToString(webPushAuthSecret, Base64.DEFAULT) : "");
+                if (mgPendingUpdate != null) {
+                    editor.putString("mg_pendingUpdate", mgPendingUpdate);
+                } else {
+                    editor.remove("mg_pendingUpdate");
+                }
+                editor.putLong("mg_lastUpdateCheckTime", mgLastUpdateCheckTime);
+                if (mgUpdateApkPath != null) {
+                    editor.putString("mg_updateApkPath", mgUpdateApkPath);
+                } else {
+                    editor.remove("mg_updateApkPath");
+                }
                 editor.putString("mg_unifiedPushEndpointUrl", unifiedPushEndpointUrl);
                 editor.apply();
             } catch (Exception e) {
@@ -811,6 +836,7 @@ public class SharedConfig {
             unifiedPushGateway = preferences.getString("mg_unifiedPushGateway2", unifiedPushGateway);
             disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
             removeAdsAndProxySponsor = preferences.getBoolean("mg_removeAdsAndProxySponsor", false);
+            disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
             String wpPriv = preferences.getString("mg_webPushPrivateKey", "");
             if (!TextUtils.isEmpty(wpPriv)) webPushPrivateKey = Base64.decode(wpPriv, Base64.DEFAULT);
             String wpPub = preferences.getString("mg_webPushPublicKey", "");
@@ -818,6 +844,26 @@ public class SharedConfig {
             String wpAuth = preferences.getString("mg_webPushAuthSecret", "");
             if (!TextUtils.isEmpty(wpAuth)) webPushAuthSecret = Base64.decode(wpAuth, Base64.DEFAULT);
             unifiedPushEndpointUrl = preferences.getString("mg_unifiedPushEndpointUrl", "");
+            mgPendingUpdate = preferences.getString("mg_pendingUpdate", null);
+            mgLastUpdateCheckTime = preferences.getLong("mg_lastUpdateCheckTime", 0);
+            mgUpdateApkPath = preferences.getString("mg_updateApkPath", null);
+            if (mgPendingUpdate != null) {
+                try {
+                    it.belloworld.mercurygram.MgUpdateInfo info = it.belloworld.mercurygram.MgUpdateInfo.fromJson(mgPendingUpdate);
+                    if (info != null) {
+                        String currentVersion = null;
+                        try {
+                            PackageInfo pi = ApplicationLoader.applicationContext.getPackageManager()
+                                    .getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
+                            currentVersion = pi.versionName;
+                        } catch (Exception ignore) {}
+                        if (currentVersion != null && versionBiggerOrEqual(currentVersion, info.versionName)) {
+                            mgPendingUpdate = null;
+                            mgUpdateApkPath = null;
+                        }
+                    }
+                } catch (Exception ignore) {}
+            }
 
             loadDebugConfig(preferences);
 
@@ -948,6 +994,33 @@ public class SharedConfig {
         pendingAppUpdateBuildVersion = versionCode;
         saveConfig();
         return true;
+    }
+
+    public static boolean isMgUpdateAvailable() {
+        return mgPendingUpdate != null && !it.belloworld.mercurygram.MgUpdateChecker.isFdroidBuild();
+    }
+
+    public static it.belloworld.mercurygram.MgUpdateInfo getMgPendingUpdate() {
+        return it.belloworld.mercurygram.MgUpdateInfo.fromJson(mgPendingUpdate);
+    }
+
+    public static void setMgPendingUpdate(it.belloworld.mercurygram.MgUpdateInfo info) {
+        if (info != null) {
+            mgPendingUpdate = info.toJson();
+        } else {
+            mgPendingUpdate = null;
+            mgUpdateApkPath = null;
+        }
+        saveConfig();
+    }
+
+    public static void clearMgPendingUpdate() {
+        if (mgUpdateApkPath != null) {
+            new java.io.File(mgUpdateApkPath).delete();
+        }
+        mgPendingUpdate = null;
+        mgUpdateApkPath = null;
+        saveConfig();
     }
 
     // returns a >= b
