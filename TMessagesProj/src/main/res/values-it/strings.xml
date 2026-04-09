@@ -1535,4 +1535,23 @@
     <string name="RemindDayAt">\'Ricorda il\' d MMM \'alle\' HH:mm</string>
     <string name="RemindDayYearAt">\'Ricorda il\' d MMM yyyy \'alle\' HH:mm</string>
     <string name="BotsMenuTitle">Menu</string>
+    <string name="MercurygramSettings">Mercurygram</string>
+    <string name="MercurygramSettingsInfo">Funzionalità specifiche di Mercurygram</string>
+    <string name="MercurygramSettingsGeneral">Generale</string>
+    <string name="MercurygramSettingsMedia">Media</string>
+    <string name="MercurygramSettingsUpdates">Aggiornamenti</string>
+    <string name="MercurygramSettingsNotifications">Notifiche</string>
+    <string name="MercurygramMessageDetailsMenu">Mostra \"Dettagli messaggio\"</string>
+    <string name="MercurygramDisableAutoUpdate">Disabilita aggiornamenti in-app</string>
+    <string name="MercurygramDisableAutoUpdateAbout">Mercurygram non controllerà più la presenza di aggiornamenti su GitHub all\'avvio. Puoi comunque avviare un controllo manuale dal menu di debug.</string>
+    <string name="MercurygramAcceptPreReleaseUpdates">Accetta aggiornamenti pre-release</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesAbout">Ricevi build pre-release a 5 punti (ad esempio 12.6.4.4.42) tramite l\'aggiornamento in-app. Sono snapshot di sviluppo fra le release stabili; possono contenere crash, funzionalità parzialmente operative o altre regressioni. Puoi disattivare questa opzione in seguito per tornare alla release stabile (a 4 punti) corrispondente; le build pre-source (X.Y.Z.0.K) sono un\'eccezione e restano bloccate fino alla prossima release stabile.</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesLocked">Stai usando una build pre-source per una futura versione upstream. Questo interruttore può essere disattivato solo dopo che il sorgente upstream corrispondente viene rilasciato e tu aggiorni a una release stabile (a 4 punti).</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesWarningTitle">Abilitare gli aggiornamenti pre-release?</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesWarningMessage">Le build pre-release di Mercurygram (a 5 punti, ad esempio 12.6.4.4.42) sono snapshot di sviluppo fra le release stabili. Possono contenere crash non ancora scoperti, funzionalità parzialmente operative o altre regressioni. Puoi disattivare questa opzione in seguito per tornare alla release stabile (a 4 punti) corrispondente. Continuare?</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesEnable">Abilita</string>
+    <string name="MercurygramDisableUnifiedPush">Disabilita UnifiedPush</string>
+    <string name="MercurygramDisableUnifiedPushAbout">Quando disabilitato, Mercurygram torna al polling per i nuovi messaggi. L\'app verrà riavviata per applicare la modifica.</string>
+    <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram deve essere riavviato per applicare questa modifica. Continuare?</string>
+    <string name="MercurygramRestart">Riavvia</string>
 </resources>
