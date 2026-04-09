@@ -1,0 +1,213 @@
+name: Beta
+
+on:
+  push:
+    branches:
+      - Mercurygram
+
+concurrency:
+  group: beta-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # K (5th component of X.Y.Z.W.K) is derived from existing git tags so it
+  # resets to 1 on every MG_VERSION_NAME bump. The .beta debug-flavor
+  # versionCodeOverride stays on github.run_number (globally monotonic) so
+  # PackageInstaller accepts beta-over-beta upgrades across a stable bump.
+  version:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.compute.outputs.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          fetch-tags: true
+
+      - name: Compute beta version
+        id: compute
+        run: |
+          set -euo pipefail
+          MG_VN=$(grep '^MG_VERSION_NAME=' gradle.properties | cut -d= -f2)
+          LAST=$(git tag -l "${MG_VN}.*" --sort=-version:refname | head -1 || true)
+          if [ -z "$LAST" ]; then
+            K=1
+          else
+            K=$(( ${LAST##*.} + 1 ))
+          fi
+          echo "name=${MG_VN}.${K}" >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: ubuntu-24.04
+    needs: version
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Release builds — reproducible, shares versionCode with the
+          # latest stable. Filename has no infix.
+          - flavor: afatFdArm32
+            task: assembleAfatFdArm32Release
+            abi: armeabi-v7a
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdArm64
+            task: assembleAfatFdArm64Release
+            abi: arm64-v8a
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdX86
+            task: assembleAfatFdX86Release
+            abi: x86
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdX86_64
+            task: assembleAfatFdX86_64Release
+            abi: x86_64
+            build-type: release
+            name-infix: ''
+          # Debug builds — `.beta` applicationIdSuffix, side-by-side install
+          # with stable. Filename gets a "-debug" infix to distinguish from
+          # the Release APK.
+          - flavor: afatFdArm32
+            task: assembleAfatFdArm32Debug
+            abi: armeabi-v7a
+            build-type: debug
+            name-infix: '-debug'
+          - flavor: afatFdArm64
+            task: assembleAfatFdArm64Debug
+            abi: arm64-v8a
+            build-type: debug
+            name-infix: '-debug'
+          - flavor: afatFdX86
+            task: assembleAfatFdX86Debug
+            abi: x86
+            build-type: debug
+            name-infix: '-debug'
+          - flavor: afatFdX86_64
+            task: assembleAfatFdX86_64Debug
+            abi: x86_64
+            build-type: debug
+            name-infix: '-debug'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Build APK
+        id: build
+        uses: ./.github/actions/build-mg
+        with:
+          flavor: ${{ matrix.flavor }}
+          task: ${{ matrix.task }}
+          abi: ${{ matrix.abi }}
+          build-type: ${{ matrix.build-type }}
+          artifact-version: ${{ needs.version.outputs.name }}
+          name-infix: ${{ matrix.name-infix }}
+          # MG_BETA_* only apply to the debug buildType (see
+          # TMessagesProj_App/build.gradle:274). For release, leave the inputs
+          # empty so build-mg skips the -P overrides and the variant takes the
+          # standard MG_VERSION_CODE*10+abi versionCode.
+          beta-version-code: ${{ matrix.build-type == 'debug' && github.run_number || '' }}
+          beta-version-name: ${{ matrix.build-type == 'debug' && needs.version.outputs.name || '' }}
+          app-id: ${{ secrets.APP_ID }}
+          app-hash: ${{ secrets.APP_HASH }}
+          release-keystore-b64: ${{ secrets.RELEASE_KEYSTORE }}
+          release-keystore-password: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          release-key-alias: ${{ secrets.RELEASE_KEY_ALIAS }}
+          release-key-password: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: apk-${{ matrix.abi }}-${{ matrix.build-type }}
+          path: ${{ steps.build.outputs.apk_path }}
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: [version, build]
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ needs.version.outputs.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: artifacts/
+
+      - name: Compose changelog
+        env:
+          TAG: ${{ needs.version.outputs.name }}
+        run: |
+          set -euo pipefail
+          MG_VN="${TAG%.*}"
+          # Match the 4-part stable tag AND prior 5-part betas so the first
+          # beta after a stable bump references that stable, not "-n 30".
+          PREV=$(git tag -l "${MG_VN}" "${MG_VN}.*" --sort=-version:refname | head -1 || true)
+          {
+            if [ -n "$PREV" ]; then
+              printf '## Changes since %s\n\n' "$PREV"
+              git log --pretty=format:'- %s' "${PREV}..HEAD"
+            else
+              printf '## Recent changes\n\n'
+              git log --pretty=format:'- %s' -n 30
+            fi
+            printf '\n\ncommit: %s\n' "${GITHUB_SHA}"
+          } > "$RUNNER_TEMP/body.md"
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.version.outputs.name }}
+          name: ${{ needs.version.outputs.name }}
+          prerelease: true
+          make_latest: false
+          body_path: ${{ runner.temp }}/body.md
+          files: artifacts/*.apk
+
+  # Reproducibility regression guard for the beta channel: rebuild the just-
+  # published arm64 Release APK inside the F-Droid buildserver-trixie env and
+  # compare against the GitHub artifact. arm64 only — the source is identical
+  # across ABIs; per-ABI delta is the buildNativeLibs<Abi> task. continue-on-
+  # error is on so an infra hiccup or a transient diffoscope mismatch never
+  # blocks a beta release. Flip to hard-fail once the run is consistently green.
+  verify:
+    runs-on: ubuntu-24.04
+    needs: release
+    timeout-minutes: 90
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Run reproducibility check (arm64 Release APK)
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+          REF: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${{ github.repository }}/releases/download/${TAG}/Mercurygram-${TAG}-arm64-v8a.apk"
+          scripts/check-reproducibility.sh verify "$url" "$REF"
