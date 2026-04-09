@@ -1373,4 +1373,23 @@
     <string name="RemindTodayAt">\'Heute um\' HH:mm \'erinnern\'</string>
     <string name="RemindDayAt">\'Am\' d MMM \'um\' HH:mm \'erinnern\'</string>
     <string name="RemindDayYearAt">\'Am\' d\'.\' MMM yyyy \'um\' HH:mm \'erinnern\'</string>
+    <string name="MercurygramSettings">Mercurygram</string>
+    <string name="MercurygramSettingsInfo">Mercurygram-spezifische Funktionen</string>
+    <string name="MercurygramSettingsGeneral">Allgemein</string>
+    <string name="MercurygramSettingsMedia">Medien</string>
+    <string name="MercurygramSettingsUpdates">Updates</string>
+    <string name="MercurygramSettingsNotifications">Benachrichtigungen</string>
+    <string name="MercurygramMessageDetailsMenu">\"Nachrichtendetails\" anzeigen</string>
+    <string name="MercurygramDisableAutoUpdate">In-App-Updater deaktivieren</string>
+    <string name="MercurygramDisableAutoUpdateAbout">Mercurygram sucht beim Start nicht mehr auf GitHub nach Updates. Du kannst weiterhin manuell aus dem Debug-Menü prüfen.</string>
+    <string name="MercurygramAcceptPreReleaseUpdates">Pre-Release-Updates akzeptieren</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesAbout">Empfange 5-Punkt-Pre-Release-Builds (z. B. 12.6.4.4.42) über den In-App-Updater. Das sind Entwicklungs-Snapshots zwischen stabilen Versionen; sie können Abstürze, teilweise funktionierende Features oder andere Regressionen enthalten. Nach der Installation kannst du diese Option erst wieder deaktivieren, wenn du auf eine stabile (4-Punkt-)Version aktualisierst.</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesLocked">Du verwendest einen Pre-Release-Build. Dieser Schalter kann erst nach einem Update auf eine stabile (4-Punkt-)Version deaktiviert werden.</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesWarningTitle">Pre-Release-Updates aktivieren?</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesWarningMessage">Mercurygram-Pre-Release-Builds (5-Punkt, z. B. 12.6.4.4.42) sind Entwicklungs-Snapshots zwischen stabilen Versionen. Sie können noch unbekannte Abstürze, nur teilweise funktionierende Features oder andere Regressionen enthalten. Nach der Installation kannst du diese Option erst wieder deaktivieren, sobald eine stabile (4-Punkt-)Version erscheint und du darauf aktualisierst. Fortfahren?</string>
+    <string name="MercurygramAcceptPreReleaseUpdatesEnable">Aktivieren</string>
+    <string name="MercurygramDisableUnifiedPush">UnifiedPush deaktivieren</string>
+    <string name="MercurygramDisableUnifiedPushAbout">Wenn deaktiviert, fällt Mercurygram auf Polling neuer Nachrichten zurück. Die App wird neu gestartet, um die Änderung anzuwenden.</string>
+    <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram muss neu gestartet werden, um diese Änderung anzuwenden. Fortfahren?</string>
+    <string name="MercurygramRestart">Neu starten</string>
 </resources>
