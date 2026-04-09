@@ -1373,4 +1373,17 @@
     <string name="RemindTodayAt">\'Heute um\' HH:mm \'erinnern\'</string>
     <string name="RemindDayAt">\'Am\' d MMM \'um\' HH:mm \'erinnern\'</string>
     <string name="RemindDayYearAt">\'Am\' d\'.\' MMM yyyy \'um\' HH:mm \'erinnern\'</string>
+    <string name="MercurygramSettings">Mercurygram</string>
+    <string name="MercurygramSettingsInfo">Mercurygram-spezifische Funktionen</string>
+    <string name="MercurygramSettingsGeneral">Allgemein</string>
+    <string name="MercurygramSettingsMedia">Medien</string>
+    <string name="MercurygramSettingsUpdates">Updates</string>
+    <string name="MercurygramSettingsNotifications">Benachrichtigungen</string>
+    <string name="MercurygramMessageDetailsMenu">\"Nachrichtendetails\" anzeigen</string>
+    <string name="MercurygramDisableAutoUpdate">In-App-Updater deaktivieren</string>
+    <string name="MercurygramDisableAutoUpdateAbout">Mercurygram sucht beim Start nicht mehr auf GitHub nach Updates. Du kannst weiterhin manuell aus dem Debug-Menü prüfen.</string>
+    <string name="MercurygramDisableUnifiedPush">UnifiedPush deaktivieren</string>
+    <string name="MercurygramDisableUnifiedPushAbout">Wenn deaktiviert, fällt Mercurygram auf Polling neuer Nachrichten zurück. Die App wird neu gestartet, um die Änderung anzuwenden.</string>
+    <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram muss neu gestartet werden, um diese Änderung anzuwenden. Fortfahren?</string>
+    <string name="MercurygramRestart">Neu starten</string>
 </resources>
