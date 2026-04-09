@@ -263,4 +263,7 @@
     <string name="RemindDayAt">\'Отправить\' d MMM \'в\' HH:mm</string>
     <string name="RemindDayYearAt">\'Напомнить\' d MMM yyyy \'в\' HH:mm</string>
     <string name="MercurygramSendLargePhotos">Отправлять фото большего размера (2560px)</string>
+    <string name="MercurygramRearRoundVideos">Использовать заднюю камеру для видеосообщений</string>
+    <string name="MercurygramHideChatKeyboard">Скрывать клавиатуру при прокрутке чата</string>
+    <string name="MercurygramHideAllTab">Скрывать вкладку «Все чаты»</string>
 </resources>

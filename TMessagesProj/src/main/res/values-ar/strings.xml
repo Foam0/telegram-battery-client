@@ -1243,4 +1243,7 @@
     <string name="RemindDayAt">\'ذكّرني بتاريخ\' d MMM \'عند\' HH:mm</string>
     <string name="RemindDayYearAt">\'ذكّرني بتاريخ\' d MMM yyyy \'عند\' HH:mm</string>
     <string name="MercurygramSendLargePhotos">إرسال صور أكبر (2560 بكسل)</string>
+    <string name="MercurygramRearRoundVideos">استخدام الكاميرا الخلفية لرسائل الفيديو</string>
+    <string name="MercurygramHideChatKeyboard">إخفاء لوحة المفاتيح عند تمرير المحادثة</string>
+    <string name="MercurygramHideAllTab">إخفاء علامة التبويب \"جميع المحادثات\"</string>
 </resources>

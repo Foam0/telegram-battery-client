@@ -1084,4 +1084,7 @@
     <string name="RemindDayYearAt">\'Herinner op\' d MMM yyyy \'om\' HH:mm</string>
     <string name="BotsMenuTitle">Menu</string>
     <string name="MercurygramSendLargePhotos">Grotere foto\'s versturen (2560px)</string>
+    <string name="MercurygramRearRoundVideos">Achtercamera gebruiken voor videoberichten</string>
+    <string name="MercurygramHideChatKeyboard">Toetsenbord verbergen bij scrollen door chat</string>
+    <string name="MercurygramHideAllTab">Tabblad \"Alle chats\" verbergen</string>
 </resources>

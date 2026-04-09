@@ -1375,4 +1375,7 @@
     <string name="RemindDayAt">\'Am\' d MMM \'um\' HH:mm \'erinnern\'</string>
     <string name="RemindDayYearAt">\'Am\' d\'.\' MMM yyyy \'um\' HH:mm \'erinnern\'</string>
     <string name="MercurygramSendLargePhotos">Größere Fotos senden (2560px)</string>
+    <string name="MercurygramRearRoundVideos">Rückkamera für Videonachrichten verwenden</string>
+    <string name="MercurygramHideChatKeyboard">Tastatur beim Chat-Scrollen ausblenden</string>
+    <string name="MercurygramHideAllTab">Tab \"Alle Chats\" ausblenden</string>
 </resources>

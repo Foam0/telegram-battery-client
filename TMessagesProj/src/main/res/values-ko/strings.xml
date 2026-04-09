@@ -1136,4 +1136,7 @@
     <string name="RemindDayYearAt">yyyy\'년\' M\'월\' d\'일\' HH:mm\'에 알림\'</string>
     <string name="BotsMenuTitle">메뉴</string>
     <string name="MercurygramSendLargePhotos">더 큰 사진 보내기 (2560px)</string>
+    <string name="MercurygramRearRoundVideos">영상 메시지에 후면 카메라 사용</string>
+    <string name="MercurygramHideChatKeyboard">채팅 스크롤 시 키보드 숨기기</string>
+    <string name="MercurygramHideAllTab">\"모든 채팅\" 탭 숨기기</string>
 </resources>

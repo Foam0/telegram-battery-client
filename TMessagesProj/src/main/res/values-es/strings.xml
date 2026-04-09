@@ -1316,4 +1316,7 @@
     <string name="BotsMenuTitle">Menu</string>
     <string name="Understood">👍 Entendido</string>
     <string name="MercurygramSendLargePhotos">Enviar fotos más grandes (2560px)</string>
+    <string name="MercurygramRearRoundVideos">Usar cámara trasera para mensajes de video</string>
+    <string name="MercurygramHideChatKeyboard">Ocultar teclado al desplazarse por el chat</string>
+    <string name="MercurygramHideAllTab">Ocultar pestaña \"Todos los chats\"</string>
 </resources>

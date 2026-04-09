@@ -10580,6 +10580,9 @@
     <string name="RelativeDateCopied">Date copied to clipboard</string>
     <string name="GiftResaleStarsOnly">Show listings for stars only</string>
     <string name="MercurygramSendLargePhotos">Send larger photos (2560px)</string>
+    <string name="MercurygramRearRoundVideos">Use rear camera for video messages</string>
+    <string name="MercurygramHideChatKeyboard">Hide keyboard on chat scroll</string>
+    <string name="MercurygramHideAllTab">Hide \"All Chats\" tab</string>
     <string name="UnifiedPushDistributor">UnifiedPush Distributor</string>
     <string name="UnifiedPushGateway">Gateway URL</string>
     <string name="UnifiedPushGatewayInfo">URL prefix for the UnifiedPush gateway</string>
