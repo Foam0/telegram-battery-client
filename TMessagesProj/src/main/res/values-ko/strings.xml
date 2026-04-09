@@ -1135,4 +1135,5 @@
     <string name="RemindDayAt">MMM d HH:mm\'에 알리기\'</string>
     <string name="RemindDayYearAt">yyyy\'년\' M\'월\' d\'일\' HH:mm\'에 알림\'</string>
     <string name="BotsMenuTitle">메뉴</string>
+    <string name="MercurygramSendLargePhotos">더 큰 사진 보내기 (2560px)</string>
 </resources>
