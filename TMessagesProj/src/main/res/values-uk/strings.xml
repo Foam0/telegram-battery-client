@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>
     <string name="LanguageNameInEnglish">Ukrainian</string>
     <string name="LanguageCode">uk</string>
     <string name="ContinueOnThisLanguage">Продовжити українською</string>
+    <string name="MercurygramVersion">Mercurygram для Android %1$s</string>
     <!--signin view-->
     <string name="YourPhone">Ваш номер</string>
     <string name="StartText">Перевірте код країни і введіть\nсвій номер телефону.</string>
