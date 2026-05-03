@@ -83,6 +83,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import android.os.SystemClock;
 
+import it.belloworld.mercurygram.HiddenAccountHelper;
+
 public class NotificationsSettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
     public static class NotificationException {
@@ -191,7 +193,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
     private void rebuildRows() {
         rowCount = 0;
 
-        if (UserConfig.getActivatedAccountsCount() > 1) {
+        if (HiddenAccountHelper.getVisibleAccountsCount() > 1) {
             accountsSectionRow = rowCount++;
             accountsAllRow = rowCount++;
             accountsInfoRow = rowCount++;
