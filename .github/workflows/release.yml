@@ -166,3 +166,81 @@ jobs:
         with:
           body_path: artifacts/changelog.md
           files: artifacts/*.apk
+
+  fdroiddata-sync:
+    runs-on: ubuntu-24.04
+    needs: build
+    env:
+      APPID: it.belloworld.mercurygram
+      BRANCH: mercurygram-${{ github.ref_name }}
+    concurrency:
+      group: fdroiddata-sync-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Download signed APKs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: apks/
+
+      - name: Checkout Mercurygram at tag
+        uses: actions/checkout@v6
+        with:
+          path: mercurygram
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Install fdroidserver + ruamel.yaml
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apksigner
+          python3 -m venv "$HOME/fdroid-venv"
+          "$HOME/fdroid-venv/bin/pip" install --quiet fdroidserver ruamel.yaml
+
+      - name: Clone fdroiddata
+        env:
+          GITLAB_TOKEN: ${{ secrets.FDROIDDATA_GITLAB_TOKEN }}
+        run: |
+          # --filter=blob:none: partial clone, ~50 MB instead of ~500 MB.
+          # GitLab refuses push from --depth=1 ("shallow update not allowed")
+          # but accepts it from a partial clone.
+          git clone --filter=blob:none \
+            "https://oauth2:${GITLAB_TOKEN}@gitlab.com/drizzt/fdroiddata.git"
+          cd fdroiddata
+          git config user.name 'Mercurygram CI'
+          git config user.email 'ci@belloworld.it'
+          git remote add upstream https://gitlab.com/fdroid/fdroiddata.git
+          git fetch --filter=blob:none upstream master
+          git checkout -B "$BRANCH" upstream/master
+
+      - name: Sync metadata and extract per-vercode signature blocks
+        working-directory: fdroiddata
+        run: |
+          "$HOME/fdroid-venv/bin/python3" \
+            ../mercurygram/.github/scripts/fdroid_sync.py \
+            "$GITHUB_REF_NAME" ../apks . ../mercurygram
+
+      - name: Commit and push branch
+        working-directory: fdroiddata
+        run: |
+          git add "metadata/$APPID.yml" "metadata/$APPID/signatures/"
+          git commit -m "$APPID: update to ${GITHUB_REF_NAME}"
+          git push --force-with-lease -u origin "$BRANCH"
+
+      - name: Open merge request
+        env:
+          GITLAB_TOKEN: ${{ secrets.FDROIDDATA_GITLAB_TOKEN }}
+        run: |
+          SRC_PID=$(curl -sf --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            'https://gitlab.com/api/v4/projects/drizzt%2Ffdroiddata' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          curl -sf --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            --data-urlencode "source_branch=$BRANCH" \
+            --data-urlencode 'target_branch=master' \
+            --data-urlencode "title=$APPID: update to ${GITHUB_REF_NAME}" \
+            --data-urlencode 'target_project_id=36528' \
+            --data-urlencode 'remove_source_branch=true' \
+            "https://gitlab.com/api/v4/projects/${SRC_PID}/merge_requests" \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print("MR:", d.get("web_url") or d)'
