@@ -5834,6 +5834,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
                                         photoEntry.isVideo = true;
                                         photoEntry.isLivePhoto = true;
+                                        photoEntry.discardLivePhoto = SharedConfig.disableLivePhotosByDefault; // [MG]
 
                                         photoEntry.livePhotoVideoOffset = videoStart;
                                         photoEntry.livePhotoTimestampUs = motionPhoto.photoPresentationTimestampUs;

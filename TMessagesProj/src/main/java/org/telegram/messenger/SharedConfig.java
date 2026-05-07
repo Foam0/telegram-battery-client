@@ -184,6 +184,14 @@ public class SharedConfig {
                 .apply();
     }
 
+    public static void toggleDisableLivePhotosByDefault() {
+        disableLivePhotosByDefault = !disableLivePhotosByDefault;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableLivePhotosByDefault", disableLivePhotosByDefault)
+                .apply();
+    }
+
     public static void setUnifiedPushGateway(String gateway) {
         unifiedPushGateway = gateway;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -332,6 +340,7 @@ public class SharedConfig {
     public static boolean disableSecureFlags = false;
     public static boolean removeAdsAndProxySponsor = false;
     public static boolean disableAutoUpdate = false;
+    public static boolean disableLivePhotosByDefault = false;
 
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
@@ -837,6 +846,7 @@ public class SharedConfig {
             disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
             removeAdsAndProxySponsor = preferences.getBoolean("mg_removeAdsAndProxySponsor", false);
             disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
+            disableLivePhotosByDefault = preferences.getBoolean("mg_disableLivePhotosByDefault", false);
             String wpPriv = preferences.getString("mg_webPushPrivateKey", "");
             if (!TextUtils.isEmpty(wpPriv)) webPushPrivateKey = Base64.decode(wpPriv, Base64.DEFAULT);
             String wpPub = preferences.getString("mg_webPushPublicKey", "");
