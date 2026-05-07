@@ -45,6 +45,7 @@ public class MercurygramSettingsActivity extends UniversalFragment {
     private static final int ID_HIDE_ALL_TAB = 3;
     private static final int ID_SEND_LARGE_PHOTOS = 10;
     private static final int ID_REAR_ROUND_VIDEOS = 11;
+    private static final int ID_DISABLE_LIVE_PHOTOS = 12;
     private static final int ID_DISABLE_AUTO_UPDATE = 20;
     private static final int ID_ACCEPT_PRERELEASES = 21;
     private static final int ID_DISABLE_UNIFIED_PUSH = 30;
@@ -86,7 +87,9 @@ public class MercurygramSettingsActivity extends UniversalFragment {
                 .setChecked(getUserConfig().sendLargePhotos));
         items.add(UItem.asCheck(ID_REAR_ROUND_VIDEOS, LocaleController.getString(R.string.RearRoundVideos))
                 .setChecked(getUserConfig().rearRoundCamera));
-        items.add(UItem.asShadow(null));
+        items.add(UItem.asCheck(ID_DISABLE_LIVE_PHOTOS, LocaleController.getString(R.string.MercurygramDisableLivePhotos))
+                .setChecked(SharedConfig.disableLivePhotosByDefault));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramDisableLivePhotosAbout)));
 
         if (!MgUpdateChecker.isFdroidBuild()) {
             items.add(UItem.asHeader(LocaleController.getString(R.string.MercurygramSettingsUpdates)));
@@ -161,6 +164,10 @@ public class MercurygramSettingsActivity extends UniversalFragment {
             case ID_REAR_ROUND_VIDEOS:
                 getUserConfig().rearRoundCamera = !getUserConfig().rearRoundCamera;
                 getUserConfig().saveConfig(false);
+                refreshList();
+                break;
+            case ID_DISABLE_LIVE_PHOTOS:
+                SharedConfig.toggleDisableLivePhotosByDefault();
                 refreshList();
                 break;
             case ID_DISABLE_AUTO_UPDATE:

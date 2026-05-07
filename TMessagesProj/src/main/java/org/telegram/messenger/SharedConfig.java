@@ -189,6 +189,11 @@ public class SharedConfig {
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_acceptPreReleaseUpdates", acceptPreReleaseUpdates)
+    public static void toggleDisableLivePhotosByDefault() {
+        disableLivePhotosByDefault = !disableLivePhotosByDefault;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableLivePhotosByDefault", disableLivePhotosByDefault)
                 .apply();
     }
 
@@ -342,6 +347,7 @@ public class SharedConfig {
     public static boolean disableAutoUpdate = false;
     public static boolean acceptPreReleaseUpdates = false;
     public static String mgLastInstalledTag = null;
+    public static boolean disableLivePhotosByDefault = false;
 
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
@@ -855,6 +861,7 @@ public class SharedConfig {
             disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
             acceptPreReleaseUpdates = preferences.getBoolean("mg_acceptPreReleaseUpdates", false);
             mgLastInstalledTag = preferences.getString("mg_lastInstalledTag", null);
+            disableLivePhotosByDefault = preferences.getBoolean("mg_disableLivePhotosByDefault", false);
             String wpPriv = preferences.getString("mg_webPushPrivateKey", "");
             if (!TextUtils.isEmpty(wpPriv)) webPushPrivateKey = Base64.decode(wpPriv, Base64.DEFAULT);
             String wpPub = preferences.getString("mg_webPushPublicKey", "");

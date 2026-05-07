@@ -1256,6 +1256,8 @@
     <string name="MercurygramAcceptPreReleaseUpdatesWarningTitle">تفعيل تحديثات الإصدارات قبل النهائية؟</string>
     <string name="MercurygramAcceptPreReleaseUpdatesWarningMessage">إصدارات Mercurygram قبل النهائية (مكونة من خمس نقاط مثل 12.6.4.4.42) هي نسخ تطوير بين الإصدارات المستقرة. قد تحتوي على أعطال غير مكتشفة أو ميزات تعمل جزئياً. بعد تثبيت إحداها، لن تتمكن من تعطيل هذا الخيار حتى يصدر إصدار مستقر (مكون من أربع نقاط) وتقوم بالتحديث إليه. متابعة؟</string>
     <string name="MercurygramAcceptPreReleaseUpdatesEnable">تفعيل</string>
+    <string name="MercurygramDisableLivePhotos">تعطيل Live Photos افتراضيًا</string>
+    <string name="MercurygramDisableLivePhotosAbout">أرسل الصورة الثابتة فقط عند اختيار Google Motion Photo. لا يزال بإمكانك تمكين Live Photo لاختيار فردي بالنقر على أيقونة الحركة في لوحة المرفقات.</string>
     <string name="MercurygramDisableUnifiedPush">تعطيل UnifiedPush</string>
     <string name="MercurygramDisableUnifiedPushAbout">عند تعطيله، يعود Mercurygram إلى استطلاع الرسائل الجديدة. سيُعاد تشغيل التطبيق لتطبيق التغيير.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">يحتاج Mercurygram إلى إعادة التشغيل لتطبيق هذا التغيير. هل تريد المتابعة؟</string>
