@@ -283,6 +283,8 @@
     <string name="MercurygramMessageDetailsMenu">Показати «Деталі повідомлення»</string>
     <string name="MercurygramDisableAutoUpdate">Вимкнути вбудований оновлювач</string>
     <string name="MercurygramDisableAutoUpdateAbout">Mercurygram більше не перевірятиме оновлення на GitHub під час запуску. Ручну перевірку можна запустити з меню налагодження.</string>
+    <string name="MercurygramDisableLivePhotos">Вимкнути Live Photos за замовчуванням</string>
+    <string name="MercurygramDisableLivePhotosAbout">Надсилати лише статичне фото під час вибору Google Motion Photo. Live Photo для окремого вибору можна увімкнути, торкнувшись піктограми руху на панелі вкладень.</string>
     <string name="MercurygramDisableUnifiedPush">Вимкнути UnifiedPush</string>
     <string name="MercurygramDisableUnifiedPushAbout">Якщо вимкнено, Mercurygram повертається до опитування нових повідомлень. Програму буде перезапущено для застосування змін.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Щоб застосувати цю зміну, Mercurygram потрібно перезапустити. Продовжити?</string>

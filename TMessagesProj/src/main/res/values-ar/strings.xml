@@ -1250,6 +1250,8 @@
     <string name="MercurygramMessageDetailsMenu">إظهار \"تفاصيل الرسالة\"</string>
     <string name="MercurygramDisableAutoUpdate">تعطيل المُحدِّث داخل التطبيق</string>
     <string name="MercurygramDisableAutoUpdateAbout">لن يتحقق Mercurygram بعد الآن من التحديثات على GitHub عند بدء التشغيل. لا يزال بإمكانك تشغيل فحص يدوي من قائمة التصحيح.</string>
+    <string name="MercurygramDisableLivePhotos">تعطيل Live Photos افتراضيًا</string>
+    <string name="MercurygramDisableLivePhotosAbout">أرسل الصورة الثابتة فقط عند اختيار Google Motion Photo. لا يزال بإمكانك تمكين Live Photo لاختيار فردي بالنقر على أيقونة الحركة في لوحة المرفقات.</string>
     <string name="MercurygramDisableUnifiedPush">تعطيل UnifiedPush</string>
     <string name="MercurygramDisableUnifiedPushAbout">عند تعطيله، يعود Mercurygram إلى استطلاع الرسائل الجديدة. سيُعاد تشغيل التطبيق لتطبيق التغيير.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">يحتاج Mercurygram إلى إعادة التشغيل لتطبيق هذا التغيير. هل تريد المتابعة؟</string>

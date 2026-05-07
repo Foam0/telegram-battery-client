@@ -1256,6 +1256,8 @@
     <string name="MercurygramMessageDetailsMenu">Mostrar \"Detalhes da mensagem\"</string>
     <string name="MercurygramDisableAutoUpdate">Desativar atualizador interno</string>
     <string name="MercurygramDisableAutoUpdateAbout">O Mercurygram não verificará mais atualizações no GitHub na inicialização. Você ainda pode iniciar uma verificação manual no menu de depuração.</string>
+    <string name="MercurygramDisableLivePhotos">Desativar Live Photos por padrão</string>
+    <string name="MercurygramDisableLivePhotosAbout">Enviar apenas a foto estática ao escolher uma Google Motion Photo. Você ainda pode ativar Live Photo para uma seleção específica tocando no ícone de movimento no painel de anexos.</string>
     <string name="MercurygramDisableUnifiedPush">Desativar UnifiedPush</string>
     <string name="MercurygramDisableUnifiedPushAbout">Quando desativado, o Mercurygram volta a sondar por novas mensagens. O aplicativo será reiniciado para aplicar a alteração.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">O Mercurygram precisa ser reiniciado para aplicar esta alteração. Continuar?</string>
