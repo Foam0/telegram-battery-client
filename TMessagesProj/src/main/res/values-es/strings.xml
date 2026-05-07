@@ -1329,6 +1329,8 @@
     <string name="MercurygramAcceptPreReleaseUpdatesWarningTitle">¿Activar actualizaciones de pre-lanzamiento?</string>
     <string name="MercurygramAcceptPreReleaseUpdatesWarningMessage">Las compilaciones de pre-lanzamiento de Mercurygram (de 5 puntos, como 12.6.4.4.42) son capturas de desarrollo entre versiones estables. Pueden contener fallos no descubiertos, funciones parcialmente operativas u otras regresiones. Puedes desactivar esta opción más tarde para volver a la versión estable (de 4 puntos) correspondiente. ¿Continuar?</string>
     <string name="MercurygramAcceptPreReleaseUpdatesEnable">Activar</string>
+    <string name="MercurygramDisableLivePhotos">Desactivar Live Photos de forma predeterminada</string>
+    <string name="MercurygramDisableLivePhotosAbout">Envía solo la foto estática al seleccionar una Google Motion Photo. Aún puedes activar Live Photo en una selección concreta tocando el icono de movimiento en el panel de adjuntos.</string>
     <string name="MercurygramDisableUnifiedPush">Desactivar UnifiedPush</string>
     <string name="MercurygramDisableUnifiedPushAbout">Cuando está desactivado, Mercurygram vuelve al sondeo de nuevos mensajes. La aplicación se reiniciará para aplicar el cambio.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram debe reiniciarse para aplicar este cambio. ¿Continuar?</string>

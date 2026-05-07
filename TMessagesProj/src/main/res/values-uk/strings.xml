@@ -289,6 +289,8 @@
     <string name="MercurygramAcceptPreReleaseUpdatesWarningTitle">Увімкнути попередні оновлення?</string>
     <string name="MercurygramAcceptPreReleaseUpdatesWarningMessage">Попередні збірки Mercurygram (5-крапкові, наприклад 12.6.4.4.42) — це знімки розробки між стабільними випусками. Вони можуть містити ще не виявлені збої, частково працюючі функції або інші регресії. Ви можете вимкнути цей параметр пізніше, щоб повернутися до відповідного стабільного (4-крапкового) випуску. Продовжити?</string>
     <string name="MercurygramAcceptPreReleaseUpdatesEnable">Увімкнути</string>
+    <string name="MercurygramDisableLivePhotos">Вимкнути Live Photos за замовчуванням</string>
+    <string name="MercurygramDisableLivePhotosAbout">Надсилати лише статичне фото під час вибору Google Motion Photo. Live Photo для окремого вибору можна увімкнути, торкнувшись піктограми руху на панелі вкладень.</string>
     <string name="MercurygramDisableUnifiedPush">Вимкнути UnifiedPush</string>
     <string name="MercurygramDisableUnifiedPushAbout">Якщо вимкнено, Mercurygram повертається до опитування нових повідомлень. Програму буде перезапущено для застосування змін.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Щоб застосувати цю зміну, Mercurygram потрібно перезапустити. Продовжити?</string>
