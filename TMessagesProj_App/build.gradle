@@ -263,8 +263,15 @@ android {
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             def flavorName = variant.productFlavors.get(0).name
-            outputFileName = flavorName.startsWith("afatFd") ? "${flavorName}.apk" : "app.apk"
-            output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode
+            def isBeta = variant.buildType.name == "debug" && project.hasProperty("MG_BETA_VERSION_CODE")
+            if (isBeta) {
+                outputFileName = "${flavorName}.apk"
+                output.versionCodeOverride = Integer.parseInt(MG_BETA_VERSION_CODE)
+                output.versionNameOverride = MG_BETA_VERSION_NAME
+            } else {
+                outputFileName = flavorName.startsWith("afatFd") ? "${flavorName}.apk" : "app.apk"
+                output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode
+            }
         }
     }
 
