@@ -1,0 +1,158 @@
+name: Beta
+
+on:
+  push:
+    branches:
+      - Mercurygram
+
+concurrency:
+  group: beta-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: afatFdArm32
+            task: assembleAfatFdArm32Debug
+            abi: armeabi-v7a
+          - flavor: afatFdArm64
+            task: assembleAfatFdArm64Debug
+            abi: arm64-v8a
+          - flavor: afatFdX86
+            task: assembleAfatFdX86Debug
+            abi: x86
+          - flavor: afatFdX86_64
+            task: assembleAfatFdX86_64Debug
+            abi: x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake golang-go gperf g++ libuv1 libuv1-dev make meson nasm ninja-build
+
+      - name: Cache Android NDK and build-tools
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ env.ANDROID_SDK_ROOT }}/ndk/21.4.7075529
+            ${{ env.ANDROID_SDK_ROOT }}/build-tools/35.0.0
+          key: android-sdk-${{ runner.os }}-ndk-21.4.7075529-buildtools-35.0.0
+
+      - name: Install NDK and build-tools
+        run: $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "ndk;21.4.7075529" "build-tools;35.0.0"
+
+      - name: Create API_KEYS
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_HASH: ${{ secrets.APP_HASH }}
+        run: printf 'APP_ID = %s\nAPP_HASH = %s\n' "$APP_ID" "$APP_HASH" > API_KEYS
+
+      - name: Setup signing
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
+        run: echo "$KEYSTORE_B64" | base64 -d > TMessagesProj/config/release.keystore
+
+      - name: Compute beta version
+        id: ver
+        run: |
+          set -euo pipefail
+          MG_VN=$(grep '^MG_VERSION_NAME=' gradle.properties | cut -d= -f2)
+          echo "name=${MG_VN}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build APK
+        env:
+          KS_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KS_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KS_KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          ./gradlew ${{ matrix.task }} \
+            -PMG_BETA_VERSION_CODE="${{ steps.ver.outputs.code }}" \
+            -PMG_BETA_VERSION_NAME="${{ steps.ver.outputs.name }}" \
+            -PRELEASE_STORE_PASSWORD="$KS_PASS" \
+            -PRELEASE_KEY_PASSWORD="$KS_KEY_PASS" \
+            -PRELEASE_KEY_ALIAS="$KS_KEY_ALIAS" \
+            --no-daemon
+
+      - name: Rename artifact
+        id: rename
+        run: |
+          set -euo pipefail
+          APK_DIR=TMessagesProj_App/build/outputs/apk/${{ matrix.flavor }}/debug
+          DEST="$APK_DIR/Mercurygram-${{ steps.ver.outputs.name }}-${{ matrix.abi }}.apk"
+          cp "$APK_DIR/${{ matrix.flavor }}.apk" "$DEST"
+          echo "apk_path=${DEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: apk-${{ matrix.abi }}
+          path: ${{ steps.rename.outputs.apk_path }}
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: artifacts/
+
+      - name: Compute beta version and changelog
+        id: meta
+        run: |
+          set -euo pipefail
+          MG_VN=$(grep '^MG_VERSION_NAME=' gradle.properties | cut -d= -f2)
+          echo "name=${MG_VN}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+          PREV=$(git tag -l "${MG_VN}.*" --sort=-version:refname | head -1 || true)
+          {
+            if [ -n "$PREV" ]; then
+              printf '## Changes since %s\n\n' "$PREV"
+              git log --pretty=format:'- %s' "${PREV}..HEAD"
+            else
+              printf '## Recent changes\n\n'
+              git log --pretty=format:'- %s' -n 30
+            fi
+            printf '\n\ncommit: %s\n' "${GITHUB_SHA}"
+          } > "$RUNNER_TEMP/body.md"
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.name }}
+          name: ${{ steps.meta.outputs.name }}
+          prerelease: true
+          make_latest: false
+          body_path: ${{ runner.temp }}/body.md
+          files: artifacts/*.apk
