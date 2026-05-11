@@ -197,6 +197,15 @@ public class SharedConfig {
                 .apply();
     }
 
+    public static void toggleUseSystemFont() {
+        useSystemFont = !useSystemFont;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_useSystemFont", useSystemFont)
+                .apply();
+        AndroidUtilities.clearTypefaceCache();
+    }
+
     public static void setUnifiedPushGateway(String gateway) {
         unifiedPushGateway = gateway;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -348,6 +357,7 @@ public class SharedConfig {
     public static boolean acceptPreReleaseUpdates = false;
     public static String mgLastInstalledTag = null;
     public static boolean disableLivePhotosByDefault = false;
+    public static boolean useSystemFont = false;
 
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
@@ -862,6 +872,7 @@ public class SharedConfig {
             acceptPreReleaseUpdates = preferences.getBoolean("mg_acceptPreReleaseUpdates", false);
             mgLastInstalledTag = preferences.getString("mg_lastInstalledTag", null);
             disableLivePhotosByDefault = preferences.getBoolean("mg_disableLivePhotosByDefault", false);
+            useSystemFont = preferences.getBoolean("mg_useSystemFont", false);
             String wpPriv = preferences.getString("mg_webPushPrivateKey", "");
             if (!TextUtils.isEmpty(wpPriv)) webPushPrivateKey = Base64.decode(wpPriv, Base64.DEFAULT);
             String wpPub = preferences.getString("mg_webPushPublicKey", "");
