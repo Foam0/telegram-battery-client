@@ -1252,4 +1252,17 @@
     <string name="MercurygramRearRoundVideos">Usar câmera traseira para mensagens de vídeo</string>
     <string name="MercurygramHideChatKeyboard">Ocultar teclado ao rolar o chat</string>
     <string name="MercurygramHideAllTab">Ocultar aba \"Todas as conversas\"</string>
+    <string name="MercurygramSettings">Mercurygram</string>
+    <string name="MercurygramSettingsInfo">Recursos específicos do Mercurygram</string>
+    <string name="MercurygramSettingsGeneral">Geral</string>
+    <string name="MercurygramSettingsMedia">Mídia</string>
+    <string name="MercurygramSettingsUpdates">Atualizações</string>
+    <string name="MercurygramSettingsNotifications">Notificações</string>
+    <string name="MercurygramMessageDetailsMenu">Mostrar \"Detalhes da mensagem\"</string>
+    <string name="MercurygramDisableAutoUpdate">Desativar atualizador interno</string>
+    <string name="MercurygramDisableAutoUpdateAbout">O Mercurygram não verificará mais atualizações no GitHub na inicialização. Você ainda pode iniciar uma verificação manual no menu de depuração.</string>
+    <string name="MercurygramDisableUnifiedPush">Desativar UnifiedPush</string>
+    <string name="MercurygramDisableUnifiedPushAbout">Quando desativado, o Mercurygram volta a sondar por novas mensagens. O aplicativo será reiniciado para aplicar a alteração.</string>
+    <string name="MercurygramUnifiedPushRestartConfirm">O Mercurygram precisa ser reiniciado para aplicar esta alteração. Continuar?</string>
+    <string name="MercurygramRestart">Reiniciar</string>
 </resources>

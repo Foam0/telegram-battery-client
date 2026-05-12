@@ -1246,4 +1246,17 @@
     <string name="MercurygramRearRoundVideos">استخدام الكاميرا الخلفية لرسائل الفيديو</string>
     <string name="MercurygramHideChatKeyboard">إخفاء لوحة المفاتيح عند تمرير المحادثة</string>
     <string name="MercurygramHideAllTab">إخفاء علامة التبويب \"جميع المحادثات\"</string>
+    <string name="MercurygramSettings">Mercurygram</string>
+    <string name="MercurygramSettingsInfo">ميزات خاصة بـ Mercurygram</string>
+    <string name="MercurygramSettingsGeneral">عام</string>
+    <string name="MercurygramSettingsMedia">الوسائط</string>
+    <string name="MercurygramSettingsUpdates">التحديثات</string>
+    <string name="MercurygramSettingsNotifications">الإشعارات</string>
+    <string name="MercurygramMessageDetailsMenu">إظهار \"تفاصيل الرسالة\"</string>
+    <string name="MercurygramDisableAutoUpdate">تعطيل المُحدِّث داخل التطبيق</string>
+    <string name="MercurygramDisableAutoUpdateAbout">لن يتحقق Mercurygram بعد الآن من التحديثات على GitHub عند بدء التشغيل. لا يزال بإمكانك تشغيل فحص يدوي من قائمة التصحيح.</string>
+    <string name="MercurygramDisableUnifiedPush">تعطيل UnifiedPush</string>
+    <string name="MercurygramDisableUnifiedPushAbout">عند تعطيله، يعود Mercurygram إلى استطلاع الرسائل الجديدة. سيُعاد تشغيل التطبيق لتطبيق التغيير.</string>
+    <string name="MercurygramUnifiedPushRestartConfirm">يحتاج Mercurygram إلى إعادة التشغيل لتطبيق هذا التغيير. هل تريد المتابعة؟</string>
+    <string name="MercurygramRestart">إعادة التشغيل</string>
 </resources>

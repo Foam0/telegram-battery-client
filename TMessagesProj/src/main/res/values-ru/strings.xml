@@ -266,4 +266,17 @@
     <string name="MercurygramRearRoundVideos">Использовать заднюю камеру для видеосообщений</string>
     <string name="MercurygramHideChatKeyboard">Скрывать клавиатуру при прокрутке чата</string>
     <string name="MercurygramHideAllTab">Скрывать вкладку «Все чаты»</string>
+    <string name="MercurygramSettings">Mercurygram</string>
+    <string name="MercurygramSettingsInfo">Функции, специфичные для Mercurygram</string>
+    <string name="MercurygramSettingsGeneral">Основное</string>
+    <string name="MercurygramSettingsMedia">Медиа</string>
+    <string name="MercurygramSettingsUpdates">Обновления</string>
+    <string name="MercurygramSettingsNotifications">Уведомления</string>
+    <string name="MercurygramMessageDetailsMenu">Показать «Подробности сообщения»</string>
+    <string name="MercurygramDisableAutoUpdate">Отключить встроенное обновление</string>
+    <string name="MercurygramDisableAutoUpdateAbout">Mercurygram больше не будет проверять обновления на GitHub при запуске. Вручную проверить можно через меню отладки.</string>
+    <string name="MercurygramDisableUnifiedPush">Отключить UnifiedPush</string>
+    <string name="MercurygramDisableUnifiedPushAbout">Если отключено, Mercurygram переходит на опрос новых сообщений. Приложение перезапустится для применения изменения.</string>
+    <string name="MercurygramUnifiedPushRestartConfirm">Для применения этого изменения Mercurygram нужно перезапустить. Продолжить?</string>
+    <string name="MercurygramRestart">Перезапустить</string>
 </resources>
