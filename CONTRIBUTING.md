@@ -99,3 +99,13 @@ For non-translation code changes, follow the conventions in
   not added as new follow-up commits.
 - Keep `AGENTS.md` / `README.md` in sync with any change to build, config,
   or workflow.
+
+### `[UP]` commits are maintainer-only
+
+`[UP]`-prefixed commits port upstream Telegram changes from a decompiled APK
+during the gap before DrKLO publishes the matching source. They live on
+throwaway `pre-source/<upstream-version>` branches and are discarded when the
+real source ships — see [`AGENTS.md`](AGENTS.md) "Pre-source upstream sync".
+
+PRs containing `[UP]` commits are **not accepted**: the decompiled source has
+provenance and review constraints that the maintainer handles directly.

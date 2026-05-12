@@ -165,6 +165,10 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "0"
+            // Used by the in-app updater on pre-source builds to compare against
+            // GitHub release published_at (versionCode is fixed across pre1/pre2/...).
+            buildConfigField "long", "MG_BUILD_TIMESTAMP", System.currentTimeMillis() + "L"
+            buildConfigField "boolean", "MG_IS_PRE_SOURCE", MG_VERSION_NAME.contains(".pre").toString()
         }
 
         standalone {
@@ -181,6 +185,8 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "6"
+            buildConfigField "long", "MG_BUILD_TIMESTAMP", "0L"
+            buildConfigField "boolean", "MG_IS_PRE_SOURCE", MG_VERSION_NAME.contains(".pre").toString()
         }
 
         release {
@@ -198,6 +204,8 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "7"
+            buildConfigField "long", "MG_BUILD_TIMESTAMP", "0L"
+            buildConfigField "boolean", "MG_IS_PRE_SOURCE", MG_VERSION_NAME.contains(".pre").toString()
         }
     }
 
