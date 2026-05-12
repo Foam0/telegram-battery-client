@@ -13,6 +13,44 @@ This is an unofficial fork of [Telegram App for Android](https://github.com/DrKL
 
 </div>
 
+## Install
+
+Mercurygram publishes three kinds of build. The tag shape tells you which:
+
+| Channel | Tag shape | Example | Packages | When it ships |
+|---|---|---|---|---|
+| **Stable** | 4-part `X.Y.Z.M` (M ≥ 1) | `12.7.3.1` | stable only (`it.belloworld.mercurygram`) | Tagged release. Also goes to F-Droid / IzzyOnDroid. |
+| **Snapshot** | 5-part `X.Y.Z.M.K` (M ≥ 1) | `12.7.3.1.42` | **both** stable and beta (`it.belloworld.mercurygram.beta`) | Every push to the `Mercurygram` branch (`beta.yml`). Snapshot of the next stable. |
+| **Pre-source** | 5-part `X.Y.Z.0.N` (penultimate = 0) | `12.7.3.0.1` | **both** stable and beta | When DrKLO ships an official Telegram APK before pushing the matching source — built from a decompiled APK on a throwaway `pre-source/<ver>` branch (`prerelease.yml`). Decompiled Java may contain artefacts. |
+
+The 5-part channels publish two APKs per release: a Release-flavor APK that updates the stable package side and a Debug-flavor APK (filename infixed with `-debug`) that updates the `.beta` package side. Filenames: `Mercurygram-<tag>-<abi>.apk` (Release) and `Mercurygram-debug-<tag>-<abi>.apk` (Debug). Stable installs pull the Release APK via the in-app updater opt-in toggle; `.beta` installs pull the Debug APK.
+
+Versions order naturally: `12.7.3.0.1 < 12.7.3.0.2 < 12.7.3.1 < 12.7.3.1.42 < 12.7.3.2`.
+
+### One-click install via [Obtainium](https://obtainium.imranr.dev/)
+
+Open the link on your Android device and the app source pre-fills with the right release filter and package ID.
+
+**Stable** — package `it.belloworld.mercurygram`. Tagged stable releases only.
+
+[![Add Mercurygram to Obtainium](https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22it.belloworld.mercurygram%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FMercurygram%2FMercurygram%22%2C%22author%22%3A%22Mercurygram%22%2C%22name%22%3A%22Mercurygram%22%7D)
+
+**Beta** — package `it.belloworld.mercurygram.beta`. Any 5-part build (both Snapshot and Pre-source). The catch-all if you want everything pre-release.
+
+[![Add Mercurygram Beta to Obtainium](https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22it.belloworld.mercurygram.beta%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FMercurygram%2FMercurygram%22%2C%22author%22%3A%22Mercurygram%22%2C%22name%22%3A%22Mercurygram%20Beta%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3A%20true%2C%20%5C%22filterReleaseTitlesByRegEx%5C%22%3A%20%5C%22%5E%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%24%5C%22%7D%22%7D)
+
+**Snapshot only** — package `it.belloworld.mercurygram.beta`. Per-push snapshots of the next stable (`X.Y.Z.M.K`, M ≥ 1). Skips pre-source builds.
+
+[![Add Mercurygram Snapshot to Obtainium](https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22it.belloworld.mercurygram.beta%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FMercurygram%2FMercurygram%22%2C%22author%22%3A%22Mercurygram%22%2C%22name%22%3A%22Mercurygram%20Snapshot%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3A%20true%2C%20%5C%22filterReleaseTitlesByRegEx%5C%22%3A%20%5C%22%5E%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5B1-9%5D%5C%5C%5C%5Cd%2A%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%24%5C%22%7D%22%7D)
+
+**Pre-source only** — package `it.belloworld.mercurygram.beta`. Decompiled-APK ports (`X.Y.Z.0.N`). May contain decompilation artefacts.
+
+[![Add Mercurygram Pre-source to Obtainium](https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22it.belloworld.mercurygram.beta%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FMercurygram%2FMercurygram%22%2C%22author%22%3A%22Mercurygram%22%2C%22name%22%3A%22Mercurygram%20Pre-source%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3A%20true%2C%20%5C%22filterReleaseTitlesByRegEx%5C%22%3A%20%5C%22%5E%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.0%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%24%5C%22%7D%22%7D)
+
+> **Obtainium users:** pre-source iterations of the same upstream version (`X.Y.Z.0.1`, `X.Y.Z.0.2`, …) share the same `versionCode` by design. In your beta app entry, set **Sort method** → *Release date* and **Apk Sort Method** → *Release date* so newer iterations are detected. The in-app updater handles this automatically.
+>
+> **Stable users:** the in-app updater can be opted in to pre-release updates from **Settings → Mercurygram → Updates → Accept pre-release updates**. Enabling shows a warning dialog; once installed a pre-release you can only turn the toggle off again after upgrading to a stable (4-part) release.
+
 ## Features
 
 - Add ID in Profile Info
@@ -160,12 +198,15 @@ locale.
 
 ## Versioning
 
-This repository contains tags to make tracking versions easier.
+Tag shape encodes the release channel (see the [Install](#install) section for the table):
 
-Versions are in form "$UPSTREAM.$RELEASE" where:
+- **Stable** — `X.Y.Z.M` (4-part, `M ≥ 1`). `X.Y.Z` is the upstream Telegram version; `M` is the Mercurygram minor revision on top of it. Goes to the `it.belloworld.mercurygram` package, F-Droid, IzzyOnDroid.
+- **Snapshot** — `X.Y.Z.M.K` (5-part, `M ≥ 1`). Per-push automated build between stable `X.Y.Z.M` and `X.Y.Z.(M+1)`. `K` is the GitHub Actions run number. Goes to the `it.belloworld.mercurygram.beta` package.
+- **Pre-source** — `X.Y.Z.0.N` (5-part, penultimate `0`). Built from a decompiled Telegram APK when upstream ships the official APK before the matching source. The `0` marks "no upstream source yet"; once it does ship, the first stable release is `X.Y.Z.1`. Goes to the `it.belloworld.mercurygram.beta` package.
 
-* $UPSTREAM is the upstream Telegram version.
-* $RELEASE is a number ([0-9]\*), indicating minor releases between official upstream versions.
+Pure lex compare on the dotted integer vector (shorter padded with zero) gives the right chronology: `12.7.3.0.1 < 12.7.3.0.2 < 12.7.3.1 < 12.7.3.1.42 < 12.7.3.2`.
+
+`MgUpdateChecker` records the tag the in-app updater last installed in `SharedConfig.mgLastInstalledTag` and uses that for comparisons — runtime `versionName`/`versionCode` alone can't distinguish a 5-part snapshot from the stable it's a snapshot of.
 
 ## API, Protocol documentation
 

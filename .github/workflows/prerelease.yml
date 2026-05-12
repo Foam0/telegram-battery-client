@@ -1,0 +1,201 @@
+name: Pre-source Release
+
+# Triggered when a maintainer pushes a pre-source tag (e.g. 12.7.3.0.1).
+# Pre-source tags are 5-part numeric tags with the penultimate component
+# equal to 0: X.Y.Z.0.N where N >= 1 (see AGENTS.md "Pre-source upstream
+# sync"). The release.yml glob excludes 5-part tags so this workflow is
+# the only one that fires; beta.yml's snapshot tags (X.Y.Z.M.K with
+# M >= 1) never hit this glob because the penultimate is M, not 0.
+#
+# This pipeline mirrors beta.yml — per push it builds both the Release flavor
+# (stable package) and the Debug flavor (`.beta` package) per ABI (8 APKs
+# total) and publishes them as a GitHub pre-release clearly labelled as built
+# from a decompiled APK. F-Droid sync is intentionally skipped — pre-source
+# builds are not source-reproducible in the F-Droid sense.
+
+on:
+  push:
+    tags:
+      - '*.*.*.0.*'
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      apk_sha256: ${{ steps.manifest.outputs.apk_sha256 }}
+      apk_version: ${{ steps.manifest.outputs.apk_version }}
+      upstream_ref: ${{ steps.manifest.outputs.upstream_ref }}
+      upstream_sha: ${{ steps.manifest.outputs.upstream_sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Translation lockstep gate
+        run: |
+          set -euo pipefail
+          out=$(./scripts/check-mg-translations.sh)
+          echo "$out"
+          if printf '%s' "$out" | grep -qE 'missing [1-9]'; then
+              echo "::error::Translation gate failed — missing MG keys in one or more locales." >&2
+              exit 1
+          fi
+
+      - name: Pre-source sanity check
+        run: ./scripts/presource-sanity-check.sh "$GITHUB_REF_NAME"
+
+      - name: Read manifest
+        id: manifest
+        run: |
+          set -euo pipefail
+          m=.presource-manifest
+          {
+            echo "apk_sha256=$(sed -n 's/^APK_SHA256=//p' "$m")"
+            echo "apk_version=$(sed -n 's/^APK_VERSION_NAME=//p' "$m")"
+            echo "upstream_ref=$(sed -n 's/^UPSTREAM_REF=//p' "$m")"
+            echo "upstream_sha=$(sed -n 's/^UPSTREAM_SHA=//p' "$m")"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: ubuntu-24.04
+    needs: gate
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Release builds — go to the stable package
+          # (it.belloworld.mercurygram). Stable users who opted in via
+          # Settings → Mercurygram → Updates → Accept pre-release updates
+          # receive these through the in-app updater.
+          - flavor: afatFdArm32
+            task: assembleAfatFdArm32Release
+            abi: armeabi-v7a
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdArm64
+            task: assembleAfatFdArm64Release
+            abi: arm64-v8a
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdX86
+            task: assembleAfatFdX86Release
+            abi: x86
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdX86_64
+            task: assembleAfatFdX86_64Release
+            abi: x86_64
+            build-type: release
+            name-infix: ''
+          # Debug builds — `.beta` applicationIdSuffix, side-by-side install
+          # with stable. Filename gets a "-debug" infix to distinguish from
+          # the Release APK.
+          - flavor: afatFdArm32
+            task: assembleAfatFdArm32Debug
+            abi: armeabi-v7a
+            build-type: debug
+            name-infix: '-debug'
+          - flavor: afatFdArm64
+            task: assembleAfatFdArm64Debug
+            abi: arm64-v8a
+            build-type: debug
+            name-infix: '-debug'
+          - flavor: afatFdX86
+            task: assembleAfatFdX86Debug
+            abi: x86
+            build-type: debug
+            name-infix: '-debug'
+          - flavor: afatFdX86_64
+            task: assembleAfatFdX86_64Debug
+            abi: x86_64
+            build-type: debug
+            name-infix: '-debug'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Build APK
+        id: build
+        uses: ./.github/actions/build-mg
+        with:
+          flavor: ${{ matrix.flavor }}
+          task: ${{ matrix.task }}
+          abi: ${{ matrix.abi }}
+          build-type: ${{ matrix.build-type }}
+          artifact-version: ${{ github.ref_name }}
+          name-infix: ${{ matrix.name-infix }}
+          app-id: ${{ secrets.APP_ID }}
+          app-hash: ${{ secrets.APP_HASH }}
+          release-keystore-b64: ${{ secrets.RELEASE_KEYSTORE }}
+          release-keystore-password: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          release-key-alias: ${{ secrets.RELEASE_KEY_ALIAS }}
+          release-key-password: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: apk-${{ matrix.abi }}-${{ matrix.build-type }}
+          path: ${{ steps.build.outputs.apk_path }}
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: [gate, build]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: artifacts/
+
+      - name: Compose release body
+        run: |
+          set -euo pipefail
+          PREV=$(git tag -l '[0-9]*' --sort=-version:refname \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
+              | head -1 || true)
+          {
+            printf '## PRE-SOURCE BUILD\n\n'
+            printf 'Built from a decompiled official Telegram APK before DrKLO published the matching source.\n'
+            printf 'Decompiled Java may contain artefacts (synthetic identifiers, missing generics).\n\n'
+            printf '| Field | Value |\n|---|---|\n'
+            printf '| Upstream APK version | `%s` |\n' '${{ needs.gate.outputs.apk_version }}'
+            printf '| APK SHA-256          | `%s` |\n' '${{ needs.gate.outputs.apk_sha256 }}'
+            printf '| Upstream baseline    | `%s` (`%s`) |\n' \
+                '${{ needs.gate.outputs.upstream_ref }}' \
+                '${{ needs.gate.outputs.upstream_sha }}'
+            printf '\n'
+            if [ -n "$PREV" ]; then
+              printf '## Changes since %s\n\n' "$PREV"
+              bash .github/scripts/changelog-diff.sh --presource "$PREV" "$GITHUB_REF_NAME" \
+                  | grep -E '^\[(UP|MG|TF)\]' \
+                  | sed -E 's/^(\[[A-Z]+\]) /- \1 /' \
+                  || echo '- See commit history for changes.'
+            fi
+          } > "$RUNNER_TEMP/body.md"
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }} (pre-source)
+          prerelease: true
+          make_latest: false
+          body_path: ${{ runner.temp }}/body.md
+          files: artifacts/*.apk

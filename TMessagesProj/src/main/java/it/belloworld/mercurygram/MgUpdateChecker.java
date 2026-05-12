@@ -386,4 +386,5 @@ public class MgUpdateChecker {
         }
         return vec;
     }
+
 }
