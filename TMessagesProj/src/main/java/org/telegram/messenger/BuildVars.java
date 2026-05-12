@@ -21,6 +21,8 @@ public class BuildVars {
     public static boolean CHECK_UPDATES = true;
     public static boolean NO_SCOPED_STORAGE = Build.VERSION.SDK_INT <= 29;
     public static String BUILD_VERSION_STRING = BuildConfig.BUILD_VERSION_STRING;
+    public static long MG_BUILD_TIMESTAMP = BuildConfig.MG_BUILD_TIMESTAMP;
+    public static boolean MG_IS_PRE_SOURCE = BuildConfig.MG_IS_PRE_SOURCE;
 
     public static int APP_ID = BuildConfig.APP_ID;
     public static String APP_HASH = BuildConfig.APP_HASH;

@@ -27,6 +27,10 @@ release filter and package ID.
 
 [![Add Mercurygram Beta to Obtainium](https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22it.belloworld.mercurygram.beta%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FMercurygram%2FMercurygram%22%2C%22author%22%3A%22Mercurygram%22%2C%22name%22%3A%22Mercurygram%20Beta%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3A%20true%2C%20%5C%22filterReleaseTitlesByRegEx%5C%22%3A%20%5C%22%5E%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%5C%5C%5C%5C.%5C%5C%5C%5Cd%2B%24%5C%22%7D%22%7D)
 
+**Pre-source builds** — occasionally published as [GitHub pre-releases](https://github.com/Mercurygram/Mercurygram/releases) when the official Telegram APK ships a new version before DrKLO pushes the matching source. Tags end with `.preN` and the release body documents the upstream APK SHA-256. See [`AGENTS.md`](AGENTS.md#pre-source-upstream-sync).
+
+> **Obtainium users:** pre1/pre2/... iterations of the same upstream version share the same `versionCode` by design. In your beta app entry, set **Sort method** → *Release date* and **Apk Sort Method** → *Release date* so newer pre-source iterations are detected. The in-app updater handles this automatically.
+
 ## Features
 
 - Add ID in Profile Info

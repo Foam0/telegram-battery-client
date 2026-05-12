@@ -29,6 +29,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MgUpdateChecker {
@@ -151,9 +153,10 @@ public class MgUpdateChecker {
                     release = new JSONObject(body);
                 }
                 String tagName = release.getString("tag_name");
+                String publishedAt = release.optString("published_at", "");
 
                 String currentVersion = getCurrentVersionName();
-                if (SharedConfig.versionBiggerOrEqual(currentVersion, tagName)) {
+                if (isUpToDate(currentVersion, tagName, publishedAt)) {
                     SharedConfig.mgLastUpdateCheckTime = System.currentTimeMillis();
                     SharedConfig.saveConfig();
                     return;
@@ -332,6 +335,26 @@ public class MgUpdateChecker {
             return pi.versionName;
         } catch (Exception e) {
             return BuildVars.BUILD_VERSION_STRING;
+        }
+    }
+
+    private static boolean isUpToDate(String currentVersion, String tagName, String publishedAt) {
+        if (BuildVars.MG_IS_PRE_SOURCE) {
+            return isPreSourceUpToDate(currentVersion, tagName, publishedAt);
+        }
+        return SharedConfig.versionBiggerOrEqual(currentVersion, tagName);
+    }
+
+    // pre1/pre2/... share MG_VERSION_CODE (sanity-check enforces trailing 00),
+    // so versionName comparison can't distinguish them. Use release.published_at
+    // vs the build timestamp baked into the APK at compile time.
+    private static boolean isPreSourceUpToDate(String currentVersion, String tagName, String publishedAt) {
+        if (tagName.equals(currentVersion)) return true;
+        if (publishedAt.isEmpty() || BuildVars.MG_BUILD_TIMESTAMP <= 0) return true;
+        try {
+            return Instant.parse(publishedAt).toEpochMilli() <= BuildVars.MG_BUILD_TIMESTAMP;
+        } catch (DateTimeParseException e) {
+            return true;
         }
     }
 }
