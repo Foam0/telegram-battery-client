@@ -47,6 +47,8 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ShapeDrawable;
+import android.graphics.drawable.shapes.OvalShape;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
@@ -339,6 +341,14 @@ public class ChatActivityEnterView extends FrameLayout implements
 
         default boolean hasScheduledMessages() {
             return true;
+        }
+
+        default void openDeletedHistory() {
+
+        }
+
+        default boolean hasDeletedHistory() {
+            return false;
         }
 
         void onSendLongClick();
@@ -635,9 +645,12 @@ public class ChatActivityEnterView extends FrameLayout implements
     @Nullable
     private ImageView scheduledButton;
     @Nullable
+    private ImageView deletedHistoryButton;
+    @Nullable
     private ImageView giftButton;
     private boolean scheduleButtonHidden;
     private AnimatorSet scheduledButtonAnimation;
+    private AnimatorSet deletedHistoryButtonAnimation;
     @Nullable
     private RecordCircle recordCircle;
     public ControlsView controlsView;
@@ -3581,6 +3594,102 @@ public class ChatActivityEnterView extends FrameLayout implements
             scheduledButton.setTranslationX((float) a.getAnimatedValue());
         });
         return va;
+    }
+
+    private void createDeletedHistoryButton() {
+        if (deletedHistoryButton != null || parentFragment == null) {
+            return;
+        }
+        final Drawable base = getContext().getResources().getDrawable(R.drawable.msg_delete).mutate();
+        base.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        ShapeDrawable dot = new ShapeDrawable(new OvalShape());
+        dot.getPaint().setColor(getThemedColor(Theme.key_chat_recordedVoiceDot));
+        final int dotSize = dp(8);
+        dot.setIntrinsicWidth(dotSize);
+        dot.setIntrinsicHeight(dotSize);
+        CombinedDrawable combined = new CombinedDrawable(base, dot);
+        combined.setIconSize(dotSize, dotSize);
+        combined.setIconOffset(dp(8), -dp(8));
+
+        deletedHistoryButton = new ImageView(getContext()) {
+            private float innerTranslationX;
+            @Override
+            public float getTranslationX() {
+                return innerTranslationX;
+            }
+            @Override
+            public void setTranslationX(float translationX) {
+                innerTranslationX = translationX;
+                super.setTranslationX(
+                    dp(-DEFAULT_HEIGHT * 2) +
+                    innerTranslationX + attachLayoutPaddingTranslationX + attachLayoutTranslationX +
+                    dp(giftButton != null && giftButton.getVisibility() == View.VISIBLE ? -DEFAULT_HEIGHT : 0) * (giftButton == null ? 0 : giftButton.getAlpha()) +
+                    dp(botButton != null && botButton.getVisibility() == VISIBLE ? -DEFAULT_HEIGHT : 0) * (botButton == null ? 0 : botButton.getAlpha())
+                );
+            }
+        };
+        deletedHistoryButton.setImageDrawable(combined);
+        deletedHistoryButton.setVisibility(GONE);
+        deletedHistoryButton.setContentDescription(getString(R.string.MercurygramDeletedEditedMessagesTitle));
+        deletedHistoryButton.setScaleType(ImageView.ScaleType.CENTER);
+        deletedHistoryButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
+        messageEditTextContainer.addView(deletedHistoryButton, 2, LayoutHelper.createFrame(DEFAULT_HEIGHT, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.RIGHT));
+        deletedHistoryButton.setOnClickListener(v -> {
+            if (delegate != null) {
+                delegate.openDeletedHistory();
+            }
+        });
+        deletedHistoryButton.setTranslationX(0);
+    }
+
+    public void updateDeletedHistoryButton(boolean animated) {
+        boolean visible = SharedConfig.savedMessagesHistory
+                && !recordingAudioVideo
+                && delegate != null && delegate.hasDeletedHistory();
+        if (visible) {
+            createDeletedHistoryButton();
+        }
+        if (deletedHistoryButton == null) {
+            return;
+        }
+        if ((deletedHistoryButton.getTag() != null) == visible) {
+            return;
+        }
+        deletedHistoryButton.setTag(visible ? 1 : null);
+        if (deletedHistoryButtonAnimation != null) {
+            deletedHistoryButtonAnimation.cancel();
+            deletedHistoryButtonAnimation = null;
+        }
+        if (!animated) {
+            deletedHistoryButton.setVisibility(visible ? VISIBLE : GONE);
+            deletedHistoryButton.setAlpha(visible ? 1.0f : 0.0f);
+            deletedHistoryButton.setScaleX(visible ? 1.0f : 0.1f);
+            deletedHistoryButton.setScaleY(visible ? 1.0f : 0.1f);
+            deletedHistoryButton.setTranslationX(0);
+        } else {
+            if (visible) {
+                deletedHistoryButton.setVisibility(VISIBLE);
+            }
+            deletedHistoryButton.setPivotX(dp(24));
+            deletedHistoryButtonAnimation = new AnimatorSet();
+            deletedHistoryButtonAnimation.playTogether(
+                    ObjectAnimator.ofFloat(deletedHistoryButton, View.ALPHA, visible ? 1.0f : 0.0f),
+                    ObjectAnimator.ofFloat(deletedHistoryButton, View.SCALE_X, visible ? 1.0f : 0.1f),
+                    ObjectAnimator.ofFloat(deletedHistoryButton, View.SCALE_Y, visible ? 1.0f : 0.1f));
+            deletedHistoryButtonAnimation.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (animation.equals(deletedHistoryButtonAnimation)) {
+                        deletedHistoryButtonAnimation = null;
+                        if (!visible && deletedHistoryButton != null) {
+                            deletedHistoryButton.setVisibility(GONE);
+                        }
+                    }
+                }
+            });
+            deletedHistoryButtonAnimation.setDuration(180);
+            deletedHistoryButtonAnimation.start();
+        }
     }
 
     private void createGiftButton() {
@@ -10373,6 +10482,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void updateScheduleButton(boolean animated) {
+        updateDeletedHistoryButton(animated);
         boolean notifyVisible = false;
         if (DialogObject.isChatDialog(dialog_id)) {
             TLRPC.Chat currentChat = accountInstance.getMessagesController().getChat(-dialog_id);

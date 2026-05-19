@@ -2405,6 +2405,19 @@ public class ChatActivity extends BaseFragment implements
         }
 
         @Override
+        public boolean hasDeletedHistory() {
+            return SharedConfig.savedMessagesHistory
+                    && !DialogObject.isEncryptedDialog(dialog_id)
+                    && it.belloworld.mercurygram.MgMessageHistory.getInstance()
+                            .hasEntries(currentAccount, dialog_id);
+        }
+
+        @Override
+        public void openDeletedHistory() {
+            presentFragment(new it.belloworld.mercurygram.ui.MgMessageHistoryActivity(dialog_id));
+        }
+
+        @Override
         public void onAudioVideoInterfaceUpdated() {
             updatePagedownButtonVisibility(true);
         }
@@ -21785,6 +21798,9 @@ public class ChatActivity extends BaseFragment implements
                 chatAdapter.notifyDataSetChanged(false);
             }
         } else if (id == NotificationCenter.messagesDeleted) {
+            if (chatActivityEnterView != null) {
+                chatActivityEnterView.updateDeletedHistoryButton(true);
+            }
             boolean scheduled = (Boolean) args[2];
             if (scheduled != (chatMode == MODE_SCHEDULED)) {
                 return;
@@ -21818,7 +21834,37 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog.dismiss();
                 scheduleNowDialog = null;
             }
-            processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled);
+            ArrayList<MessageObject> mgGhosts = null;
+            ArrayList<Integer> mgDeleteList = markAsDeletedMessages;
+            if (SharedConfig.savedMessagesHistory && chatMode == MODE_DEFAULT && !movedToScheduled) {
+                for (int i = 0; i < messages.size(); i++) {
+                    MessageObject mo = messages.get(i);
+                    if (!mo.scheduled && !it.belloworld.mercurygram.MgMessageHistory.isExcluded(dialog_id, mo.messageOwner)) {
+                        mo.mgDeletedGhost = true;
+                        if (mgGhosts == null) {
+                            mgGhosts = new ArrayList<>();
+                        }
+                        mgGhosts.add(mo);
+                    }
+                }
+                if (mgGhosts != null) {
+                    HashSet<Integer> ghostIds = new HashSet<>(mgGhosts.size());
+                    for (int i = 0; i < mgGhosts.size(); i++) {
+                        ghostIds.add(mgGhosts.get(i).getId());
+                    }
+                    mgDeleteList = new ArrayList<>(markAsDeletedMessages.size());
+                    for (int i = 0; i < markAsDeletedMessages.size(); i++) {
+                        int mid = markAsDeletedMessages.get(i);
+                        if (!ghostIds.contains(mid)) {
+                            mgDeleteList.add(mid);
+                        }
+                    }
+                }
+            }
+            processDeletedMessages(mgDeleteList, channelId, sent, !movedToScheduled);
+            if (mgGhosts != null && chatAdapter != null) {
+                updateMessages(mgGhosts, false);
+            }
             if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED) {
                 getMessagesController().forceNoReload(dialog_id, ChatActivity.MODE_SCHEDULED);
                 openScheduledMessages(scheduledMessageId, true);
@@ -22834,6 +22880,9 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
         } else if (id == NotificationCenter.replaceMessagesObjects) {
+            if (chatActivityEnterView != null) {
+                chatActivityEnterView.updateDeletedHistoryButton(true);
+            }
             long did = (long) args[0];
             final ArrayList<MessageObject> messageObjects = (ArrayList<MessageObject>) args[1];
             if (replyingMessageObject != null) {
