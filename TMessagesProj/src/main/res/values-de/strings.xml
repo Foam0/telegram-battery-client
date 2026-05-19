@@ -1386,6 +1386,14 @@
     <string name="MercurygramDisableLivePhotosAbout">Nur das Standbild senden, wenn du ein Google Motion Photo auswählst. Du kannst Live Photo für eine einzelne Auswahl trotzdem aktivieren, indem du das Bewegungssymbol im Anhang-Panel antippst.</string>
     <string name="MercurygramUseSystemFont">Systemschriftart verwenden</string>
     <string name="MercurygramUseSystemFontAbout">Ersetzt die mitgelieferten Roboto-Schriftarten durch die Systemschriftarten des Geräts. Bereits geöffnete Bildschirme müssen ggf. neu geöffnet werden, damit die Änderung vollständig wirksam wird.</string>
+    <string name="MercurygramSavedMessagesHistory">Gelöschte &amp; bearbeitete Nachrichten speichern</string>
+    <string name="MercurygramSavedMessagesHistoryAbout">Behält eine lokale Kopie der vom Server gelöschten Nachrichten sowie den vorherigen Text bearbeiteter Nachrichten, damit sie nicht zurückgezogen werden können, bevor du sie siehst. Wird getrennt vom Telegram-Cache gespeichert. Selbstzerstörende Nachrichten und geheime Chats werden nie gespeichert.</string>
+    <string name="MercurygramSavedMessagesHistoryTitle">Gespeicherter Nachrichtenverlauf</string>
+    <string name="MercurygramSavedMessagesDeleted">Gelöscht</string>
+    <string name="MercurygramSavedMessagesEdited">Bearbeitet</string>
+    <string name="MercurygramSavedMessagesEmpty">(kein Text)</string>
+    <string name="MercurygramClearSavedHistory">Gespeicherten Nachrichtenverlauf löschen</string>
+    <string name="MercurygramClearSavedHistoryConfirm">Alle gespeicherten gelöschten und bearbeiteten Nachrichten endgültig löschen?</string>
     <string name="MercurygramDisableUnifiedPush">UnifiedPush deaktivieren</string>
     <string name="MercurygramDisableUnifiedPushAbout">Wenn deaktiviert, fällt Mercurygram auf Polling neuer Nachrichten zurück. Die App wird neu gestartet, um die Änderung anzuwenden.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram muss neu gestartet werden, um diese Änderung anzuwenden. Fortfahren?</string>

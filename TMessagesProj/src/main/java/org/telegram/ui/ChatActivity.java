@@ -1612,6 +1612,9 @@ public class ChatActivity extends BaseFragment implements
 
     private final static int chat_menu_topic_create = 73;
 
+    // MG: high id to avoid clashing with future upstream header-menu items on rebase
+    private final static int mg_saved_history = 9201;
+
     private final static int id_chat_compose_panel = 1000;
 
     RecyclerListView.OnItemLongClickListenerExtended onItemLongClickListener = new RecyclerListView.OnItemLongClickListenerExtended() {
@@ -3828,6 +3831,8 @@ public class ChatActivity extends BaseFragment implements
                         return;
                     }
                     showDialog(AlertsCreator.createTTLAlert(getParentActivity(), currentEncryptedChat, themeDelegate).create());
+                } else if (id == mg_saved_history) {
+                    presentFragment(new it.belloworld.mercurygram.ui.MgMessageHistoryActivity(dialog_id));
                 } else if (id == clear_history || id == delete_chat || id == auto_delete_timer) {
                     if (getParentActivity() == null) {
                         return;
@@ -4411,6 +4416,9 @@ public class ChatActivity extends BaseFragment implements
             }
             if (!isTopic && !ChatObject.isMonoForum(currentChat)) {
                 clearHistoryItem = headerItem.lazilyAddSubItem(clear_history, R.drawable.msg_clear, LocaleController.getString(R.string.ClearHistory));
+            }
+            if (SharedConfig.savedMessagesHistory) {
+                headerItem.lazilyAddSubItem(mg_saved_history, R.drawable.msg_message, LocaleController.getString(R.string.MercurygramSavedMessagesHistoryTitle));
             }
             boolean addedSettings = false;
             if (!isTopic) {
@@ -21818,7 +21826,37 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog.dismiss();
                 scheduleNowDialog = null;
             }
-            processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled);
+            ArrayList<MessageObject> mgGhosts = null;
+            ArrayList<Integer> mgDeleteList = markAsDeletedMessages;
+            if (SharedConfig.savedMessagesHistory && chatMode == MODE_DEFAULT && !movedToScheduled) {
+                for (int i = 0; i < messages.size(); i++) {
+                    MessageObject mo = messages.get(i);
+                    if (!mo.scheduled && !it.belloworld.mercurygram.MgMessageHistory.isExcluded(dialog_id, mo.messageOwner)) {
+                        mo.mgDeletedGhost = true;
+                        if (mgGhosts == null) {
+                            mgGhosts = new ArrayList<>();
+                        }
+                        mgGhosts.add(mo);
+                    }
+                }
+                if (mgGhosts != null) {
+                    HashSet<Integer> ghostIds = new HashSet<>(mgGhosts.size());
+                    for (int i = 0; i < mgGhosts.size(); i++) {
+                        ghostIds.add(mgGhosts.get(i).getId());
+                    }
+                    mgDeleteList = new ArrayList<>(markAsDeletedMessages.size());
+                    for (int i = 0; i < markAsDeletedMessages.size(); i++) {
+                        int mid = markAsDeletedMessages.get(i);
+                        if (!ghostIds.contains(mid)) {
+                            mgDeleteList.add(mid);
+                        }
+                    }
+                }
+            }
+            processDeletedMessages(mgDeleteList, channelId, sent, !movedToScheduled);
+            if (mgGhosts != null && chatAdapter != null) {
+                updateMessages(mgGhosts, false);
+            }
             if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED) {
                 getMessagesController().forceNoReload(dialog_id, ChatActivity.MODE_SCHEDULED);
                 openScheduledMessages(scheduledMessageId, true);
