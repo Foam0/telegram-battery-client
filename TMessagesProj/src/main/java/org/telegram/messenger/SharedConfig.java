@@ -152,6 +152,14 @@ public class SharedConfig {
                 .apply();
     }
 
+    public static void toggleSavedMessagesHistory() {
+        savedMessagesHistory = !savedMessagesHistory;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_savedMessagesHistory", savedMessagesHistory)
+                .apply();
+    }
+
     public static void toggleDisableUnifiedPush() {
         disableUnifiedPush = !disableUnifiedPush;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -351,6 +359,7 @@ public class SharedConfig {
 
     // Mercurygram: UI settings
     public static boolean messageDetailsMenu = false;
+    public static boolean savedMessagesHistory = false;
     public static boolean disableSecureFlags = false;
     public static boolean removeAdsAndProxySponsor = false;
     public static boolean disableAutoUpdate = false;
@@ -644,6 +653,7 @@ public class SharedConfig {
                 editor.putBoolean("record_via_sco", recordViaSco);
                 // Mercurygram settings
                 editor.putBoolean("mg_messageDetailsMenu", messageDetailsMenu);
+                editor.putBoolean("mg_savedMessagesHistory", savedMessagesHistory);
                 editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
                 editor.putString("mg_unifiedPushGateway2", unifiedPushGateway);
                 editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
@@ -864,6 +874,7 @@ public class SharedConfig {
 
             // Mercurygram settings
             messageDetailsMenu = preferences.getBoolean("mg_messageDetailsMenu", false);
+            savedMessagesHistory = preferences.getBoolean("mg_savedMessagesHistory", false);
             disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
             unifiedPushGateway = preferences.getString("mg_unifiedPushGateway2", unifiedPushGateway);
             disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
