@@ -328,6 +328,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -827,6 +828,12 @@ public class ChatActivity extends BaseFragment implements
     private boolean scrollToTopUnReadOnResume;
     private long dialog_id;
     private Long dialog_id_Long;
+    // Mercurygram: per-chat caches for kept-deleted / edited message IDs.
+    // Null until primed off the UI thread on first messagesDidLoad; consulted by
+    // the long-press menu and the ghost-marking pass to avoid per-row SQLite.
+    private Set<Integer> mgDeletedMidsCache;
+    private Set<Integer> mgEditedMidsCache;
+    private boolean mgHistoryCachesPriming;
     private int lastLoadIndex = 1;
     private SparseArray<MessageObject>[] selectedMessagesIds = new SparseArray[]{new SparseArray<>(), new SparseArray<>()};
     private SparseArray<MessageObject>[] selectedMessagesCanCopyIds = new SparseArray[]{new SparseArray<>(), new SparseArray<>()};
@@ -1177,6 +1184,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_FACT_CHECK = 106;
     public final static int OPTION_EDIT_PRICE = 107;
     public final static int OPTION_DETAILS = 200;
+    public final static int OPTION_EDIT_HISTORY = 201;
     public final static int OPTION_GIFT = 108;
     public final static int OPTION_EDIT_TODO = 109;
     public final static int OPTION_ADD_TO_TODO = 110;
@@ -4954,6 +4962,7 @@ public class ChatActivity extends BaseFragment implements
                         MessageObject message = slidingView.getMessageObject();
                         boolean allowReplyOnOpenTopic = canSendMessageToTopic(message);
                         if (
+                                message.mgDeletedGhost || // Mercurygram: cannot reply to a kept-after-delete ghost
                                 chatMode != 0 && chatMode != MODE_QUICK_REPLIES && chatMode != MODE_SUGGESTIONS && (chatMode != MODE_SAVED || threadMessageId != getUserConfig().getClientUserId()) ||
                                 threadMessageObjects != null && threadMessageObjects.contains(message) ||
                                 getMessageType(message) == 1 && (message.getDialogId() == mergeDialogId || message.needDrawBluredPreview()) ||
@@ -20075,6 +20084,9 @@ public class ChatActivity extends BaseFragment implements
             }
             ArrayList<MessageObject> messArr = (ArrayList<MessageObject>) args[2];
 
+            mgPrimeHistoryCaches();
+            mgApplyGhostFlags(messArr);
+
             boolean universalNotify = false;
             HashMap<Integer, MessageObject> oldMessages = null;
             if (clearOnLoad && (mode == MODE_DEFAULT || mode == MODE_SUGGESTIONS)) {
@@ -21818,7 +21830,40 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog.dismiss();
                 scheduleNowDialog = null;
             }
-            processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled);
+            ArrayList<MessageObject> mgGhosts = null;
+            ArrayList<Integer> mgDeleteList = markAsDeletedMessages;
+            if (SharedConfig.savedMessagesHistory && chatMode == MODE_DEFAULT && !movedToScheduled) {
+                for (int i = 0; i < messages.size(); i++) {
+                    MessageObject mo = messages.get(i);
+                    if (!mo.scheduled && !it.belloworld.mercurygram.MgMessageHistory.isExcluded(dialog_id, mo.messageOwner)) {
+                        mo.mgDeletedGhost = true;
+                        if (mgGhosts == null) {
+                            mgGhosts = new ArrayList<>();
+                        }
+                        mgGhosts.add(mo);
+                    }
+                }
+                if (mgGhosts != null) {
+                    HashSet<Integer> ghostIds = new HashSet<>(mgGhosts.size());
+                    for (int i = 0; i < mgGhosts.size(); i++) {
+                        ghostIds.add(mgGhosts.get(i).getId());
+                    }
+                    if (mgDeletedMidsCache != null) {
+                        mgDeletedMidsCache.addAll(ghostIds);
+                    }
+                    mgDeleteList = new ArrayList<>(markAsDeletedMessages.size());
+                    for (int i = 0; i < markAsDeletedMessages.size(); i++) {
+                        int mid = markAsDeletedMessages.get(i);
+                        if (!ghostIds.contains(mid)) {
+                            mgDeleteList.add(mid);
+                        }
+                    }
+                }
+            }
+            processDeletedMessages(mgDeleteList, channelId, sent, !movedToScheduled);
+            if (mgGhosts != null && chatAdapter != null) {
+                updateMessages(mgGhosts, false);
+            }
             if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED) {
                 getMessagesController().forceNoReload(dialog_id, ChatActivity.MODE_SCHEDULED);
                 openScheduledMessages(scheduledMessageId, true);
@@ -22836,6 +22881,16 @@ public class ChatActivity extends BaseFragment implements
         } else if (id == NotificationCenter.replaceMessagesObjects) {
             long did = (long) args[0];
             final ArrayList<MessageObject> messageObjects = (ArrayList<MessageObject>) args[1];
+            if (did == dialog_id && SharedConfig.savedMessagesHistory
+                    && mgEditedMidsCache != null && !DialogObject.isEncryptedDialog(dialog_id)) {
+                for (int i = 0; i < messageObjects.size(); i++) {
+                    MessageObject mo = messageObjects.get(i);
+                    if (mo != null && mo.messageOwner != null && mo.messageOwner.edit_date != 0
+                            && !it.belloworld.mercurygram.MgMessageHistory.isExcluded(dialog_id, mo.messageOwner)) {
+                        mgEditedMidsCache.add(mo.getId());
+                    }
+                }
+            }
             if (replyingMessageObject != null) {
                 for (int i = 0; i < messageObjects.size(); ++i) {
                     MessageObject messageObject = messageObjects.get(i);
@@ -25541,6 +25596,56 @@ public class ChatActivity extends BaseFragment implements
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent) {
         processDeletedMessages(markAsDeletedMessages, channelId, sent, true);
     }
+
+    private void mgPrimeHistoryCaches() {
+        if (!SharedConfig.savedMessagesHistory || mgHistoryCachesPriming
+                || mgDeletedMidsCache != null
+                || DialogObject.isEncryptedDialog(dialog_id)) {
+            return;
+        }
+        mgHistoryCachesPriming = true;
+        final int acc = currentAccount;
+        final long did = dialog_id;
+        Utilities.globalQueue.postRunnable(() -> {
+            Set<Integer> dmids = it.belloworld.mercurygram.MgMessageHistory.getInstance()
+                    .getMidsForDialog(acc, did, false);
+            Set<Integer> emids = it.belloworld.mercurygram.MgMessageHistory.getInstance()
+                    .getMidsForDialog(acc, did, true);
+            AndroidUtilities.runOnUIThread(() -> {
+                mgDeletedMidsCache = dmids;
+                mgEditedMidsCache = emids;
+                mgHistoryCachesPriming = false;
+                if (dmids.isEmpty() || messages.isEmpty() || chatAdapter == null) {
+                    return;
+                }
+                boolean any = false;
+                for (int i = 0; i < messages.size(); i++) {
+                    MessageObject mo = messages.get(i);
+                    if (mo != null && !mo.mgDeletedGhost && dmids.contains(mo.getId())) {
+                        mo.mgDeletedGhost = true;
+                        any = true;
+                    }
+                }
+                if (any) {
+                    chatAdapter.notifyDataSetChanged(false);
+                }
+            });
+        });
+    }
+
+    private void mgApplyGhostFlags(ArrayList<MessageObject> messArr) {
+        if (!SharedConfig.savedMessagesHistory || mgDeletedMidsCache == null
+                || mgDeletedMidsCache.isEmpty() || messArr == null || messArr.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < messArr.size(); i++) {
+            MessageObject mo = messArr.get(i);
+            if (mo != null && mgDeletedMidsCache.contains(mo.getId())) {
+                mo.mgDeletedGhost = true;
+            }
+        }
+    }
+
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent, boolean thanos) {
         ArrayList<Integer> removedIndexes = new ArrayList<>();
         ArrayList<Integer> thanosMessagesIndexes = new ArrayList<>();
@@ -32631,6 +32736,9 @@ public class ChatActivity extends BaseFragment implements
                 break;
             }
             case OPTION_REPLY: {
+                if (selectedObject != null && selectedObject.mgDeletedGhost) {
+                    return;
+                }
                 if (selectedObject != null && selectedObject.messageOwner != null && selectedObject.messageOwner.noforwards) {
                     return;
                 }
@@ -33256,6 +33364,10 @@ public class ChatActivity extends BaseFragment implements
             }
             case OPTION_DETAILS: {
                 presentFragment(new it.belloworld.mercurygram.ui.MessageDetailsActivity(selectedObject));
+                break;
+            }
+            case OPTION_EDIT_HISTORY: {
+                presentFragment(new it.belloworld.mercurygram.ui.MgMessageEditHistoryActivity(selectedObject));
                 break;
             }
             case OPTION_SUGGESTION_ADD_OFFER:
@@ -44389,7 +44501,7 @@ public class ChatActivity extends BaseFragment implements
                     icons.add(R.drawable.msg_report);
                 }
             } else {
-                if (selectedObject.getId() > 0 && allowChatActions && !isInsideContainer) {
+                if (selectedObject.getId() > 0 && allowChatActions && !isInsideContainer && !selectedObject.mgDeletedGhost) {
                     items.add(LocaleController.getString(R.string.Reply));
                     options.add(OPTION_REPLY);
                     icons.add(R.drawable.menu_reply);
@@ -44435,7 +44547,7 @@ public class ChatActivity extends BaseFragment implements
                         icons.add(R.drawable.msg_fave);
                     }
                 }
-                if ((allowChatActions || !noforwardsOrPaidMedia && ChatObject.isChannelAndNotMegaGroup(currentChat) && !selectedObject.isSponsored() && selectedObject.contentType == 0 && chatMode == MODE_DEFAULT) && !isInsideContainer) {
+                if ((allowChatActions || !noforwardsOrPaidMedia && ChatObject.isChannelAndNotMegaGroup(currentChat) && !selectedObject.isSponsored() && selectedObject.contentType == 0 && chatMode == MODE_DEFAULT) && !isInsideContainer && !selectedObject.mgDeletedGhost) {
                     items.add(LocaleController.getString(R.string.Reply));
                     options.add(OPTION_REPLY);
                     icons.add(R.drawable.menu_reply);
@@ -44721,6 +44833,15 @@ public class ChatActivity extends BaseFragment implements
                     items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));
                     options.add(OPTION_DELETE);
                     icons.add(deleteIconRes);
+                }
+                if (SharedConfig.savedMessagesHistory
+                        && selectedObject.messageOwner != null
+                        && selectedObject.messageOwner.edit_date != 0
+                        && mgEditedMidsCache != null
+                        && mgEditedMidsCache.contains(selectedObject.getId())) {
+                    items.add(LocaleController.getString(R.string.MercurygramEditHistory));
+                    options.add(OPTION_EDIT_HISTORY);
+                    icons.add(R.drawable.msg_edit);
                 }
                 if (SharedConfig.messageDetailsMenu) {
                     items.add(LocaleController.getString(R.string.MessageDetails));
