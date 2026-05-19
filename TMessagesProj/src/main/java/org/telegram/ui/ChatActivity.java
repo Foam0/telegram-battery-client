@@ -343,6 +343,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1229,6 +1230,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_FACT_CHECK = 106;
     public final static int OPTION_EDIT_PRICE = 107;
     public final static int OPTION_DETAILS = 200;
+    public final static int OPTION_EDIT_HISTORY = 201;
     public final static int OPTION_GIFT = 108;
     public final static int OPTION_EDIT_TODO = 109;
     public final static int OPTION_ADD_TO_TODO = 110;
@@ -4940,6 +4942,7 @@ public class ChatActivity extends BaseFragment implements
                         MessageObject message = getSlidingMessageObject();
                         boolean allowReplyOnOpenTopic = canSendMessageToTopic(message);
                         if (
+                            message.mgDeletedGhost || // Mercurygram: cannot reply to a kept-after-delete ghost
                             chatMode != 0 && chatMode != MODE_QUICK_REPLIES && chatMode != MODE_SUGGESTIONS && (chatMode != MODE_SAVED || threadMessageId != getUserConfig().getClientUserId()) ||
                             threadMessageObjects != null && threadMessageObjects.contains(message) ||
                             getMessageType(message) == 1 && (message.getDialogId() == mergeDialogId || message.needDrawBluredPreview()) ||
@@ -20383,6 +20386,9 @@ public class ChatActivity extends BaseFragment implements
         }
         ArrayList<MessageObject> messArr = (ArrayList<MessageObject>) args[2];
 
+        mgGhost.prime();
+        mgGhost.applyFlags(messArr);
+
         boolean universalNotify = false;
         HashMap<Integer, MessageObject> oldMessages = null;
         if (clearOnLoad && (mode == MODE_DEFAULT || mode == MODE_SUGGESTIONS)) {
@@ -21207,6 +21213,7 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         checkGroupMessagesOrder();
+        mgGhost.inject();
         if (createUnreadLoading) {
             createUnreadMessageAfterId = 0;
         }
@@ -22134,7 +22141,9 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog.dismiss();
                 scheduleNowDialog = null;
             }
-            processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled);
+            final ArrayList<Integer> mgDeleteList = mgGhost.divertDeletes(markAsDeletedMessages, messages, movedToScheduled);
+            processDeletedMessages(mgDeleteList, channelId, sent, !movedToScheduled);
+            mgGhost.updateDivertedRows();
             if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED) {
                 getMessagesController().forceNoReload(dialog_id, ChatActivity.MODE_SCHEDULED);
                 openScheduledMessages(scheduledMessageId, true);
@@ -23166,6 +23175,7 @@ public class ChatActivity extends BaseFragment implements
         } else if (id == NotificationCenter.replaceMessagesObjects) {
             long did = (long) args[0];
             final ArrayList<MessageObject> messageObjects = (ArrayList<MessageObject>) args[1];
+            mgGhost.onReplaceMessages(did, messageObjects);
             if (replyingMessageObject != null) {
                 for (int i = 0; i < messageObjects.size(); ++i) {
                     MessageObject messageObject = messageObjects.get(i);
@@ -26075,6 +26085,61 @@ public class ChatActivity extends BaseFragment implements
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent) {
         processDeletedMessages(markAsDeletedMessages, channelId, sent, true);
     }
+
+    // Mercurygram: saved-message-history ghost machinery lives in
+    // MgChatGhostController; these accessors expose the private structures its
+    // inject path must read or mutate (the adapter is package-private, so the
+    // adapter operations are wrapped rather than exposed).
+    public final it.belloworld.mercurygram.ui.MgChatGhostController mgGhost = new it.belloworld.mercurygram.ui.MgChatGhostController(this);
+
+    public SparseArray<MessageObject> mgMessagesDict0() {
+        return messagesDict[0];
+    }
+
+    public HashMap<String, ArrayList<MessageObject>> mgMessagesByDays() {
+        return messagesByDays;
+    }
+
+    public SparseArray<ArrayList<MessageObject>> mgMessagesByDaysSorted() {
+        return messagesByDaysSorted;
+    }
+
+    public LongSparseArray<MessageObject.GroupedMessages> mgGroupedMessagesMap() {
+        return groupedMessagesMap;
+    }
+
+    public int mgGhostWindowMin() {
+        return endReached[0] ? Integer.MIN_VALUE : minDate[0];
+    }
+
+    public int mgGhostWindowMax() {
+        return forwardEndReached[0] ? Integer.MAX_VALUE : maxDate[0];
+    }
+
+    public boolean mgHasAdapter() {
+        return chatAdapter != null;
+    }
+
+    public boolean mgAdapterUsable() {
+        return chatAdapter != null && !chatAdapter.isFiltered;
+    }
+
+    public void mgNotifyAdapter() {
+        if (chatAdapter != null) {
+            chatAdapter.notifyDataSetChanged(false);
+        }
+    }
+
+    public void mgUpdateRow(MessageObject mo) {
+        if (chatAdapter != null) {
+            chatAdapter.updateRowWithMessageObject(mo, true, false);
+        }
+    }
+
+    public int mgStableIdForDate(int dateKeyInt) {
+        return getStableIdForDateObject(dateKeyInt);
+    }
+
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent, boolean thanos) {
         ArrayList<Integer> removedIndexes = new ArrayList<>();
         ArrayList<Integer> thanosMessagesIndexes = new ArrayList<>();
@@ -33352,6 +33417,9 @@ public class ChatActivity extends BaseFragment implements
                 break;
             }
             case OPTION_REPLY: {
+                if (selectedObject != null && selectedObject.mgDeletedGhost) {
+                    return;
+                }
                 if (selectedObject != null && selectedObject.messageOwner != null && selectedObject.messageOwner.noforwards) {
                     return;
                 }
@@ -34018,6 +34086,10 @@ public class ChatActivity extends BaseFragment implements
             }
             case OPTION_DETAILS: {
                 presentFragment(new it.belloworld.mercurygram.ui.MessageDetailsActivity(selectedObject));
+                break;
+            }
+            case OPTION_EDIT_HISTORY: {
+                presentFragment(new it.belloworld.mercurygram.ui.MgMessageEditHistoryActivity(selectedObject));
                 break;
             }
             case OPTION_SUGGESTION_ADD_OFFER:
@@ -45457,7 +45529,7 @@ public class ChatActivity extends BaseFragment implements
                     icons.add(R.drawable.msg_report);
                 }
             } else {
-                if (selectedObject.getId() > 0 && (allowChatActions || isEphemeralFromBot) && !isInsideContainer) {
+                if (selectedObject.getId() > 0 && (allowChatActions || isEphemeralFromBot) && !isInsideContainer && !selectedObject.mgDeletedGhost) {
                     items.add(LocaleController.getString(R.string.Reply));
                     options.add(OPTION_REPLY);
                     icons.add(R.drawable.menu_reply);
@@ -45503,7 +45575,7 @@ public class ChatActivity extends BaseFragment implements
                         icons.add(R.drawable.msg_fave);
                     }
                 }
-                if (((allowChatActions || isEphemeralFromBot) || !noforwardsOrPaidMedia && ChatObject.isChannelAndNotMegaGroup(currentChat) && !selectedObject.isSponsored() && selectedObject.contentType == 0 && chatMode == MODE_DEFAULT) && !isInsideContainer) {
+                if (((allowChatActions || isEphemeralFromBot) || !noforwardsOrPaidMedia && ChatObject.isChannelAndNotMegaGroup(currentChat) && !selectedObject.isSponsored() && selectedObject.contentType == 0 && chatMode == MODE_DEFAULT) && !isInsideContainer && !selectedObject.mgDeletedGhost) {
                     items.add(LocaleController.getString(R.string.Reply));
                     options.add(OPTION_REPLY);
                     icons.add(R.drawable.menu_reply);
@@ -45796,6 +45868,11 @@ public class ChatActivity extends BaseFragment implements
                     items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));
                     options.add(OPTION_DELETE);
                     icons.add(deleteIconRes);
+                }
+                if (mgGhost.isEditHistoryCandidate(selectedObject)) {
+                    items.add(LocaleController.getString(R.string.MercurygramEditHistory));
+                    options.add(OPTION_EDIT_HISTORY);
+                    icons.add(R.drawable.msg_edit);
                 }
                 if (getUserConfig().mg.messageDetailsMenu) {
                     items.add(LocaleController.getString(R.string.MessageDetails));
