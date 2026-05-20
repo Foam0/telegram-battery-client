@@ -64,6 +64,7 @@ public class UserConfig extends BaseController {
     public boolean sendLargePhotos = false;
     public boolean rearRoundCamera = false;
     public boolean hideChatKeyboard = false;
+    public boolean hideAllTab = false;
     public boolean hasSecureData;
     public int loginTime;
     public TLRPC.TL_help_termsOfService unacceptedTermsOfService;
@@ -166,6 +167,7 @@ public class UserConfig extends BaseController {
                     editor.putBoolean("sendLargePhotos", sendLargePhotos);
                     editor.putBoolean("rearRoundCamera", rearRoundCamera);
                     editor.putBoolean("hideChatKeyboard", hideChatKeyboard);
+                    editor.putBoolean("hideAllTab", hideAllTab);
                     editor.putBoolean("hasSecureData", hasSecureData);
                     editor.putBoolean("notificationsSettingsLoaded4", notificationsSettingsLoaded);
                     editor.putBoolean("notificationsSignUpSettingsLoaded", notificationsSignUpSettingsLoaded);
@@ -320,6 +322,7 @@ public class UserConfig extends BaseController {
             sendLargePhotos = preferences.getBoolean("sendLargePhotos", false);
             rearRoundCamera = preferences.getBoolean("rearRoundCamera", false);
             hideChatKeyboard = preferences.getBoolean("hideChatKeyboard", false);
+            hideAllTab = preferences.getBoolean("hideAllTab", false);
             hasSecureData = preferences.getBoolean("hasSecureData", false);
             notificationsSettingsLoaded = preferences.getBoolean("notificationsSettingsLoaded4", false);
             notificationsSignUpSettingsLoaded = preferences.getBoolean("notificationsSignUpSettingsLoaded", false);
@@ -494,6 +497,7 @@ public class UserConfig extends BaseController {
         sendLargePhotos = false;
         rearRoundCamera = false;
         hideChatKeyboard = false;
+        hideAllTab = false;
         unreadDialogsLoaded = true;
         hasValidDialogLoadIds = true;
         unacceptedTermsOfService = null;
