@@ -1,0 +1,65 @@
+name: Reproducible build check
+
+# Heavy (full native + 2x fdroidserver build) — manual trigger only, not on
+# every push. Run before tagging a release, or after touching build.gradle,
+# native code, or bundled assets. Mirrors F-Droid's real reproducible-build
+# verification (scripts/check-reproducibility.sh).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'determinism (build ref twice) | verify (vs f-droid.org) | verify-beta (vs GitHub release APK)'
+        type: choice
+        options: [determinism, verify, verify-beta]
+        default: determinism
+      arg:
+        description: 'determinism: git ref (blank=checked-out) — verify: versionCode — verify-beta: GitHub APK URL'
+        type: string
+        default: ''
+      arg2:
+        description: 'verify-beta only: optional git ref (defaults to checked-out commit)'
+        type: string
+        default: ''
+
+concurrency:
+  group: reproducible-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reproducible:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # verify-beta rebuilds the same source the beta APK was built from. The
+      # real APP_ID/APP_HASH are baked into the APK via BuildConfig at gradle
+      # time, so reproducing requires the same secrets — same write that
+      # build-mg/action.yml does for beta.yml.
+      - name: Write API_KEYS for verify-beta
+        if: inputs.mode == 'verify-beta'
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_HASH: ${{ secrets.APP_HASH }}
+        run: printf 'APP_ID = %s\nAPP_HASH = %s\n' "$APP_ID" "$APP_HASH" > API_KEYS
+
+      - name: Run reproducibility check (real fdroidserver, podman)
+        env:
+          ARG: ${{ inputs.arg }}
+          ARG2: ${{ inputs.arg2 }}
+        run: |
+          set -euo pipefail
+          arg=$(printf '%s' "$ARG" | xargs)        # trim whitespace
+          arg2=$(printf '%s' "$ARG2" | xargs)
+          case "${{ inputs.mode }}" in
+            verify)      scripts/check-reproducibility.sh verify "$arg" ;;
+            verify-beta) scripts/check-reproducibility.sh verify-beta "$arg" "$arg2" ;;
+            *)           scripts/check-reproducibility.sh determinism "$arg" ;;
+          esac
