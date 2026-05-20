@@ -9,19 +9,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
 # so absolute build paths are not embedded in .rodata. Works with clang 9+ (NDK r21e).
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-builtin-macro-redefined -D__FILE__=__FILE_NAME__")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--build-id=none -Wl,--hash-style=gnu -Wl,-Bsymbolic -Wl,--exclude-libs,libtgvoip.a,libtgcalls.a,libtgcalls_tp.a,libtgnet.a,libflac.a,librlottie.a,libsqlite.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libswscale.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libavformat.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libavcodec.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libavresample.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libavutil.a,
-${CMAKE_HOME_DIRECTORY}/ffmpeg/build/${ANDROID_ABI}/lib/libswresample.a,
-${CMAKE_HOME_DIRECTORY}/libvpx/build/${ANDROID_ABI}/lib/libvpx.a,
-${CMAKE_HOME_DIRECTORY}/dav1d/build/${ANDROID_ABI}/lib/libdav1d.a,
-${CMAKE_HOME_DIRECTORY}/boringssl/build/${ANDROID_ABI}/ssl/libssl.a,
-${CMAKE_HOME_DIRECTORY}/boringssl/build/${ANDROID_ABI}/crypto/libcrypto.a,
-${CMAKE_HOME_DIRECTORY}/td/build/${ANDROID_ABI}/tde2e/libtde2e.a,
-${CMAKE_HOME_DIRECTORY}/td/build/${ANDROID_ABI}/tdutils/libtdutils.a")
+# --exclude-libs takes a single colon/comma-separated value. The previous form
+# "-Wl,--exclude-libs,A,B,C" was broken: clang splits -Wl, on commas, so only
+# the first archive reached ld; the rest became positional inputs. Use the
+# "=" form with ":" separator to keep the whole list as one linker argument.
+# libvoipandroid.a is deliberately excluded from this list because it exports
+# Java_org_telegram_messenger_voip_* JNI entry points that must stay visible.
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--build-id=none -Wl,--hash-style=gnu -Wl,-Bsymbolic -Wl,--gc-sections -Wl,--exclude-libs=libtgvoip.a:libtgcalls.a:libtgcalls_tp.a:libtgnet.a:libflac.a:librlottie.a:libsqlite.a:libbreakpad.a:libopenh264.a:librnnoise.a:libcpufeatures.a:libswscale.a:libavformat.a:libavcodec.a:libavresample.a:libavutil.a:libswresample.a:libvpx.a:libdav1d.a:libssl.a:libcrypto.a:libtde2e.a:libtdutils.a")
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     enable_language(ASM)
