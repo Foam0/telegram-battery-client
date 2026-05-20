@@ -36,21 +36,27 @@
 #       an already-shipped tag as a release regression guard (it WILL differ
 #       for unreleased local changes — expected; use determinism then).
 #
-#   verify-beta <github-apk-url> [ref]
-#       Cross-env reproducibility check for the beta channel (shipped via
-#       GitHub Releases, not F-Droid). Downloads the GitHub APK, rebuilds the
-#       same Debug variant in the F-Droid buildserver-trixie env, and
-#       diffoscopes both (signatures excluded). PASS = build is independent
-#       of GitHub-Actions runner toolchain/paths. ref defaults to HEAD; pass
-#       the tag/sha matching the beta build to compare against.
+#   verify <github-apk-url> [ref]
+#       Same authoritative path, but the comparison APK is downloaded from a
+#       GitHub Release URL (Release-flavor beta APK; only Release-flavor beta
+#       APKs are verified — Debug-flavor APKs are not the subject of F-Droid
+#       reproducibility). Recipe's last
+#       Builds entry is overridden to the given ref and the APK's versionCode;
+#       fdroid build --test runs as usual (outputs unsigned APK), then both
+#       APKs are unzipped (excluding META-INF/*) and diffoscoped: the v2/v3
+#       APK Signing Block sits outside the zip entries so unzip never sees it
+#       — every comparable byte (dex / resources / native libs / manifest)
+#       gets compared, signatures don't. Same coverage as fdroid verify
+#       without the apksigcopier metadata-strictness fight. ref defaults to
+#       HEAD; pass the tag/sha matching the beta build.
 #
 # Usage:
 #   scripts/check-reproducibility.sh                 # determinism, working tree
 #   scripts/check-reproducibility.sh determinism HEAD
 #   scripts/check-reproducibility.sh verify 6666048
-#   scripts/check-reproducibility.sh verify-beta \
-#       https://github.com/.../releases/download/12.6.4.4.42/Mercurygram-12.6.4.4.42-arm64-v8a.apk \
-#       12.6.4.4.42
+#   scripts/check-reproducibility.sh verify \
+#       https://github.com/.../releases/download/12.6.4.4.15/Mercurygram-12.6.4.4.15-arm64-v8a.apk \
+#       12.6.4.4.15
 #
 # Requires: podman, git, network. Heavy: full native build x2.
 
@@ -251,112 +257,124 @@ PY
     ;;
 
   verify)
-    vc="${2:-}"
-    [ -n "$vc" ] || die "usage: $0 verify <versionCode>"
-    log "fdroid build $APPID:$vc (pinned recipe commit)"
-    fdroid_in_container "build --no-tarball --skip-scan $APPID:$vc" \
-        > "$work/build.log" 2>&1 \
-        || { tail -50 "$work/build.log"; die "fdroid build failed (full log: $work/build.log)"; }
-    log "fdroid verify $APPID:$vc against https://f-droid.org/repo (v2/v3 graft, !1825)"
-    rc=0
-    fdroid_in_container "verify --verbose $APPID:$vc" || rc=$?
-    cat "$work"/fdroiddata/verified/${APPID}_${vc}.apk.json 2>/dev/null || true
-    if [ "$rc" -eq 0 ]; then
-        log "RESULT: VERIFIED — local build matches the F-Droid-published APK"
-        exit 0
+    arg2="${2:-}"
+    [ -n "$arg2" ] || die "usage: $0 verify <versionCode> | verify <github-apk-url> [ref]"
+
+    if [[ "$arg2" =~ ^[0-9]+$ ]]; then
+        # ---- versionCode form: compare against f-droid.org-published APK ----
+        vc="$arg2"
+        log "fdroid build $APPID:$vc (pinned recipe commit)"
+        fdroid_in_container "build --no-tarball --skip-scan $APPID:$vc" \
+            > "$work/build.log" 2>&1 \
+            || { tail -50 "$work/build.log"; die "fdroid build failed (full log: $work/build.log)"; }
+        log "fdroid verify $APPID:$vc against https://f-droid.org/repo (v2/v3 graft, !1825)"
+        rc=0
+        fdroid_in_container "verify --verbose $APPID:$vc" || rc=$?
+        cat "$work"/fdroiddata/verified/${APPID}_${vc}.apk.json 2>/dev/null || true
+        if [ "$rc" -eq 0 ]; then
+            log "RESULT: VERIFIED — local build matches the F-Droid-published APK"
+            exit 0
+        fi
+        log "RESULT: MISMATCH — local build differs from published APK (see JSON above)"
+        exit 1
     fi
-    log "RESULT: MISMATCH — local build differs from published APK (see JSON above)"
-    exit 1
-    ;;
 
-  verify-beta)
-    # Cross-env reproducibility check for beta builds. Beta is shipped via
-    # GitHub Releases (NOT F-Droid), built by .github/workflows/beta.yml +
-    # .github/actions/build-mg. Here we rebuild the same Debug variant in
-    # the F-Droid buildserver-trixie environment and diffoscope the two APKs
-    # (signatures excluded). PASS = the build is path/toolchain-independent.
-    #
-    # Usage: scripts/check-reproducibility.sh verify-beta <github-apk-url> [ref]
-    #   ref defaults to HEAD; pass the tag/sha matching the GitHub APK build.
-    url="${2:-}"
+    # ---- URL form: compare against a GitHub Release APK ----
+    # Mirrors fdroiddata CI's reproducible-build job for a Release-flavor APK
+    # built outside of F-Droid (beta channel publishes these per push). Flow:
+    #  1. download the GitHub APK
+    #  2. read its versionCode from the AndroidManifest (aapt2 dump badging)
+    #  3. snapshot source at the matching ref, push to a bare repo
+    #  4. override the recipe's last Builds entry (commit + versionCode +
+    #     Repo) to point at that snapshot
+    #  5. fdroid build --on-server --test (same path as determinism mode)
+    #  6. apksigcopier copies the GitHub signature onto the local unsigned APK
+    #  7. diffoscope full APKs — PASS only if every byte matches
+    url="$arg2"
     ref="${3:-HEAD}"
-    [ -n "$url" ] || die "usage: $0 verify-beta <github-apk-url> [ref]"
-    [ -f "$repo_root/API_KEYS" ] || die "API_KEYS missing in repo (APP_ID/APP_HASH are baked into the APK; same keys needed to reproduce)"
+    case "$url" in https://*|http://*) ;; *) die "verify arg must be a versionCode or a http(s) URL" ;; esac
 
-    log "download GitHub beta APK: $url"
+    log "download GitHub APK: $url"
     curl -fsSL "$url" -o "$work/github.apk" || die "download failed"
 
-    # Infer beta version + flavor from the APK filename produced by
-    # build-mg/action.yml: Mercurygram-<MG_BETA_VN>-<abi>.apk
-    base=$(basename "$url" .apk)
-    abi=$(printf '%s\n' "$base" | grep -oE '(arm64-v8a|armeabi-v7a|x86_64|x86)$' || true)
-    [ -n "$abi" ] || die "could not infer abi from filename: $base"
-    bvn=${base%-"$abi"}; bvn=${bvn#Mercurygram-}
-    bvc=${bvn##*.}
-    case "$abi" in
-        arm64-v8a)   flavor=AfatFdArm64 ;;
-        armeabi-v7a) flavor=AfatFdArm32 ;;
-        x86)         flavor=AfatFdX86   ;;
-        x86_64)      flavor=AfatFdX86_64 ;;
-    esac
-    log "inferred: MG_BETA_VERSION_NAME=$bvn MG_BETA_VERSION_CODE=$bvc abi=$abi flavor=$flavor"
+    log "extract versionCode from GitHub APK manifest (aapt2 dump badging)"
+    apk_vc=$(podman run --rm -v "$work":/w:z "$IMG" \
+        /opt/android-sdk/build-tools/35.0.0/aapt2 dump badging /w/github.apk \
+        | sed -n "s/^package: .*versionCode='\([0-9]\+\)'.*/\1/p" | head -1)
+    [ -n "$apk_vc" ] || die "could not extract versionCode from $url"
+    log "GitHub APK versionCode: $apk_vc"
 
     log "snapshot source at ref=$ref (carries uncommitted tracked changes when ref=HEAD)"
     git clone --quiet --no-local "$repo_root" "$work/src"
     git -C "$work/src" checkout --quiet "$(git -C "$repo_root" rev-parse "$ref")"
     if [ "$ref" = HEAD ] && ! git -C "$repo_root" diff --quiet HEAD; then
         git -C "$repo_root" diff --binary HEAD | git -C "$work/src" apply --index --binary
-        git -C "$work/src" -c user.email=repro@local -c user.name=repro \
-            commit --quiet -m 'repro snapshot'
     fi
-    cp "$repo_root/API_KEYS" "$work/src/API_KEYS"
+    git -C "$work/src" checkout --quiet -B repro
+    git -C "$work/src" -c user.email=repro@local -c user.name=repro \
+        commit --quiet --allow-empty -m 'repro snapshot'
+    snap_sha=$(git -C "$work/src" rev-parse HEAD)
+    git clone --quiet --mirror "$work/src" "$work/fdroiddata/${APPID}.git"
+    git -C "$work/fdroiddata/${APPID}.git" symbolic-ref HEAD refs/heads/repro
 
-    log "build assemble${flavor}Debug in buildserver-trixie env (mirrors beta.yml + build-mg)"
-    podman run --rm --network=host -v "$work/src":/src:z -w /src "$IMG" \
+    # Override the recipe's last Builds entry: commit -> snapshot, versionCode
+    # -> the GitHub APK's vc (this beta vc may not exist in the recipe at all
+    # since the recipe only tracks F-Droid-released stable vc's). Repo ->
+    # local bare repo.
+    REPRO_VC=$(podman run --rm -i -v "$work":/w:z "$IMG" python3 - \
+        "/w/fdroiddata/metadata/${APPID}.yml" "/w/fdroiddata/${APPID}.git" \
+        "$snap_sha" "$apk_vc" <<'PY'
+import sys, yaml
+recipe, bundle, sha, vc = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+with open(recipe) as f:
+    data = yaml.safe_load(f)
+data['Repo'] = bundle
+last = data['Builds'][-1]
+last['commit'] = sha
+last['versionCode'] = vc
+with open(recipe, 'w') as f:
+    yaml.dump(data, f, sort_keys=False)
+print(vc)
+PY
+    )
+
+    log "fdroid build --on-server --test $APPID:$REPRO_VC (rebuild GitHub APK from source)"
+    podman run --rm --network=host -v "$work":/w:z -w /w/fdroiddata "$IMG" \
         bash -euo pipefail -c "
-            # Mirror the fdroiddata recipe sudo: block exactly (native build
-            # tools + Java 17 from bookworm). GitHub Actions uses temurin-17 —
-            # same major version, build output is deterministic across vendor
-            # d8/r8 given same inputs.
-            echo 'deb https://deb.debian.org/debian bookworm main' > /etc/apt/sources.list.d/bookworm.list
-            apt-get update -qq
-            apt-get install -y cmake gperf g++ make meson nasm ninja-build >/dev/null
-            apt-get install -y -t bookworm openjdk-17-jdk-headless >/dev/null
-            update-java-alternatives -s java-1.17.0-openjdk-amd64 || true
-            export JAVA_HOME=/usr/lib/jvm/java-1.17.0-openjdk-amd64 ANDROID_HOME=/opt/android-sdk
-
-            # Mercurygram's debug buildType signs with release.keystore (real
-            # password lives in beta.yml secrets). Generate a throwaway
-            # keystore so the package task doesn't crash; signatures are
-            # excluded from the diffoscope comparison anyway.
-            keytool -genkeypair -keystore /tmp/stub.keystore -storepass stubstub -keypass stubstub \
-                -alias stub -keyalg RSA -keysize 2048 -validity 365 \
-                -dname 'CN=stub' -noprompt 2>/dev/null
-
-            ./gradlew :TMessagesProj_App:assemble${flavor}Debug --no-daemon \
-                -PMG_BETA_VERSION_CODE=${bvc} -PMG_BETA_VERSION_NAME=${bvn} \
-                -PRELEASE_STORE_FILE=/tmp/stub.keystore -PRELEASE_KEY_ALIAS=stub \
-                -PRELEASE_STORE_PASSWORD=stubstub -PRELEASE_KEY_PASSWORD=stubstub
-            apk=\$(find TMessagesProj_App/build/outputs/apk -name '*.apk' | head -1)
-            cp \"\$apk\" /src/_local.apk
+            test -f /etc/profile.d/bsenv.sh && . /etc/profile.d/bsenv.sh
+            export PATH=/opt/fdroidserver:\$PATH
+            export PYTHONPATH=/opt/fdroidserver\${PYTHONPATH:+:\$PYTHONPATH}
+            git config --global --add safe.directory '*'
+            # Pre-clone the bare repo to dodge fdroidserver's py3.13 bug:
+            # set_FDroidPopen_env runs before prepare_source, so
+            # get_source_date_epoch returns None when build/<appid> doesn't
+            # yet exist -> TypeError when assigning None to os.environ[].
+            mkdir -p build
+            git clone --quiet /w/fdroiddata/${APPID}.git build/${APPID}
+            git -C build/${APPID} checkout --quiet ${snap_sha}
+            git -C build/${APPID} submodule update --init --recursive --depth 1 \
+                >/dev/null 2>&1 || git -C build/${APPID} submodule update --init --recursive
+            fdroid build --on-server --test --no-tarball --refresh-scanner $APPID:$REPRO_VC
         " > "$work/build.log" 2>&1 \
-        || { tail -80 "$work/build.log"; die "gradle build failed (full log: $work/build.log)"; }
-    cp "$work/src/_local.apk" "$work/local.apk"
+        || { tail -80 "$work/build.log"; die "fdroid build failed (full log: $work/build.log)"; }
+    cp "$work"/fdroiddata/tmp/${APPID}_${REPRO_VC}.apk "$work/local.apk"
 
-    # Unzip both APKs into directories. v2/v3 signing blocks sit OUTSIDE the
-    # zip entries (between central dir and EOCD) so unzip ignores them — no
-    # need to graft or filter them out. v1 META-INF/* is excluded explicitly.
-    log "extract APKs (signature blocks/META-INF excluded from comparison)"
+    # Unzip both APKs; the v2/v3 APK Signing Block lives between central
+    # directory and EOCD so unzip skips it. META-INF/* is excluded explicitly
+    # (catches v1 META-INF/CERT.{RSA,SF}/MANIFEST.MF if any exist — the
+    # Release buildType has enableV1Signing=false, so they shouldn't, but
+    # excluding is harmless). Every other byte gets compared.
+    log "extract APKs (APK Signing Block and META-INF/* excluded from comparison)"
     rm -rf "$work/github.unzip" "$work/local.unzip"
     mkdir -p "$work/github.unzip" "$work/local.unzip"
     unzip -qq "$work/github.apk" -d "$work/github.unzip" -x 'META-INF/*'
     unzip -qq "$work/local.apk"  -d "$work/local.unzip"  -x 'META-INF/*'
 
-    log "diffoscope github.unzip vs local.unzip"
+    log "diffoscope github.apk content vs local.apk content"
     if podman run --rm -v "$work":/w:z "$DIFF_IMG" \
         diffoscope --exclude-directory-metadata=yes \
             /w/github.unzip /w/local.unzip; then
-        log "RESULT: REPRODUCIBLE — GitHub beta APK matches local F-Droid-env build (signatures excluded)"
+        log "RESULT: VERIFIED — GitHub APK matches local F-Droid-env build (signatures excluded)"
         exit 0
     fi
     log "RESULT: MISMATCH — see diffoscope output above"
@@ -364,6 +382,6 @@ PY
     ;;
 
   *)
-    die "unknown mode '$mode' (expected: determinism | verify | verify-beta)"
+    die "unknown mode '$mode' (expected: determinism | verify)"
     ;;
 esac

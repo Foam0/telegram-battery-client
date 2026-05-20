@@ -259,6 +259,8 @@ public class MercurygramSettingsActivity extends UniversalFragment {
         if (positive != null) {
             positive.setTextColor(getThemedColor(Theme.key_text_RedBold));
         }
+    }
+
     private void confirmClearSavedHistory() {
         Context context = getParentActivity();
         if (context == null) {

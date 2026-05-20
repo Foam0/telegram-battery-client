@@ -19,18 +19,51 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Release builds — reproducible, shares versionCode with the
+          # latest stable. Filename has no infix.
+          - flavor: afatFdArm32
+            task: assembleAfatFdArm32Release
+            abi: armeabi-v7a
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdArm64
+            task: assembleAfatFdArm64Release
+            abi: arm64-v8a
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdX86
+            task: assembleAfatFdX86Release
+            abi: x86
+            build-type: release
+            name-infix: ''
+          - flavor: afatFdX86_64
+            task: assembleAfatFdX86_64Release
+            abi: x86_64
+            build-type: release
+            name-infix: ''
+          # Debug builds — `.beta` applicationIdSuffix, side-by-side install
+          # with stable. Filename gets a "-debug" infix to distinguish from
+          # the Release APK.
           - flavor: afatFdArm32
             task: assembleAfatFdArm32Debug
             abi: armeabi-v7a
+            build-type: debug
+            name-infix: '-debug'
           - flavor: afatFdArm64
             task: assembleAfatFdArm64Debug
             abi: arm64-v8a
+            build-type: debug
+            name-infix: '-debug'
           - flavor: afatFdX86
             task: assembleAfatFdX86Debug
             abi: x86
+            build-type: debug
+            name-infix: '-debug'
           - flavor: afatFdX86_64
             task: assembleAfatFdX86_64Debug
             abi: x86_64
+            build-type: debug
+            name-infix: '-debug'
 
     steps:
       - name: Checkout
@@ -53,10 +86,15 @@ jobs:
           flavor: ${{ matrix.flavor }}
           task: ${{ matrix.task }}
           abi: ${{ matrix.abi }}
-          build-type: debug
+          build-type: ${{ matrix.build-type }}
           artifact-version: ${{ steps.ver.outputs.name }}
-          beta-version-code: ${{ steps.ver.outputs.code }}
-          beta-version-name: ${{ steps.ver.outputs.name }}
+          name-infix: ${{ matrix.name-infix }}
+          # MG_BETA_* only apply to the debug buildType (see
+          # TMessagesProj_App/build.gradle:274). For release, leave the inputs
+          # empty so build-mg skips the -P overrides and the variant takes the
+          # standard MG_VERSION_CODE*10+abi versionCode.
+          beta-version-code: ${{ matrix.build-type == 'debug' && steps.ver.outputs.code || '' }}
+          beta-version-name: ${{ matrix.build-type == 'debug' && steps.ver.outputs.name || '' }}
           app-id: ${{ secrets.APP_ID }}
           app-hash: ${{ secrets.APP_HASH }}
           release-keystore-b64: ${{ secrets.RELEASE_KEYSTORE }}
@@ -67,7 +105,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: apk-${{ matrix.abi }}
+          name: apk-${{ matrix.abi }}-${{ matrix.build-type }}
           path: ${{ steps.build.outputs.apk_path }}
 
   release:
@@ -75,6 +113,8 @@ jobs:
     needs: build
     permissions:
       contents: write
+    outputs:
+      tag: ${{ steps.meta.outputs.name }}
 
     steps:
       - name: Checkout
@@ -117,3 +157,32 @@ jobs:
           make_latest: false
           body_path: ${{ runner.temp }}/body.md
           files: artifacts/*.apk
+
+  # Reproducibility regression guard for the beta channel: rebuild the just-
+  # published arm64 Release APK inside the F-Droid buildserver-trixie env and
+  # compare against the GitHub artifact. arm64 only — the source is identical
+  # across ABIs; per-ABI delta is the buildNativeLibs<Abi> task. continue-on-
+  # error is on so an infra hiccup or a transient diffoscope mismatch never
+  # blocks a beta release. Flip to hard-fail once the run is consistently green.
+  verify:
+    runs-on: ubuntu-24.04
+    needs: release
+    timeout-minutes: 90
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Run reproducibility check (arm64 Release APK)
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+          REF: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${{ github.repository }}/releases/download/${TAG}/Mercurygram-${TAG}-arm64-v8a.apk"
+          scripts/check-reproducibility.sh verify "$url" "$REF"

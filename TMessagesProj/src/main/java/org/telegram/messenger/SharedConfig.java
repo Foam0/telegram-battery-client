@@ -197,6 +197,9 @@ public class SharedConfig {
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_acceptPreReleaseUpdates", acceptPreReleaseUpdates)
+                .apply();
+    }
+
     public static void toggleDisableLivePhotosByDefault() {
         disableLivePhotosByDefault = !disableLivePhotosByDefault;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)

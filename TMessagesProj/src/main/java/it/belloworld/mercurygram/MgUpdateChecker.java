@@ -178,7 +178,15 @@ public class MgUpdateChecker {
                 String downloadUrl = null;
                 long fileSize = 0;
 
-                String abiApkName = "Mercurygram-" + tagName + "-" + targetAbi + ".apk";
+                // Beta channel publishes both Release (no infix, stable package)
+                // and Debug (-debug infix, .beta package) APKs per push. A
+                // .beta-installed runtime fetches the debug variant; stable
+                // installs use /releases/latest (set above), which excludes
+                // prereleases, so the empty-infix lookup never matches a beta
+                // tag accidentally.
+                String infix = ApplicationLoader.applicationContext.getPackageName()
+                        .endsWith(".beta") ? "-debug" : "";
+                String abiApkName = "Mercurygram" + infix + "-" + tagName + "-" + targetAbi + ".apk";
                 for (int i = 0; i < assets.length(); i++) {
                     JSONObject asset = assets.getJSONObject(i);
                     String name = asset.getString("name");
