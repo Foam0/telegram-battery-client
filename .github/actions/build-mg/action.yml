@@ -21,6 +21,10 @@ inputs:
   artifact-version:
     description: 'Version string for the renamed APK filename (Mercurygram-<ver>-<abi>.apk).'
     required: true
+  name-infix:
+    description: 'Optional infix between "Mercurygram-" and the version (e.g. "-debug" for the beta debug variant). Empty by default.'
+    required: false
+    default: ''
   beta-version-code:
     description: 'Optional MG_BETA_VERSION_CODE override (beta workflow only).'
     required: false
@@ -126,6 +130,6 @@ runs:
       run: |
         set -euo pipefail
         APK_DIR=TMessagesProj_App/build/outputs/apk/${{ inputs.flavor }}/${{ inputs.build-type }}
-        DEST="$APK_DIR/Mercurygram-${{ inputs.artifact-version }}-${{ inputs.abi }}.apk"
+        DEST="$APK_DIR/Mercurygram${{ inputs.name-infix }}-${{ inputs.artifact-version }}-${{ inputs.abi }}.apk"
         cp "$APK_DIR/${{ inputs.flavor }}.apk" "$DEST"
         echo "apk_path=${DEST}" >> "$GITHUB_OUTPUT"
