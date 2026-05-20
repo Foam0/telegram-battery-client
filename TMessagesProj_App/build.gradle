@@ -41,6 +41,14 @@ android {
 
     defaultConfig.applicationId = APP_PACKAGE
 
+    // [MG] compress native .so in the APK (AGP default since 4.1 is uncompressed).
+    // ~13 MB smaller download on the single-ABI F-Droid build. Deterministic.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
