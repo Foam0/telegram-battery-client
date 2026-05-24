@@ -56,6 +56,8 @@ public class MercurygramSettingsActivity extends UniversalFragment {
     private static final int ID_DISABLE_UNIFIED_PUSH = 30;
     private static final int ID_UNIFIED_PUSH_DISTRIBUTOR = 31;
     private static final int ID_UNIFIED_PUSH_GATEWAY = 32;
+    private static final int ID_REDUCE_TRACKING_FINGERPRINT = 40;
+    private static final int ID_USE_ORBOT = 41;
 
     @Override
     protected CharSequence getTitle() {
@@ -102,6 +104,22 @@ public class MercurygramSettingsActivity extends UniversalFragment {
         items.add(UItem.asCheck(ID_DISABLE_LIVE_PHOTOS, LocaleController.getString(R.string.MercurygramDisableLivePhotos))
                 .setChecked(getUserConfig().disableLivePhotosByDefault));
         items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramDisableLivePhotosAbout)));
+
+        items.add(UItem.asHeader(LocaleController.getString(R.string.MercurygramSettingsPrivacy)));
+        items.add(UItem.asCheck(ID_REDUCE_TRACKING_FINGERPRINT,
+                        LocaleController.getString(R.string.MercurygramReduceTrackingFingerprint))
+                .setChecked(SharedConfig.reduceTrackingFingerprint));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramReduceTrackingFingerprintAbout)));
+
+        boolean orbotInstalled = it.belloworld.mercurygram.MgOrbotHelper.isOrbotInstalled(ApplicationLoader.applicationContext);
+        items.add(UItem.asButton(ID_USE_ORBOT,
+                LocaleController.getString(orbotInstalled
+                        ? R.string.MercurygramOrbotIntegration
+                        : R.string.MercurygramOrbotInstall),
+                LocaleController.getString(orbotInstalled
+                        ? R.string.MercurygramOrbotIntegrationSubtitle
+                        : R.string.MercurygramOrbotInstallSubtitle)));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramOrbotAbout)));
 
         if (!MgUpdateChecker.isFdroidBuild()) {
             items.add(UItem.asHeader(LocaleController.getString(R.string.MercurygramSettingsUpdates)));
@@ -220,6 +238,12 @@ public class MercurygramSettingsActivity extends UniversalFragment {
             case ID_UNIFIED_PUSH_GATEWAY:
                 showGatewayDialog();
                 break;
+            case ID_REDUCE_TRACKING_FINGERPRINT:
+                handleReduceTrackingFingerprintClick();
+                break;
+            case ID_USE_ORBOT:
+                handleUseOrbotClick();
+                break;
         }
     }
 
@@ -260,6 +284,65 @@ public class MercurygramSettingsActivity extends UniversalFragment {
                 .setPositiveButton(LocaleController.getString(R.string.MercurygramAcceptPreReleaseUpdatesEnable),
                         (d, which) -> {
                             SharedConfig.toggleAcceptPreReleaseUpdates();
+                            refreshList();
+                        })
+                .create();
+        showDialog(dialog);
+        TextView positive = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (positive != null) {
+            positive.setTextColor(getThemedColor(Theme.key_text_RedBold));
+        }
+    }
+
+    private void handleUseOrbotClick() {
+        Context context = getParentActivity();
+        if (context == null) return;
+        if (!it.belloworld.mercurygram.MgOrbotHelper.isOrbotInstalled(ApplicationLoader.applicationContext)) {
+            try {
+                context.startActivity(it.belloworld.mercurygram.MgOrbotHelper.getInstallIntent());
+            } catch (Throwable ignored) {
+                Toast.makeText(context,
+                        LocaleController.getString(R.string.MercurygramOrbotInstallFailed),
+                        Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
+        AlertDialog dialog = new AlertDialog.Builder(context)
+                .setTitle(LocaleController.getString(R.string.MercurygramOrbotActivateTitle))
+                .setMessage(LocaleController.getString(R.string.MercurygramOrbotActivateMessage))
+                .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                .setPositiveButton(LocaleController.getString(R.string.MercurygramOrbotActivate),
+                        (d, which) -> {
+                            it.belloworld.mercurygram.MgOrbotHelper.startOrbot(ApplicationLoader.applicationContext);
+                            SharedConfig.ProxyInfo info = it.belloworld.mercurygram.MgOrbotHelper.configureSocksProxy();
+                            it.belloworld.mercurygram.MgOrbotHelper.activateProxy(
+                                    org.telegram.messenger.MessagesController.getGlobalMainSettings(), info);
+                            Toast.makeText(context,
+                                    LocaleController.getString(R.string.MercurygramOrbotActivated),
+                                    Toast.LENGTH_SHORT).show();
+                            refreshList();
+                        })
+                .create();
+        showDialog(dialog);
+    }
+
+    private void handleReduceTrackingFingerprintClick() {
+        if (SharedConfig.reduceTrackingFingerprint) {
+            SharedConfig.toggleReduceTrackingFingerprint();
+            refreshList();
+            return;
+        }
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        AlertDialog dialog = new AlertDialog.Builder(context)
+                .setTitle(LocaleController.getString(R.string.MercurygramReduceTrackingFingerprintWarningTitle))
+                .setMessage(LocaleController.getString(R.string.MercurygramReduceTrackingFingerprintWarningMessage))
+                .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                .setPositiveButton(LocaleController.getString(R.string.MercurygramReduceTrackingFingerprintEnable),
+                        (d, which) -> {
+                            SharedConfig.toggleReduceTrackingFingerprint();
                             refreshList();
                         })
                 .create();

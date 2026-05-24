@@ -1421,14 +1421,68 @@ void ConnectionsManager::processServerResponse(TLObject *message, int64_t messag
                                     request->startTimeMillis = 0;
                                     request->requestFlags |= RequestFlagResendAfter;
                                 } else if (error->error_message.find(bindFailed) != std::string::npos && typeid(*request->rawRequest) == typeid(TL_auth_bindTempAuthKey)) {
-                                    int datacenterId;
-                                    if (delegate != nullptr && getDatacenterWithId(DEFAULT_DATACENTER_ID) == datacenter) {
-                                        delegate->onLogout(instanceNum);
-                                        datacenterId = -1;
+                                    // MG: if reduced-TTL mode is on and the ladder isn't
+                                    // exhausted, the rejection may be due to our shortened
+                                    // expires_in. Bump the ladder, drop only the temp key
+                                    // (not perm — no logout), evict any other pending
+                                    // bindTempAuthKey requests for this DC (their temp_id
+                                    // is now stale), and trigger a fresh handshake with
+                                    // the longer TTL. Eviction + new handshake run via
+                                    // scheduleTask to avoid mutating runningRequests
+                                    // while we are iterating it.
+                                    if (onTempKeyBindFailedRecover()) {
+                                        discardResponse = true;
+                                        uint32_t dcId = datacenter->getDatacenterId();
+                                        scheduleTask([&, dcId] {
+                                            Datacenter *dc = getDatacenterWithId(dcId);
+                                            if (dc == nullptr) return;
+                                            dc->clearAuthKey(HandshakeTypeTemp);
+                                            if (dc->hasMediaAddress()) {
+                                                dc->clearAuthKey(HandshakeTypeMediaTemp);
+                                            }
+                                            // Match the recreate-sessions invariant that
+                                            // the original cleanUp() path enforces; without
+                                            // this, frames already in flight encrypted with
+                                            // the just-deleted temp key get rebound to the
+                                            // new key in the same session id and the server
+                                            // discards them (NEW_SESSION_CREATED).
+                                            dc->recreateSessions(HandshakeTypeTemp);
+                                            if (dc->hasMediaAddress()) {
+                                                dc->recreateSessions(HandshakeTypeMediaTemp);
+                                            }
+                                            for (auto it = runningRequests.begin(); it != runningRequests.end();) {
+                                                Request *r = it->get();
+                                                if (r->datacenterId == dcId && r->rawRequest != nullptr
+                                                    && typeid(*r->rawRequest) == typeid(TL_auth_bindTempAuthKey)) {
+                                                    it = runningRequests.erase(it);
+                                                } else {
+                                                    ++it;
+                                                }
+                                            }
+                                            for (auto it = requestsQueue.begin(); it != requestsQueue.end();) {
+                                                Request *r = it->get();
+                                                if (r->datacenterId == dcId && r->rawRequest != nullptr
+                                                    && typeid(*r->rawRequest) == typeid(TL_auth_bindTempAuthKey)) {
+                                                    it = requestsQueue.erase(it);
+                                                } else {
+                                                    ++it;
+                                                }
+                                            }
+                                            dc->beginHandshake(HandshakeTypeTemp, true);
+                                            if (dc->hasMediaAddress()) {
+                                                dc->beginHandshake(HandshakeTypeMediaTemp, true);
+                                            }
+                                        });
                                     } else {
-                                        datacenterId = datacenter->getDatacenterId();
+                                        int datacenterId;
+                                        if (delegate != nullptr && getDatacenterWithId(DEFAULT_DATACENTER_ID) == datacenter) {
+                                            delegate->onLogout(instanceNum);
+                                            datacenterId = -1;
+                                        } else {
+                                            datacenterId = datacenter->getDatacenterId();
+                                        }
+                                        cleanUp(true, datacenterId);
                                     }
-                                    cleanUp(true, datacenterId);
                                 }
                             }
                         }
@@ -3551,6 +3605,98 @@ void ConnectionsManager::setPushConnectionEnabled(bool value) {
             sendPing(datacenter, true);
         }
     }
+}
+
+// MG: reduced-mode temp-key TTL ladder. probe-temp-key-ttl.py confirmed the
+// server accepts 60s, but we start at 1h to keep handshake load low
+// (battery + observable rotation pattern). The ladder bumps up on
+// bindTempAuthKey failure so a future server-policy tightening rolls TTL
+// up rather than logging the user out. Last entry MUST equal the upstream
+// default so the final fallback is indistinguishable from "feature off".
+static const int32_t REDUCED_TEMP_KEY_LADDER[] = {3600, 21600, TEMP_AUTH_KEY_EXPIRE_TIME};
+static const int32_t REDUCED_TEMP_KEY_LADDER_SIZE = sizeof(REDUCED_TEMP_KEY_LADDER) / sizeof(int32_t);
+
+void ConnectionsManager::setReducedTempKeyMode(bool enabled) {
+    if (reducedTempKeyEnabled.load() == enabled) return;
+    reducedTempKeyEnabled.store(enabled);
+    reducedTempKeyLadderIdx.store(0);
+    effectiveTempKeyExpireTime.store(enabled ? REDUCED_TEMP_KEY_LADDER[0] : TEMP_AUTH_KEY_EXPIRE_TIME);
+    if (LOGS_ENABLED) DEBUG_D("account%d reduced temp-key mode %s, TTL=%ds", instanceNum, enabled ? "ON" : "OFF", effectiveTempKeyExpireTime.load());
+}
+
+int32_t ConnectionsManager::getEffectiveTempKeyExpiry() {
+    return effectiveTempKeyExpireTime.load();
+}
+
+// Called from the bindFailed path. Returns true if the ladder was bumped
+// and the caller should skip cleanUp/logout. Returns false if already at
+// the top of the ladder (effectively the upstream default) — caller falls
+// through to the normal cleanUp/logout flow as a safety net. On exhaustion
+// we also signal the Java side via delegate so SharedConfig clears its
+// flag and stops emitting CDN refusals / network-change rotations that
+// would re-enter the same loop.
+bool ConnectionsManager::onTempKeyBindFailedRecover() {
+    if (!reducedTempKeyEnabled.load()) return false;
+    int32_t idx = reducedTempKeyLadderIdx.load();
+    if (idx + 1 >= REDUCED_TEMP_KEY_LADDER_SIZE) {
+        reducedTempKeyEnabled.store(false);
+        reducedTempKeyLadderIdx.store(0);
+        effectiveTempKeyExpireTime.store(TEMP_AUTH_KEY_EXPIRE_TIME);
+        if (LOGS_ENABLED) DEBUG_W("account%d reduced temp-key mode exhausted ladder, disabling", instanceNum);
+        if (delegate != nullptr) {
+            delegate->onReducedTempKeyExhausted(instanceNum);
+        }
+        return false;
+    }
+    reducedTempKeyLadderIdx.store(idx + 1);
+    effectiveTempKeyExpireTime.store(REDUCED_TEMP_KEY_LADDER[idx + 1]);
+    if (LOGS_ENABLED) DEBUG_W("account%d bindTempAuthKey rejected, bumping TTL to %ds", instanceNum, effectiveTempKeyExpireTime.load());
+    return true;
+}
+
+// MG: force a new PFS temp-key handshake on every (non-CDN) datacenter that
+// already has a perm key. Each fresh handshake yields a new auth_key_id, so
+// passive observers correlating across networks cannot use the temp id as a
+// stable device fingerprint past the rotation point. Never touches authKeyPerm
+// (no full re-login). beginHandshake's internal isHandshaking() guard prevents
+// duplicating an in-progress handshake.
+void ConnectionsManager::rotateTempAuthKeys() {
+    if (!PFS_ENABLED) return;
+    scheduleTask([&] {
+        for (auto & iter : datacenters) {
+            Datacenter *datacenter = iter.second;
+            if (datacenter == nullptr) continue;
+            if (datacenter->isCdnDatacenter) continue;
+            if (datacenter->authKeyPerm == nullptr) continue;
+            // Clear before beginHandshake so an in-flight temp handshake
+            // (from a previous rotation triggered by an earlier network flip
+            // that hasn't completed yet) is aborted and restarted. Without
+            // this, beginHandshake's internal isHandshaking() guard
+            // (Datacenter.cpp:936) silently no-ops and the in-flight
+            // handshake completes on the OLD network's connection — the
+            // auth_key_id it produces is observable on the new network too,
+            // defeating the rotation. clearAuthKey(HandshakeTypeTemp) wipes
+            // both authKeyTemp and the handshakes vector (Datacenter.cpp:651)
+            // without touching authKeyPerm.
+            datacenter->clearAuthKey(HandshakeTypeTemp);
+            if (datacenter->hasMediaAddress()) {
+                datacenter->clearAuthKey(HandshakeTypeMediaTemp);
+            }
+            // Recreate sessions on the affected connection types so the
+            // server isn't asked to accept frames from the old session
+            // re-encrypted with the new temp key (which can manifest as
+            // silent message loss when the server replies NEW_SESSION_CREATED
+            // for pre-rotation frames).
+            datacenter->recreateSessions(HandshakeTypeTemp);
+            if (datacenter->hasMediaAddress()) {
+                datacenter->recreateSessions(HandshakeTypeMediaTemp);
+            }
+            datacenter->beginHandshake(HandshakeTypeTemp, true);
+            if (datacenter->hasMediaAddress()) {
+                datacenter->beginHandshake(HandshakeTypeMediaTemp, true);
+            }
+        }
+    });
 }
 
 inline bool checkPhoneByPrefixesRules(std::string phone, std::string rules) {

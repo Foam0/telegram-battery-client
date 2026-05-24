@@ -280,6 +280,7 @@
     <string name="MercurygramSettingsMedia">Медіа</string>
     <string name="MercurygramSettingsUpdates">Оновлення</string>
     <string name="MercurygramSettingsNotifications">Сповіщення</string>
+    <string name="MercurygramSettingsPrivacy">Конфіденційність</string>
     <string name="MercurygramMessageDetailsMenu">Показати «Деталі повідомлення»</string>
     <string name="MercurygramDisableAutoUpdate">Вимкнути вбудований оновлювач</string>
     <string name="MercurygramDisableAutoUpdateAbout">Mercurygram більше не перевірятиме оновлення на GitHub під час запуску. Ручну перевірку можна запустити кнопкою нижче.</string>
@@ -311,4 +312,19 @@
     <string name="MercurygramDisableUnifiedPushAbout">Якщо вимкнено, Mercurygram повертається до опитування нових повідомлень. Програму буде перезапущено для застосування змін.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Щоб застосувати цю зміну, Mercurygram потрібно перезапустити. Продовжити?</string>
     <string name="MercurygramRestart">Перезапустити</string>
+    <string name="MercurygramReduceTrackingFingerprint">Зменшити мережеве відстеження</string>
+    <string name="MercurygramReduceTrackingFingerprintAbout">Ротація ключа сесії при зміні мережі (Wi-Fi ↔ мобільна) та уникнення CDN-серверів для завантаження медіа. Ускладнює пасивну кореляцію вашого пристрою між мережами. Завантаження великих файлів буде повільнішим.</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningTitle">Зменшити мережеве відстеження?</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningMessage">Mercurygram буде примусово створювати новий ключ сесії щоразу при зміні мережі та відмовлятиметься завантажувати медіа з CDN-серверів Telegram (використовуючи замість них основний дата-центр). Це ускладнить пасивному спостерігачу у вашій мережі кореляцію вашого пристрою між мережами, але не приховає факт використання Telegram, не захистить від аналізу трафіку (час, обсяг, контакти) та сповільнить завантаження великих файлів. Перший ключ сесії при новому вході все ще спостережний один раз. Продовжити?</string>
+    <string name="MercurygramReduceTrackingFingerprintEnable">Увімкнути</string>
+    <string name="MercurygramOrbotIntegration">Активувати Tor-проксі (Orbot)</string>
+    <string name="MercurygramOrbotIntegrationSubtitle">Маршрутизація Mercurygram через локальний SOCKS5 Orbot</string>
+    <string name="MercurygramOrbotInstall">Встановити Orbot з F-Droid</string>
+    <string name="MercurygramOrbotInstallSubtitle">Orbot — клієнт Tor для Android. Не входить до Mercurygram.</string>
+    <string name="MercurygramOrbotAbout">Маршрутизує трафік через локальний SOCKS5 Orbot (127.0.0.1:9050). Долає пасивне відстеження на рівні провайдера, але Telegram все ще бачить вихідний вузол Tor. Функції, чутливі до затримок (дзвінки), можуть постраждати.</string>
+    <string name="MercurygramOrbotActivateTitle">Використовувати Orbot для Mercurygram?</string>
+    <string name="MercurygramOrbotActivateMessage">Mercurygram запустить Orbot (якщо він ще не запущений) і маршрутизуватиме весь трафік через 127.0.0.1:9050. Будь-які наявні налаштування проксі буде замінено. Це можна змінити пізніше в Налаштуваннях → Дані та сховище → Проксі. Продовжити?</string>
+    <string name="MercurygramOrbotActivate">Активувати</string>
+    <string name="MercurygramOrbotActivated">Tor-проксі (Orbot) активний</string>
+    <string name="MercurygramOrbotInstallFailed">Не вдалося відкрити сторінку встановлення</string>
 </resources>

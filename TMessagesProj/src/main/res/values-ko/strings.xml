@@ -1140,6 +1140,7 @@
     <string name="MercurygramSettingsMedia">미디어</string>
     <string name="MercurygramSettingsUpdates">업데이트</string>
     <string name="MercurygramSettingsNotifications">알림</string>
+    <string name="MercurygramSettingsPrivacy">개인 정보 보호</string>
     <string name="MercurygramMessageDetailsMenu">\"메시지 세부정보\" 표시</string>
     <string name="MercurygramDisableAutoUpdate">인앱 업데이터 사용 안 함</string>
     <string name="MercurygramDisableAutoUpdateAbout">Mercurygram이 시작 시 GitHub에서 업데이트를 더 이상 확인하지 않습니다. 아래 버튼에서 수동으로 확인할 수 있습니다.</string>
@@ -1171,4 +1172,19 @@
     <string name="MercurygramDisableUnifiedPushAbout">사용 안 함으로 설정하면 Mercurygram은 새 메시지를 폴링 방식으로 가져옵니다. 변경 사항을 적용하려면 앱이 다시 시작됩니다.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">이 변경 사항을 적용하려면 Mercurygram을 다시 시작해야 합니다. 계속하시겠습니까?</string>
     <string name="MercurygramRestart">다시 시작</string>
+    <string name="MercurygramReduceTrackingFingerprint">네트워크 추적 줄이기</string>
+    <string name="MercurygramReduceTrackingFingerprintAbout">네트워크가 변경될 때(Wi-Fi ↔ 셀룰러) 세션 키를 회전시키고, 미디어 다운로드 시 CDN 서버를 피합니다. 네트워크 전반에 걸친 기기의 수동 상관관계 분석을 더 어렵게 만듭니다. 대용량 파일 다운로드가 느려집니다.</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningTitle">네트워크 추적을 줄이시겠습니까?</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningMessage">Mercurygram은 네트워크가 변경될 때마다 새 세션 키를 강제로 사용하고, Telegram CDN 서버에서 미디어 다운로드를 거부합니다(대신 메인 데이터 센터 사용). 이는 네트워크의 수동적인 관찰자가 네트워크 전반에 걸쳐 기기를 상관시키는 것을 더 어렵게 만들지만, Telegram을 사용한다는 사실을 숨기지는 못하며, 트래픽 분석(타이밍, 볼륨, 연락처)을 막지 못하고, 대용량 파일 다운로드를 느리게 만듭니다. 새 로그인의 첫 번째 세션 키는 여전히 한 번 관찰 가능합니다. 계속하시겠습니까?</string>
+    <string name="MercurygramReduceTrackingFingerprintEnable">활성화</string>
+    <string name="MercurygramOrbotIntegration">Tor 프록시 활성화 (Orbot)</string>
+    <string name="MercurygramOrbotIntegrationSubtitle">Orbot의 로컬 SOCKS5를 통해 Mercurygram 라우팅</string>
+    <string name="MercurygramOrbotInstall">F-Droid에서 Orbot 설치</string>
+    <string name="MercurygramOrbotInstallSubtitle">Orbot은 Android용 Tor 클라이언트입니다. Mercurygram에 포함되어 있지 않습니다.</string>
+    <string name="MercurygramOrbotAbout">Orbot의 로컬 SOCKS5(127.0.0.1:9050)를 통해 트래픽을 라우팅합니다. ISP 수준의 수동 추적을 차단하지만 Telegram은 여전히 Tor 출구를 봅니다. 지연 시간에 민감한 기능(통화)에 영향을 줄 수 있습니다.</string>
+    <string name="MercurygramOrbotActivateTitle">Mercurygram에 Orbot을 사용하시겠습니까?</string>
+    <string name="MercurygramOrbotActivateMessage">Mercurygram이 Orbot을 시작(아직 실행 중이 아니라면)하고 모든 트래픽을 127.0.0.1:9050을 통해 라우팅합니다. 기존 프록시 설정이 대체됩니다. 나중에 설정 → 데이터 및 저장소 → 프록시에서 변경할 수 있습니다. 계속하시겠습니까?</string>
+    <string name="MercurygramOrbotActivate">활성화</string>
+    <string name="MercurygramOrbotActivated">Tor 프록시(Orbot) 활성화됨</string>
+    <string name="MercurygramOrbotInstallFailed">설치 페이지를 열 수 없습니다</string>
 </resources>

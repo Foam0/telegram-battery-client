@@ -1379,6 +1379,7 @@
     <string name="MercurygramSettingsMedia">Medien</string>
     <string name="MercurygramSettingsUpdates">Updates</string>
     <string name="MercurygramSettingsNotifications">Benachrichtigungen</string>
+    <string name="MercurygramSettingsPrivacy">Datenschutz</string>
     <string name="MercurygramMessageDetailsMenu">\"Nachrichtendetails\" anzeigen</string>
     <string name="MercurygramDisableAutoUpdate">In-App-Updater deaktivieren</string>
     <string name="MercurygramDisableAutoUpdateAbout">Mercurygram sucht beim Start nicht mehr auf GitHub nach Updates. Du kannst die Suche weiterhin manuell über die Schaltfläche unten anstoßen.</string>
@@ -1410,4 +1411,19 @@
     <string name="MercurygramDisableUnifiedPushAbout">Wenn deaktiviert, fällt Mercurygram auf Polling neuer Nachrichten zurück. Die App wird neu gestartet, um die Änderung anzuwenden.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram muss neu gestartet werden, um diese Änderung anzuwenden. Fortfahren?</string>
     <string name="MercurygramRestart">Neu starten</string>
+    <string name="MercurygramReduceTrackingFingerprint">Netzwerk-Tracking reduzieren</string>
+    <string name="MercurygramReduceTrackingFingerprintAbout">Rotiert den Sitzungsschlüssel bei einem Netzwerkwechsel (WLAN ↔ Mobilfunk) und vermeidet CDN-Server für Medien-Downloads. Erschwert die passive Korrelation deines Geräts über Netzwerke hinweg. Große Datei-Downloads werden langsamer.</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningTitle">Netzwerk-Tracking reduzieren?</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningMessage">Mercurygram erzwingt bei jedem Netzwerkwechsel einen neuen Sitzungsschlüssel und verweigert Mediendownloads von Telegram-CDN-Servern (verwendet stattdessen das Hauptrechenzentrum). Dies erschwert einem passiven Beobachter in deinem Netzwerk die Korrelation deines Geräts über Netzwerke hinweg, verbirgt aber nicht, dass du Telegram verwendest, verhindert keine Datenverkehrsanalyse (Zeitpunkt, Volumen, Kontakte) und macht große Datei-Downloads langsamer. Der erste Sitzungsschlüssel bei einem neuen Login bleibt einmal beobachtbar. Fortfahren?</string>
+    <string name="MercurygramReduceTrackingFingerprintEnable">Aktivieren</string>
+    <string name="MercurygramOrbotIntegration">Tor-Proxy aktivieren (Orbot)</string>
+    <string name="MercurygramOrbotIntegrationSubtitle">Mercurygram über Orbots lokales SOCKS5 leiten</string>
+    <string name="MercurygramOrbotInstall">Orbot aus F-Droid installieren</string>
+    <string name="MercurygramOrbotInstallSubtitle">Orbot ist der Android-Tor-Client. Nicht in Mercurygram enthalten.</string>
+    <string name="MercurygramOrbotAbout">Leitet den Datenverkehr über Orbots lokales SOCKS5 (127.0.0.1:9050). Wehrt passives ISP-Tracking ab, aber Telegram sieht weiterhin den Tor-Ausgangsknoten. Latenzkritische Funktionen (Anrufe) können beeinträchtigt sein.</string>
+    <string name="MercurygramOrbotActivateTitle">Orbot für Mercurygram verwenden?</string>
+    <string name="MercurygramOrbotActivateMessage">Mercurygram startet Orbot (falls nicht bereits aktiv) und leitet den gesamten Datenverkehr über 127.0.0.1:9050. Vorhandene Proxy-Einstellungen werden ersetzt. Du kannst dies später unter Einstellungen → Daten und Speicher → Proxy ändern. Fortfahren?</string>
+    <string name="MercurygramOrbotActivate">Aktivieren</string>
+    <string name="MercurygramOrbotActivated">Tor-Proxy (Orbot) aktiv</string>
+    <string name="MercurygramOrbotInstallFailed">Installationsseite konnte nicht geöffnet werden</string>
 </resources>

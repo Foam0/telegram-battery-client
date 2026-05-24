@@ -1253,6 +1253,7 @@
     <string name="MercurygramSettingsMedia">Mídia</string>
     <string name="MercurygramSettingsUpdates">Atualizações</string>
     <string name="MercurygramSettingsNotifications">Notificações</string>
+    <string name="MercurygramSettingsPrivacy">Privacidade</string>
     <string name="MercurygramMessageDetailsMenu">Mostrar \"Detalhes da mensagem\"</string>
     <string name="MercurygramDisableAutoUpdate">Desativar atualizador interno</string>
     <string name="MercurygramDisableAutoUpdateAbout">O Mercurygram não verificará mais atualizações no GitHub na inicialização. Você ainda pode iniciar uma verificação manual pelo botão abaixo.</string>
@@ -1284,4 +1285,19 @@
     <string name="MercurygramDisableUnifiedPushAbout">Quando desativado, o Mercurygram volta a sondar por novas mensagens. O aplicativo será reiniciado para aplicar a alteração.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">O Mercurygram precisa ser reiniciado para aplicar esta alteração. Continuar?</string>
     <string name="MercurygramRestart">Reiniciar</string>
+    <string name="MercurygramReduceTrackingFingerprint">Reduzir rastreamento de rede</string>
+    <string name="MercurygramReduceTrackingFingerprintAbout">Gira a chave de sessão quando a rede muda (Wi-Fi ↔ celular) e evita servidores CDN para downloads de mídia. Dificulta a correlação passiva do seu dispositivo entre redes. Downloads de arquivos grandes serão mais lentos.</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningTitle">Reduzir rastreamento de rede?</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningMessage">O Mercurygram forçará uma nova chave de sessão sempre que a rede mudar e recusará baixar mídia dos servidores CDN do Telegram (usando o data center principal em vez disso). Isso dificulta para um observador passivo na sua rede correlacionar seu dispositivo entre redes, mas não esconde que você usa o Telegram, não impede análise de tráfego (tempo, volume, contatos) e tornará downloads de arquivos grandes mais lentos. A primeira chave de sessão em um novo login ainda é observável uma vez. Continuar?</string>
+    <string name="MercurygramReduceTrackingFingerprintEnable">Ativar</string>
+    <string name="MercurygramOrbotIntegration">Ativar proxy Tor (Orbot)</string>
+    <string name="MercurygramOrbotIntegrationSubtitle">Roteamento do Mercurygram pelo SOCKS5 local do Orbot</string>
+    <string name="MercurygramOrbotInstall">Instalar Orbot no F-Droid</string>
+    <string name="MercurygramOrbotInstallSubtitle">O Orbot é o cliente Tor para Android. Não incluído no Mercurygram.</string>
+    <string name="MercurygramOrbotAbout">Roteia o tráfego pelo SOCKS5 local do Orbot (127.0.0.1:9050). Derrota o rastreamento passivo no nível do provedor, mas o Telegram ainda vê o nó de saída do Tor. Recursos sensíveis à latência (chamadas) podem ser afetados.</string>
+    <string name="MercurygramOrbotActivateTitle">Usar o Orbot para o Mercurygram?</string>
+    <string name="MercurygramOrbotActivateMessage">O Mercurygram iniciará o Orbot (se ainda não estiver em execução) e roteará todo o tráfego por 127.0.0.1:9050. Quaisquer configurações de proxy existentes serão substituídas. Você pode alterar isso mais tarde em Configurações → Dados e Armazenamento → Proxy. Continuar?</string>
+    <string name="MercurygramOrbotActivate">Ativar</string>
+    <string name="MercurygramOrbotActivated">Proxy Tor (Orbot) ativo</string>
+    <string name="MercurygramOrbotInstallFailed">Não foi possível abrir a página de instalação</string>
 </resources>
