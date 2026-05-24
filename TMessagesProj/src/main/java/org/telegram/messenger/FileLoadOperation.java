@@ -238,6 +238,7 @@ public class FileLoadOperation {
     private byte[] cdnToken;
     private int cdnDatacenterId;
     private boolean reuploadingCdn;
+    private boolean mgRefusedCdnRedirect;  // MG: prevents infinite redirect loop when server insists on CDN
     protected boolean requestingReference;
     private boolean requestedReference;
     private RandomAccessFile fileReadStream;
@@ -2517,15 +2518,6 @@ public class FileLoadOperation {
                 }
                 if (response instanceof TLRPC.TL_upload_fileCdnRedirect) {
                     TLRPC.TL_upload_fileCdnRedirect res = (TLRPC.TL_upload_fileCdnRedirect) response;
-                    if (!res.file_hashes.isEmpty()) {
-                        if (cdnHashes == null) {
-                            cdnHashes = new HashMap<>();
-                        }
-                        for (int a1 = 0; a1 < res.file_hashes.size(); a1++) {
-                            TLRPC.TL_fileHash hash = res.file_hashes.get(a1);
-                            cdnHashes.put(hash.offset, hash);
-                        }
-                    }
                     if (res.encryption_iv == null || res.encryption_key == null || res.encryption_iv.length != 16 || res.encryption_key.length != 32) {
                         if (requestInfo.whenCancelled != null) {
                             requestInfo.whenCancelled.run();
@@ -2534,7 +2526,31 @@ public class FileLoadOperation {
                         error.text = "bad redirect response";
                         error.code = 400;
                         processRequestResult(requestInfo, error);
+                    } else if (SharedConfig.reduceTrackingFingerprint && !mgRefusedCdnRedirect) {
+                        // MG: CDN nodes always use the long-lived perm key (PFS off),
+                        // exposing a stable auth_key_id on the wire. Stay on the main
+                        // DC instead — slower download, but no perm-key id leak.
+                        // mgRefusedCdnRedirect caps refusals at one to avoid an
+                        // infinite loop if the server insists on CDN. Skip the
+                        // file_hashes population: those hashes are tied to chunks
+                        // we won't actually download from this CDN; leaving them
+                        // in cdnHashes would cause stale-offset entries to be
+                        // consulted by a later genuine redirect with different
+                        // offsets, leading to a hash verification mismatch.
+                        mgRefusedCdnRedirect = true;
+                        isCdn = false;
+                        clearOperation(requestInfo, false, false);
+                        startDownloadRequest(connectionType);
                     } else {
+                        if (!res.file_hashes.isEmpty()) {
+                            if (cdnHashes == null) {
+                                cdnHashes = new HashMap<>();
+                            }
+                            for (int a1 = 0; a1 < res.file_hashes.size(); a1++) {
+                                TLRPC.TL_fileHash hash = res.file_hashes.get(a1);
+                                cdnHashes.put(hash.offset, hash);
+                            }
+                        }
                         isCdn = true;
                         if (notCheckedCdnRanges == null) {
                             notCheckedCdnRanges = new ArrayList<>();

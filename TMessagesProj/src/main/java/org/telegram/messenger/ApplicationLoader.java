@@ -243,6 +243,16 @@ public class ApplicationLoader extends Application {
 
         SharedConfig.loadConfig();
         SharedPrefsHelper.init(applicationContext);
+        // Clear stale Orbot proxy entries from the pre-embedded-Tor era so
+        // upgrades don't silently keep routing MTProto through 127.0.0.1:9050.
+        it.belloworld.mercurygram.tor.MgTorController.migrateLegacyOrbotEntry();
+        // Pin the proxy entry to the unreachable loopback stub BEFORE the
+        // ConnectionsManager singletons below read proxy_port via their
+        // init() path. Without this, the first native_setProxySettings()
+        // call on a Tor-enabled cold start targets the previous session's
+        // persisted ephemeral SOCKS port (now dead, possibly rebound by
+        // another app) until MgTorController.init() further down runs.
+        it.belloworld.mercurygram.tor.MgTorController.preInit();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
             UserConfig.getInstance(a).loadConfig();
             MessagesController.getInstance(a);
@@ -342,6 +352,9 @@ public class ApplicationLoader extends Application {
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
+        it.belloworld.mercurygram.MgNetworkChangeWatcher.init(applicationContext);
+        SharedConfig.applyReduceTrackingFingerprintToNative();
+        it.belloworld.mercurygram.tor.MgTorController.init(applicationContext);
 
     }
 

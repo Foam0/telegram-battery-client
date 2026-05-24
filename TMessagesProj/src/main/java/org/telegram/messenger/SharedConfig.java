@@ -193,6 +193,61 @@ public class SharedConfig {
         AndroidUtilities.clearTypefaceCache();
     }
 
+    public static void toggleReduceTrackingFingerprint() {
+        reduceTrackingFingerprint = !reduceTrackingFingerprint;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_reduceTrackingFingerprint", reduceTrackingFingerprint)
+                .apply();
+        applyReduceTrackingFingerprintToNative();
+    }
+
+    // Privacy-critical pref: commit() (synchronous). A crash between flip and
+    // disk write would leave mg_useTor=false on next launch, defeating the
+    // toggle and letting MTProto connect direct.
+    public static void toggleMgUseTor() {
+        mg_useTor = !mg_useTor;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_useTor", mg_useTor)
+                .commit();
+    }
+
+    public static void setMgTorIdleStopMinutes(int minutes) {
+        if (minutes < 0) minutes = 0;
+        mg_torIdleStopMinutes = minutes;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putInt("mg_torIdleStopMinutes", minutes)
+                .apply();
+    }
+
+    // Propagate the reduce-tracking flag to the native MTProto layer for every
+    // account: changes TEMP_AUTH_KEY_EXPIRE_TIME between the upstream 24h
+    // default and the reduced 1h (with a ladder fallback inside native), and
+    // rotates current temp keys immediately so the change takes effect on
+    // both enable AND disable. On enable, rotation swaps in 1h-TTL keys
+    // straight away; on disable, rotation discards the still-live short-TTL
+    // keys so the user sees the upstream behavior immediately rather than
+    // up to 1h later when the existing key would naturally expire.
+    public static void applyReduceTrackingFingerprintToNative() {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            // Per-iteration guard so a failure on account N (e.g. native
+            // init not yet complete, ConnectionsManager singleton race)
+            // doesn't abort the loop and leave accounts N+1..MAX with
+            // stale native state while the SharedConfig flag shows enabled.
+            try {
+                org.telegram.tgnet.ConnectionsManager cm = org.telegram.tgnet.ConnectionsManager.getInstance(a);
+                cm.setReducedTempKeyMode(reduceTrackingFingerprint);
+                if (UserConfig.getInstance(a).isClientActivated()) {
+                    cm.rotateTempAuthKeys();
+                }
+            } catch (Throwable t) {
+                FileLog.e(t);
+            }
+        }
+    }
+
     public static void setUnifiedPushGateway(String gateway) {
         unifiedPushGateway = gateway;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -342,6 +397,11 @@ public class SharedConfig {
     public static boolean disableAutoUpdate = false;
     public static boolean acceptPreReleaseUpdates = false;
     public static boolean useSystemFont = false;
+
+    // Mercurygram: Privacy
+    public static boolean reduceTrackingFingerprint = false;
+    public static boolean mg_useTor = false;
+    public static int mg_torIdleStopMinutes = 5;
 
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
@@ -524,6 +584,11 @@ public class SharedConfig {
         public boolean checking;
         public boolean available;
         public long availableCheckTime;
+        // MG: synthetic entry owned by MgTorController. Never serialized
+        // (saveProxyList skips), never user-editable/deletable, never
+        // tap-selectable in ProxyListActivity. Exists only so the in-bar
+        // proxy-active indicator shows while Tor routes MTProto.
+        public boolean mgInternal;
 
         public ProxyInfo(String address, int port, String username, String password, String secret) {
             this.address = address;
@@ -635,6 +700,9 @@ public class SharedConfig {
                 editor.putBoolean("mg_removeAdsAndProxySponsor", removeAdsAndProxySponsor);
                 editor.putBoolean("mg_disableAutoUpdate", disableAutoUpdate);
                 editor.putBoolean("mg_acceptPreReleaseUpdates", acceptPreReleaseUpdates);
+                editor.putBoolean("mg_reduceTrackingFingerprint", reduceTrackingFingerprint);
+                editor.putBoolean("mg_useTor", mg_useTor);
+                editor.putInt("mg_torIdleStopMinutes", mg_torIdleStopMinutes);
                 editor.putString("mg_webPushPrivateKey", webPushPrivateKey != null ? Base64.encodeToString(webPushPrivateKey, Base64.DEFAULT) : "");
                 editor.putString("mg_webPushPublicKey", webPushPublicKey != null ? Base64.encodeToString(webPushPublicKey, Base64.DEFAULT) : "");
                 editor.putString("mg_webPushAuthSecret", webPushAuthSecret != null ? Base64.encodeToString(webPushAuthSecret, Base64.DEFAULT) : "");
@@ -856,6 +924,9 @@ public class SharedConfig {
             disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
             acceptPreReleaseUpdates = preferences.getBoolean("mg_acceptPreReleaseUpdates", false);
             useSystemFont = preferences.getBoolean("mg_useSystemFont", false);
+            reduceTrackingFingerprint = preferences.getBoolean("mg_reduceTrackingFingerprint", false);
+            mg_useTor = preferences.getBoolean("mg_useTor", false);
+            mg_torIdleStopMinutes = preferences.getInt("mg_torIdleStopMinutes", 5);
             migratePerAccountSettingsV1(preferences);
             String wpPriv = preferences.getString("mg_webPushPrivateKey", "");
             if (!TextUtils.isEmpty(wpPriv)) webPushPrivateKey = Base64.decode(wpPriv, Base64.DEFAULT);
@@ -1766,13 +1837,60 @@ public class SharedConfig {
             data.cleanup();
         }
         if (currentProxy == null && !TextUtils.isEmpty(proxyAddress)) {
+            // MG: skip the ad-hoc fallback when proxy_ip is the Tor loopback
+            // and Tor mode is on — MgTorController.publishLiveTorEntry()
+            // will inject (and own) the synthetic entry once bootstrap
+            // reaches 100%. Otherwise a stale ephemeral port from the last
+            // session would surface as an unmanageable list entry on cold
+            // start, and the blocking-stub port (1) would surface as
+            // "127.0.0.1:1" between preInit and bootstrap.
+            if ("127.0.0.1".equals(proxyAddress) && mg_useTor) {
+                return;
+            }
             ProxyInfo info = currentProxy = new ProxyInfo(proxyAddress, proxyPort, proxyUsername, proxyPassword, proxySecret);
             proxyList.add(0, info);
         }
     }
 
+    // MG: invoked by MgTorController.onBootstrapReady once tor is at
+    // PROGRESS=100 and a live SOCKS port is persisted. Inserts a synthetic
+    // ProxyInfo into the in-memory proxyList (no persist) and sets
+    // currentProxy so ConnectionsManager.isProxyEnabled() returns true and
+    // LaunchActivity's drawer/proxy-active indicator updates. Idempotent.
+    public static ProxyInfo publishMgInternalTorProxy(int port) {
+        loadProxyList();
+        clearMgInternalTorProxy();
+        ProxyInfo info = new ProxyInfo("127.0.0.1", port, "", "", "");
+        info.mgInternal = true;
+        info.available = true;
+        proxyList.add(0, info);
+        currentProxy = info;
+        return info;
+    }
+
+    // MG: invoked by MgTorController.stop() / onDaemonExited(). Removes
+    // every mgInternal entry from the in-memory list. If currentProxy was
+    // the synthetic entry, clears it — the caller (snapshot restore) sets
+    // a real currentProxy if the user had one before enabling Tor.
+    public static void clearMgInternalTorProxy() {
+        for (int i = proxyList.size() - 1; i >= 0; i--) {
+            ProxyInfo info = proxyList.get(i);
+            if (info.mgInternal) {
+                if (currentProxy == info) currentProxy = null;
+                proxyList.remove(i);
+            }
+        }
+    }
+
     public static void saveProxyList() {
         List<ProxyInfo> infoToSerialize = new ArrayList<>(proxyList);
+        // MG: never persist MgTorController's synthetic entry — its address
+        // is the loopback stub and its port is the ephemeral SOCKS port
+        // (rebound per Tor session). Serializing would leave a stale entry
+        // in proxy_list JSON after every Tor restart.
+        for (int i = infoToSerialize.size() - 1; i >= 0; i--) {
+            if (infoToSerialize.get(i).mgInternal) infoToSerialize.remove(i);
+        }
         Collections.sort(infoToSerialize, (o1, o2) -> {
             long bias1 = SharedConfig.currentProxy == o1 ? -200000 : 0;
             if (!o1.available) {
