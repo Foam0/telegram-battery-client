@@ -46,18 +46,65 @@ jq -n \
       ]
     }' > "$REQ_FILE"
 
-# Decouple curl and jq so any transient failure (DNS, TLS, HTTP 5xx with
-# non-JSON body, malformed completion) degrades to BODY='' and the grep
-# fallback below — instead of aborting the script under pipefail and
-# taking the release pipeline down with it.
-RESP=$(curl -sL --max-time 120 -X POST \
-    -H "Content-Type: application/json" \
-    --data-binary "@$REQ_FILE" \
-    https://api.kilo.ai/api/gateway/v1/chat/completions) || RESP=''
+# Retry Kilo on transient errors: HTTP 429 (rate-limited — observed on
+# the kilo-auto/free tier when the upstream provider hits its concurrency
+# cap), HTTP 502/503/504 (gateway hiccups), and curl-side network errors
+# (DNS, TLS, timeout). Backoff is short on purpose — the release pipeline
+# is already on the critical path, and a transient blip usually clears
+# inside 30-60s. On every non-recoverable empty response we log the HTTP
+# status + a truncated body so post-mortems don't require reproducing the
+# call locally.
+KILO_MAX_ATTEMPTS="${KILO_MAX_ATTEMPTS:-3}"
+KILO_BACKOFFS=(0 15 45)  # cumulative wait BEFORE attempt N (0 = no wait first try)
+RESP=''
+HTTP=''
+for attempt in $(seq 1 "$KILO_MAX_ATTEMPTS"); do
+    sleep "${KILO_BACKOFFS[$((attempt - 1))]:-60}"
+    # -w '\n%{http_code}' separates body and status with a final newline;
+    # tail -1 → status, head -n -1 → body. Works whether the body is
+    # 0-byte or many KB.
+    RAW=$(curl -sL --max-time 120 -X POST \
+        -H "Content-Type: application/json" \
+        --data-binary "@$REQ_FILE" \
+        -w '\n%{http_code}' \
+        https://api.kilo.ai/api/gateway/v1/chat/completions) || RAW=''
+    if [[ -z "$RAW" ]]; then
+        HTTP='000'
+        RESP=''
+    else
+        HTTP=$(printf '%s' "$RAW" | tail -n1)
+        RESP=$(printf '%s' "$RAW" | sed '$d')
+    fi
+    case "$HTTP" in
+        200)
+            break
+            ;;
+        429|502|503|504|000)
+            # transient — retry if attempts remain
+            if [[ "$attempt" -lt "$KILO_MAX_ATTEMPTS" ]]; then
+                echo "Kilo attempt $attempt/$KILO_MAX_ATTEMPTS: HTTP $HTTP — retrying" >&2
+                continue
+            fi
+            echo "Kilo attempt $attempt/$KILO_MAX_ATTEMPTS: HTTP $HTTP (exhausted)" >&2
+            ;;
+        *)
+            # 400/401/4xx etc — won't get better on retry, bail out
+            echo "Kilo attempt $attempt: HTTP $HTTP (non-retryable)" >&2
+            break
+            ;;
+    esac
+done
+
 BODY=$(printf '%s' "$RESP" | jq -r '.choices[0].message.content // empty' 2>/dev/null) || BODY=''
 
 if [[ -z "$BODY" ]]; then
     echo "AI changelog empty — using grep-based fallback" >&2
+    # Surface enough of the actual server response that a post-mortem
+    # doesn't require replaying the curl. Avoids "AI changelog empty"
+    # being the only signal in CI logs.
+    echo "  last HTTP=$HTTP, response excerpt:" >&2
+    printf '%s' "$RESP" | head -c 500 | sed 's/^/    /' >&2
+    echo >&2
     FEATURES=$(awk '
         /^=== CODE FEATURES ===$/ { capture=1; next }
         /^=== / { capture=0 }
