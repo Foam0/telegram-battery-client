@@ -193,6 +193,42 @@ public class SharedConfig {
         AndroidUtilities.clearTypefaceCache();
     }
 
+    public static void toggleReduceTrackingFingerprint() {
+        reduceTrackingFingerprint = !reduceTrackingFingerprint;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_reduceTrackingFingerprint", reduceTrackingFingerprint)
+                .apply();
+        applyReduceTrackingFingerprintToNative();
+    }
+
+    // Propagate the reduce-tracking flag to the native MTProto layer for every
+    // account: changes TEMP_AUTH_KEY_EXPIRE_TIME between the upstream 24h
+    // default and the reduced 1h (with a ladder fallback inside native), and
+    // rotates current temp keys immediately so the change takes effect on
+    // both enable AND disable. On enable, rotation swaps in 1h-TTL keys
+    // straight away; on disable, rotation discards the still-live short-TTL
+    // keys so the user sees the upstream behavior immediately rather than
+    // up to 1h later when the existing key would naturally expire. Also
+    // cancels any pending debounced network-change rotation that no longer
+    // makes sense.
+    public static void applyReduceTrackingFingerprintToNative() {
+        try {
+            if (!reduceTrackingFingerprint) {
+                it.belloworld.mercurygram.MgNetworkChangeWatcher.cancelPendingRotation();
+            }
+            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                org.telegram.tgnet.ConnectionsManager cm = org.telegram.tgnet.ConnectionsManager.getInstance(a);
+                cm.setReducedTempKeyMode(reduceTrackingFingerprint);
+                if (UserConfig.getInstance(a).isClientActivated()) {
+                    cm.rotateTempAuthKeys();
+                }
+            }
+        } catch (Throwable t) {
+            FileLog.e(t);
+        }
+    }
+
     public static void setUnifiedPushGateway(String gateway) {
         unifiedPushGateway = gateway;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -342,6 +378,9 @@ public class SharedConfig {
     public static boolean disableAutoUpdate = false;
     public static boolean acceptPreReleaseUpdates = false;
     public static boolean useSystemFont = false;
+
+    // Mercurygram: Privacy
+    public static boolean reduceTrackingFingerprint = false;
 
     public static long pushStringGetTimeStart;
     public static long pushStringGetTimeEnd;
@@ -635,6 +674,7 @@ public class SharedConfig {
                 editor.putBoolean("mg_removeAdsAndProxySponsor", removeAdsAndProxySponsor);
                 editor.putBoolean("mg_disableAutoUpdate", disableAutoUpdate);
                 editor.putBoolean("mg_acceptPreReleaseUpdates", acceptPreReleaseUpdates);
+                editor.putBoolean("mg_reduceTrackingFingerprint", reduceTrackingFingerprint);
                 editor.putString("mg_webPushPrivateKey", webPushPrivateKey != null ? Base64.encodeToString(webPushPrivateKey, Base64.DEFAULT) : "");
                 editor.putString("mg_webPushPublicKey", webPushPublicKey != null ? Base64.encodeToString(webPushPublicKey, Base64.DEFAULT) : "");
                 editor.putString("mg_webPushAuthSecret", webPushAuthSecret != null ? Base64.encodeToString(webPushAuthSecret, Base64.DEFAULT) : "");
@@ -856,6 +896,7 @@ public class SharedConfig {
             disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
             acceptPreReleaseUpdates = preferences.getBoolean("mg_acceptPreReleaseUpdates", false);
             useSystemFont = preferences.getBoolean("mg_useSystemFont", false);
+            reduceTrackingFingerprint = preferences.getBoolean("mg_reduceTrackingFingerprint", false);
             migratePerAccountSettingsV1(preferences);
             String wpPriv = preferences.getString("mg_webPushPrivateKey", "");
             if (!TextUtils.isEmpty(wpPriv)) webPushPrivateKey = Base64.decode(wpPriv, Base64.DEFAULT);

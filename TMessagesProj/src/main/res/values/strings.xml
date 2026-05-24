@@ -10743,6 +10743,7 @@
     <string name="MercurygramSettingsMedia">Media</string>
     <string name="MercurygramSettingsUpdates">Updates</string>
     <string name="MercurygramSettingsNotifications">Notifications</string>
+    <string name="MercurygramSettingsPrivacy">Privacy</string>
     <string name="MercurygramMessageDetailsMenu">Show \"Message Details\"</string>
     <string name="MercurygramDisableAutoUpdate">Disable in-app updater</string>
     <string name="MercurygramDisableAutoUpdateAbout">Mercurygram will no longer check for updates on GitHub at startup. You can still trigger a manual check from the button below.</string>
@@ -10774,6 +10775,21 @@
     <string name="MercurygramDisableUnifiedPushAbout">When disabled, Mercurygram falls back to polling for new messages. The app will restart to apply the change.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram needs to restart to apply this change. Continue?</string>
     <string name="MercurygramRestart">Restart</string>
+    <string name="MercurygramReduceTrackingFingerprint">Reduce network tracking</string>
+    <string name="MercurygramReduceTrackingFingerprintAbout">Rotates the session key when the network changes (Wi-Fi ↔ cellular), and avoids CDN servers for media downloads. Makes passive correlation of your device across networks harder. Large file downloads will be slower.</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningTitle">Reduce network tracking?</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningMessage">Mercurygram will force a new session key every time the network changes and refuse to download media from Telegram CDN servers (using the main data center instead). This makes it harder for a passive observer on your network to correlate your device across networks, but does not hide that you use Telegram, does not defeat traffic analysis (timing, volume, contacts), and will make large file downloads slower. The first session key on a fresh login is still observable once. Continue?</string>
+    <string name="MercurygramReduceTrackingFingerprintEnable">Enable</string>
+    <string name="MercurygramOrbotIntegration">Activate Tor proxy (Orbot)</string>
+    <string name="MercurygramOrbotIntegrationSubtitle">Route Mercurygram through Orbot\'s local SOCKS5</string>
+    <string name="MercurygramOrbotInstall">Install Orbot</string>
+    <string name="MercurygramOrbotInstallSubtitle">Orbot is the Android Tor client. Not bundled with Mercurygram.</string>
+    <string name="MercurygramOrbotAbout">Routes traffic through Orbot\'s local SOCKS5 (127.0.0.1:9050). Defeats passive ISP-level tracking, but Telegram still sees the Tor exit. Latency-sensitive features (calls) may suffer.</string>
+    <string name="MercurygramOrbotActivateTitle">Use Orbot for Mercurygram?</string>
+    <string name="MercurygramOrbotActivateMessage">Mercurygram will start Orbot (if not already running) and route all traffic through 127.0.0.1:9050. Any existing proxy settings will be replaced. You can change this later in Settings → Data and Storage → Proxy. Continue?</string>
+    <string name="MercurygramOrbotActivate">Activate</string>
+    <string name="MercurygramOrbotActivated">Tor proxy (Orbot) active</string>
+    <string name="MercurygramOrbotInstallFailed">Could not open install page</string>
 
     <string name="PollV2ShowWhoVoted">Show Who Voted</string>
     <string name="PollV2ShowWhoVotedInfo">Display voter name on each option</string>

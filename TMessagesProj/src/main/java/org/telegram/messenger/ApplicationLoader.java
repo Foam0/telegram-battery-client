@@ -342,6 +342,8 @@ public class ApplicationLoader extends Application {
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
+        it.belloworld.mercurygram.MgNetworkChangeWatcher.init(applicationContext);
+        SharedConfig.applyReduceTrackingFingerprintToNative();
 
     }
 

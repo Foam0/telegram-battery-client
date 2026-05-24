@@ -1088,6 +1088,7 @@
     <string name="MercurygramSettingsMedia">Media</string>
     <string name="MercurygramSettingsUpdates">Updates</string>
     <string name="MercurygramSettingsNotifications">Meldingen</string>
+    <string name="MercurygramSettingsPrivacy">Privacy</string>
     <string name="MercurygramMessageDetailsMenu">\"Berichtdetails\" tonen</string>
     <string name="MercurygramDisableAutoUpdate">In-app-updater uitschakelen</string>
     <string name="MercurygramDisableAutoUpdateAbout">Mercurygram controleert bij het opstarten niet meer op updates op GitHub. Je kunt nog steeds handmatig controleren via de knop hieronder.</string>
@@ -1119,4 +1120,19 @@
     <string name="MercurygramDisableUnifiedPushAbout">Wanneer uitgeschakeld, valt Mercurygram terug op pollen voor nieuwe berichten. De app wordt opnieuw gestart om de wijziging toe te passen.</string>
     <string name="MercurygramUnifiedPushRestartConfirm">Mercurygram moet opnieuw worden gestart om deze wijziging toe te passen. Doorgaan?</string>
     <string name="MercurygramRestart">Opnieuw starten</string>
+    <string name="MercurygramReduceTrackingFingerprint">Netwerktracking verminderen</string>
+    <string name="MercurygramReduceTrackingFingerprintAbout">Roteert de sessiesleutel wanneer het netwerk verandert (Wi-Fi ↔ mobiel) en vermijdt CDN-servers voor mediadownloads. Maakt passieve correlatie van je apparaat over netwerken moeilijker. Grote bestandsdownloads worden langzamer.</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningTitle">Netwerktracking verminderen?</string>
+    <string name="MercurygramReduceTrackingFingerprintWarningMessage">Mercurygram forceert bij elke netwerkwijziging een nieuwe sessiesleutel en weigert media te downloaden van Telegram-CDN-servers (gebruikt in plaats daarvan het hoofddatacenter). Dit maakt het moeilijker voor een passieve waarnemer op je netwerk om je apparaat over netwerken te correleren, maar verbergt niet dat je Telegram gebruikt, verslaat geen verkeersanalyse (timing, volume, contacten) en maakt grote bestandsdownloads langzamer. De eerste sessiesleutel bij een nieuwe login blijft één keer waarneembaar. Doorgaan?</string>
+    <string name="MercurygramReduceTrackingFingerprintEnable">Inschakelen</string>
+    <string name="MercurygramOrbotIntegration">Tor-proxy activeren (Orbot)</string>
+    <string name="MercurygramOrbotIntegrationSubtitle">Mercurygram via Orbots lokale SOCKS5 routeren</string>
+    <string name="MercurygramOrbotInstall">Orbot installeren</string>
+    <string name="MercurygramOrbotInstallSubtitle">Orbot is de Android Tor-client. Niet meegeleverd met Mercurygram.</string>
+    <string name="MercurygramOrbotAbout">Routeert verkeer via Orbots lokale SOCKS5 (127.0.0.1:9050). Verslaat passieve tracking op ISP-niveau, maar Telegram ziet nog steeds de Tor-uitgang. Latency-gevoelige functies (oproepen) kunnen eronder lijden.</string>
+    <string name="MercurygramOrbotActivateTitle">Orbot voor Mercurygram gebruiken?</string>
+    <string name="MercurygramOrbotActivateMessage">Mercurygram start Orbot (als dit nog niet draait) en routeert al het verkeer via 127.0.0.1:9050. Bestaande proxy-instellingen worden vervangen. Je kunt dit later wijzigen in Instellingen → Data en opslag → Proxy. Doorgaan?</string>
+    <string name="MercurygramOrbotActivate">Activeren</string>
+    <string name="MercurygramOrbotActivated">Tor-proxy (Orbot) actief</string>
+    <string name="MercurygramOrbotInstallFailed">Installatiepagina kon niet worden geopend</string>
 </resources>

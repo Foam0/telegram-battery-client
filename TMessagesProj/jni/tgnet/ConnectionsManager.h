@@ -74,6 +74,10 @@ public:
     void setSystemLangCode(std::string langCode);
     void updateDcSettings(uint32_t datacenterId, bool workaround, bool ifLoadingTryAgain);
     void setPushConnectionEnabled(bool value);
+    void rotateTempAuthKeys();
+    void setReducedTempKeyMode(bool enabled);
+    int32_t getEffectiveTempKeyExpiry();
+    bool onTempKeyBindFailedRecover();
     void applyDnsConfig(NativeByteBuffer *buffer, std::string phone, int32_t date);
     int64_t checkProxy(std::string address, uint16_t port, std::string username, std::string password, std::string secret, onRequestTimeFunc requestTimeFunc, jobject ptr1);
 
@@ -243,6 +247,16 @@ private:
     bool registeredForInternalPush = false;
     bool pushConnectionEnabled = true;
     int32_t currentPerformanceClass = -1;
+
+    // MG: reduced temp-key TTL state. Ladder bumps up on bindTempAuthKey
+    // failure so a server-side policy tightening can't cause user logout.
+    // Indexes into REDUCED_TEMP_KEY_LADDER (defined in .cpp). Resets to 0
+    // on disable. effectiveTempKeyExpireTime is what Handshake.cpp reads.
+    // Both flags are written from the JNI/UI thread (toggle path) and read
+    // from the network thread (Handshake.cpp), so they MUST be atomic.
+    std::atomic<bool> reducedTempKeyEnabled{false};
+    std::atomic<int32_t> reducedTempKeyLadderIdx{0};
+    std::atomic<int32_t> effectiveTempKeyExpireTime{TEMP_AUTH_KEY_EXPIRE_TIME};
 
     std::map<uint32_t, std::vector<std::unique_ptr<NetworkMessage>>> genericMessagesToDatacenters;
     std::map<uint32_t, std::vector<std::unique_ptr<NetworkMessage>>> genericMediaMessagesToDatacenters;

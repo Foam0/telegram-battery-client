@@ -601,6 +601,14 @@ public class ConnectionsManager extends BaseController {
         native_setPushConnectionEnabled(currentAccount, value);
     }
 
+    public void rotateTempAuthKeys() {
+        native_rotateTempAuthKeys(currentAccount);
+    }
+
+    public void setReducedTempKeyMode(boolean enabled) {
+        native_setReducedTempKeyMode(currentAccount, enabled);
+    }
+
     public void init(int version, int layer, int apiId, String deviceModel, String systemVersion, String appVersion, String langCode, String systemLangCode, String configPath, String logPath, String regId, String cFingerprint, int timezoneOffset, long userId, boolean userPremium, boolean enablePushConnection) {
         SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
         String proxyAddress = preferences.getString("proxy_ip", "");
@@ -809,6 +817,19 @@ public class ConnectionsManager extends BaseController {
         });
     }
 
+    // MG: native side calls this when the reduced-temp-key TTL ladder
+    // exhausts (server rejected even the 24h fallback). Clear the user
+    // preference so the toggle UI flips off, FileLoadOperation stops
+    // refusing CDN redirects, and MgNetworkChangeWatcher stops emitting
+    // rotations that would re-enter the same loop.
+    public static void onReducedTempKeyExhausted(final int currentAccount) {
+        AndroidUtilities.runOnUIThread(() -> {
+            if (SharedConfig.reduceTrackingFingerprint) {
+                SharedConfig.toggleReduceTrackingFingerprint();
+            }
+        });
+    }
+
     public static int getInitFlags() {
         int flags = 0;
         EmuDetector detector = EmuDetector.with(ApplicationLoader.applicationContext);
@@ -970,6 +991,8 @@ public class ConnectionsManager extends BaseController {
     public static native void native_setSystemLangCode(int currentAccount, String langCode);
     public static native void native_setJava(boolean useJavaByteBuffers);
     public static native void native_setPushConnectionEnabled(int currentAccount, boolean value);
+    public static native void native_rotateTempAuthKeys(int currentAccount);
+    public static native void native_setReducedTempKeyMode(int currentAccount, boolean enabled);
     public static native void native_applyDnsConfig(int currentAccount, long address, String phone, int date);
     public static native long native_checkProxy(int currentAccount, String address, int port, String username, String password, String secret, RequestTimeDelegate requestTimeDelegate);
     public static native void native_onHostNameResolved(String host, long address, String ip);

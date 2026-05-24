@@ -98,6 +98,9 @@
         <intent>
             <action android:name="android.intent.action.INSTALL_PACKAGE"/>
         </intent>
+        <!-- MG: required on Android 11+ so MgOrbotHelper.isOrbotInstalled
+             can see the Orbot package under scoped package visibility. -->
+        <package android:name="org.torproject.android"/>
     </queries>
 
     <application

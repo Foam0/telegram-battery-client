@@ -481,7 +481,8 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
                     tl_p_q_inner_data_temp->dc = currentDatacenter->datacenterId;
                 }
             }
-            tl_p_q_inner_data_temp->expires_in = TEMP_AUTH_KEY_EXPIRE_TIME;
+            tempKeyExpireInSecs = ConnectionsManager::getInstance(currentDatacenter->instanceNum).getEffectiveTempKeyExpiry();
+            tl_p_q_inner_data_temp->expires_in = tempKeyExpireInSecs;
             RAND_bytes(tl_p_q_inner_data_temp->new_nonce->bytes, 32);
             authNewNonce = new ByteArray(tl_p_q_inner_data_temp->new_nonce.get());
             innerData = tl_p_q_inner_data_temp;
@@ -856,7 +857,7 @@ void Handshake::processHandshakeResponse_serverDHParamsAnswer(TLObject *message,
                 TL_auth_bindTempAuthKey *request = new TL_auth_bindTempAuthKey();
                 request->initFunc = [&, request, connection](int64_t messageId) {
                     TL_bind_auth_key_inner *inner = new TL_bind_auth_key_inner();
-                    inner->expires_at = ConnectionsManager::getInstance(currentDatacenter->instanceNum).getCurrentTime() + timeDifference + TEMP_AUTH_KEY_EXPIRE_TIME;
+                    inner->expires_at = ConnectionsManager::getInstance(currentDatacenter->instanceNum).getCurrentTime() + timeDifference + tempKeyExpireInSecs;
                     inner->perm_auth_key_id = currentDatacenter->authKeyPermId;
                     inner->temp_auth_key_id = authKeyTempPendingId;
                     RAND_bytes((uint8_t *) &inner->nonce, 8);
