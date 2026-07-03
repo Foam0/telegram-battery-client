@@ -68,6 +68,12 @@ public class BatteryVpnService extends VpnService implements CommandServerHandle
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        shutdownCore(true);
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public void onRevoke() {
         disconnect();
         super.onRevoke();

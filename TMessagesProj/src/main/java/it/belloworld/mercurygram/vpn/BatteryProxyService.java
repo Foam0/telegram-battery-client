@@ -80,6 +80,12 @@ public class BatteryProxyService extends Service implements CommandServerHandler
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        shutdownCore(true);
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public SystemProxyStatus getSystemProxyStatus() {
         SystemProxyStatus status = new SystemProxyStatus();
         status.setAvailable(false);

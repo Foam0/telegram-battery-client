@@ -48,6 +48,7 @@ import org.telegram.ui.LauncherIconController;
 import java.io.File;
 import java.util.Locale;
 
+import it.belloworld.mercurygram.vpn.BatteryProxyLifecycle;
 import io.nekohasekai.libbox.Libbox;
 import io.nekohasekai.libbox.SetupOptions;
 
@@ -369,6 +370,7 @@ public class ApplicationLoader extends Application {
         }
 
         applicationHandler = new Handler(applicationContext.getMainLooper());
+        BatteryProxyLifecycle.init(applicationContext, ForegroundDetector.getInstance());
 
         AndroidUtilities.runOnUIThread(ApplicationLoader::startPushService);
 

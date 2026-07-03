@@ -184,6 +184,16 @@ Notifications → UnifiedPush → Disable UnifiedPush*), nothing pushes to the a
 enable Background Connection or Keep-Alive Service in *Settings → Notifications
 and Sounds* if you still want messages while the app is closed.
 
+The built-in local SOCKS5 proxy mode is foreground-only. Mercurygram remembers
+the selected local proxy profile, stops the libbox proxy service shortly after
+the app leaves the foreground, and starts it again when the app is opened. Push
+notifications do not require this proxy service; they are delivered through the
+configured UnifiedPush/FCM distributor.
+
+In push-first mode, Mercurygram also suppresses Telegram's periodic
+`NotificationRepeat` wakeup alarm unless Keep-Alive Service or Background
+Connection is enabled as a fallback.
+
 If you set Battery optimization to Not optimized, Keep-Alive Service will be not
 necessary.
 

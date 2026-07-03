@@ -255,6 +255,7 @@ import java.util.zip.ZipInputStream;
 
 import it.belloworld.mercurygram.HiddenAccountHelper;
 import it.belloworld.mercurygram.MgNetworkChangeWatcher;
+import it.belloworld.mercurygram.vpn.BatteryProxyLifecycle;
 import tw.nekomimi.nekogram.helpers.MonetHelper;
 
 public class LaunchActivity extends BasePermissionsActivity implements INavigationLayout.INavigationLayoutDelegate, NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, IPipActivity {
@@ -6776,6 +6777,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
         ApplicationLoader.mainInterfacePaused = true;
         MgNetworkChangeWatcher.onForegroundStateChanged(true);
+        BatteryProxyLifecycle.pauseLocalProxy(this);
         int account = currentAccount;
         Utilities.stageQueue.postRunnable(() -> {
             ApplicationLoader.mainInterfacePausedStageQueue = true;
@@ -6841,6 +6843,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         pipActivityHandler.onStop();
         Browser.unbindCustomTabsService(this);
         ApplicationLoader.mainInterfaceStopped = true;
+        BatteryProxyLifecycle.pauseLocalProxy(this);
         if (!isChangingConfigurations() && HiddenAccountHelper.isUnlockedHiddenAccount(currentAccount)) {
             HiddenAccountHelper.clearUnlockedHiddenAccount();
         }
@@ -7031,6 +7034,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         MediaController.getInstance().setFeedbackView(feedbackView = actionBarLayout.getView(), true);
         ApplicationLoader.mainInterfacePaused = false;
         MgNetworkChangeWatcher.onForegroundStateChanged(false);
+        BatteryProxyLifecycle.resumeLocalProxy(this);
         MessagesController.getInstance(currentAccount).sortDialogs(null);
         showLanguageAlert(false);
         Utilities.stageQueue.postRunnable(() -> {
