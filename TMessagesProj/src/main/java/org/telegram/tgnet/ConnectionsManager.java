@@ -454,6 +454,7 @@ public class ConnectionsManager extends BaseController {
                             onCompleteTimestamp.run(finalResponse, finalError, timestamp);
                         } else if (finalResponse instanceof TLRPC.Updates) {
                             KeepAliveJob.finishJob();
+                            it.belloworld.mercurygram.BatteryClientDiagnostics.markUpdate(currentAccount);
                             AccountInstance.getInstance(currentAccount).getMessagesController().processUpdates((TLRPC.Updates) finalResponse, false);
                         }
                         if (finalResponse != null) {
@@ -806,6 +807,7 @@ public class ConnectionsManager extends BaseController {
                     FileLog.d("java received " + message);
                 }
                 KeepAliveJob.finishJob();
+                it.belloworld.mercurygram.BatteryClientDiagnostics.markUpdate(currentAccount);
                 Utilities.stageQueue.postRunnable(() -> AccountInstance.getInstance(currentAccount).getMessagesController().processUpdates((TLRPC.Updates) message, false));
             } else {
                 if (BuildVars.LOGS_ENABLED) {
@@ -818,6 +820,7 @@ public class ConnectionsManager extends BaseController {
     }
 
     public static void onUpdate(final int currentAccount) {
+        it.belloworld.mercurygram.BatteryClientDiagnostics.markUpdate(currentAccount);
         Utilities.stageQueue.postRunnable(() -> AccountInstance.getInstance(currentAccount).getMessagesController().updateTimerProc());
     }
 
@@ -826,6 +829,7 @@ public class ConnectionsManager extends BaseController {
     }
 
     public static void onConnectionStateChanged(final int state, final int currentAccount) {
+        it.belloworld.mercurygram.BatteryClientDiagnostics.markConnectionState(currentAccount, state);
         AndroidUtilities.runOnUIThread(() -> {
             getInstance(currentAccount).connectionState = state;
             AccountInstance.getInstance(currentAccount).getNotificationCenter().postNotificationName(NotificationCenter.didUpdateConnectionState);

@@ -13,6 +13,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
@@ -69,6 +70,12 @@ public class MercurygramSettingsActivity extends UniversalFragment {
     private static final int ID_CONFIRM_INTERNAL_LINKS = 63;
     private static final int ID_SHOW_CHAR_COUNTER = 64;
     private static final int ID_DISABLE_PROXIMITY_SENSOR = 65;
+    private static final int ID_ACCOUNT_NOTIFICATIONS_ENABLED = 70;
+    private static final int ID_ACCOUNT_NOTIFICATION_SOUND = 71;
+    private static final int ID_ACCOUNT_NOTIFICATION_VIBRATE = 72;
+    private static final int ID_BATTERY_LOAD = 73;
+    private static final int ID_BATTERY_DIAGNOSTICS = 74;
+    private static final int ID_BATTERY_VPN = 75;
 
     @Override
     protected CharSequence getTitle() {
@@ -257,6 +264,19 @@ public class MercurygramSettingsActivity extends UniversalFragment {
         }
 
         items.add(UItem.asHeader(LocaleController.getString(R.string.MercurygramSettingsNotifications)));
+        items.add(UItem.asCheck(ID_ACCOUNT_NOTIFICATIONS_ENABLED,
+                        LocaleController.getString(R.string.BatteryClientAccountNotificationsEnabled))
+                .setChecked(getUserConfig().batteryAccountNotificationsEnabled));
+        if (getUserConfig().batteryAccountNotificationsEnabled) {
+            items.add(UItem.asCheck(ID_ACCOUNT_NOTIFICATION_SOUND,
+                            LocaleController.getString(R.string.BatteryClientAccountNotificationSound))
+                    .setChecked(getUserConfig().batteryAccountNotificationSound));
+            items.add(UItem.asCheck(ID_ACCOUNT_NOTIFICATION_VIBRATE,
+                            LocaleController.getString(R.string.BatteryClientAccountNotificationVibrate))
+                    .setChecked(getUserConfig().batteryAccountNotificationVibrate));
+        }
+        items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientAccountNotificationsAbout)));
+
         CharSequence pushValue;
         if (SharedConfig.disableUnifiedPush) {
             pushValue = LocaleController.getString(R.string.NotificationsOff);
@@ -271,6 +291,12 @@ public class MercurygramSettingsActivity extends UniversalFragment {
         }
         items.add(UItem.asButton(ID_UNIFIED_PUSH, LocaleController.getString(R.string.MercurygramUnifiedPush), pushValue));
         items.add(UItem.asShadow(null));
+
+        items.add(UItem.asHeader(LocaleController.getString(R.string.BatteryClientSection)));
+        items.add(UItem.asButton(ID_BATTERY_LOAD, LocaleController.getString(R.string.BatteryClientLoadScreen)));
+        items.add(UItem.asButton(ID_BATTERY_DIAGNOSTICS, LocaleController.getString(R.string.BatteryClientDiagnosticsScreen)));
+        items.add(UItem.asButton(ID_BATTERY_VPN, LocaleController.getString(R.string.BatteryClientVpnScreen)));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientSectionAbout)));
     }
 
     @Override
@@ -359,6 +385,33 @@ public class MercurygramSettingsActivity extends UniversalFragment {
                 break;
             case ID_UNIFIED_PUSH:
                 presentFragment(new MgUnifiedPushSettingsActivity());
+                break;
+            case ID_ACCOUNT_NOTIFICATIONS_ENABLED:
+                getUserConfig().batteryAccountNotificationsEnabled = !getUserConfig().batteryAccountNotificationsEnabled;
+                getUserConfig().saveConfig(false);
+                if (!getUserConfig().batteryAccountNotificationsEnabled) {
+                    NotificationsController.getInstance(currentAccount).hideNotifications();
+                }
+                refreshList();
+                break;
+            case ID_ACCOUNT_NOTIFICATION_SOUND:
+                getUserConfig().batteryAccountNotificationSound = !getUserConfig().batteryAccountNotificationSound;
+                getUserConfig().saveConfig(false);
+                refreshList();
+                break;
+            case ID_ACCOUNT_NOTIFICATION_VIBRATE:
+                getUserConfig().batteryAccountNotificationVibrate = !getUserConfig().batteryAccountNotificationVibrate;
+                getUserConfig().saveConfig(false);
+                refreshList();
+                break;
+            case ID_BATTERY_LOAD:
+                presentFragment(new BatteryClientLoadActivity());
+                break;
+            case ID_BATTERY_DIAGNOSTICS:
+                presentFragment(new BatteryClientDiagnosticsActivity());
+                break;
+            case ID_BATTERY_VPN:
+                presentFragment(new BatteryClientVpnSettingsActivity());
                 break;
             case ID_REDUCE_TRACKING_FINGERPRINT:
                 handleReduceTrackingFingerprintClick();

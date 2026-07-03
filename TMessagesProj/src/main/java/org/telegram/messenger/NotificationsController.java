@@ -4099,7 +4099,11 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     private void showOrUpdateNotification(boolean notifyAboutLast) {
-        if (!getUserConfig().isClientActivated() || HiddenAccountHelper.isAccountHidden(currentAccount) || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
+        if (!getUserConfig().isClientActivated()
+                || !getUserConfig().batteryAccountNotificationsEnabled
+                || HiddenAccountHelper.isAccountHidden(currentAccount)
+                || pushMessages.isEmpty() && storyPushMessages.isEmpty()
+                || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
             dismissNotification();
             return;
         }
@@ -4520,6 +4524,15 @@ public class NotificationsController extends BaseController implements Notificat
                 } catch (Exception e) {
                     FileLog.e(e);
                 }
+            }
+
+            if (!getUserConfig().batteryAccountNotificationSound) {
+                soundPath = "NoSound";
+                isDefault = false;
+            }
+            if (!getUserConfig().batteryAccountNotificationVibrate) {
+                vibrate = 2;
+                isDefault = false;
             }
 
             if (notifyDisabled) {

@@ -27,6 +27,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.system.Os;
 import android.telephony.TelephonyManager;
 import android.view.ViewGroup;
 
@@ -45,6 +46,9 @@ import org.telegram.ui.LauncherIconController;
 
 import java.io.File;
 import java.util.Locale;
+
+import io.nekohasekai.libbox.Libbox;
+import io.nekohasekai.libbox.SetupOptions;
 
 public class ApplicationLoader extends Application {
 
@@ -77,6 +81,10 @@ public class ApplicationLoader extends Application {
 
     @Override
     protected void attachBaseContext(Context base) {
+        try {
+            Os.setenv("GOMAXPROCS", "2", true);
+        } catch (Throwable ignored) {
+        }
         super.attachBaseContext(base);
     }
 
@@ -331,6 +339,7 @@ public class ApplicationLoader extends Application {
         }
 
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
+        initBatteryLibbox();
 
         try {
             ConnectionsManager.native_setJava(false);
@@ -361,6 +370,31 @@ public class ApplicationLoader extends Application {
         SharedConfig.applyReduceTrackingFingerprintToNative();
         it.belloworld.mercurygram.tor.MgTorClient.init(applicationContext);
 
+    }
+
+    private void initBatteryLibbox() {
+        try {
+            Libbox.touch();
+            File basePath = getFilesDirFixed("libbox");
+            File workingPath = getFilesDirFixed("libbox-working");
+            File tempPath = new File(getCacheDir(), "libbox-temp");
+            tempPath.mkdirs();
+            SetupOptions options = new SetupOptions();
+            options.setBasePath(basePath.getAbsolutePath());
+            options.setWorkingPath(workingPath.getAbsolutePath());
+            options.setTempPath(tempPath.getAbsolutePath());
+            options.setFixAndroidStack(true);
+            options.setCommandServerListenPort(0);
+            options.setCommandServerSecret("");
+            options.setLogMaxLines(200);
+            options.setDebug(BuildVars.DEBUG_VERSION);
+            Libbox.setup(options);
+            Libbox.setLocale(Locale.getDefault().toLanguageTag());
+        } catch (Throwable t) {
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.e(t);
+            }
+        }
     }
 
     public static void startPushService() {

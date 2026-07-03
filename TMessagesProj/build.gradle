@@ -30,6 +30,8 @@ configurations.all {
 }
 
 dependencies {
+    implementation files('libs/libbox.aar')
+
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.16.0'
     implementation 'androidx.media:media:1.7.0'
@@ -174,12 +176,12 @@ android {
 
         multiDexEnabled true
 
-        // Limit CMake to a single ABI for per-ABI F-Droid builds; has no effect otherwise.
-        if (singleFdAbi) ndk.abiFilters singleFdAbi
+        // BatteryClient: ship native dependencies only for arm64-v8a.
+        ndk.abiFilters 'arm64-v8a'
 
         externalNativeBuild {
             cmake {
-                version '3.10.2'
+                version '3.22.1'
                 def cmakeArgs = ['-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-24'] //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
                 if (getProps('QUIET_NATIVE_BUILD')) {
                     cmakeArgs += '-DQUIET_BUILD=ON'
@@ -247,6 +249,16 @@ android {
     buildFeatures {
         aidl = true
     }
+}
+
+tasks.register('checkSingBoxSampleConfig', Exec) {
+    description = 'Validate the sample sing-box 1.13 config before packaging.'
+    workingDir rootDir
+    commandLine 'bash', 'scripts/check_sample_config.sh'
+}
+
+tasks.named('preBuild') {
+    dependsOn tasks.named('checkSingBoxSampleConfig')
 }
 
 

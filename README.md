@@ -8,6 +8,8 @@
 
 This is an unofficial fork of [Telegram App for Android](https://github.com/DrKLO/Telegram), maintained by rebasing Mercurygram patches and forward-ported de-googling patches on top of upstream Telegram.
 
+Battery-client fork notes, pinned versions, VPN details, and build instructions are in [README_BATTERY_CLIENT.md](README_BATTERY_CLIENT.md).
+
 [![Releases](https://img.shields.io/github/release/Mercurygram/Mercurygram.svg)](https://github.com/Mercurygram/Mercurygram/releases/latest)
 [![Discussions](https://img.shields.io/badge/Official-Group-blue.svg?logo=telegram)](https://t.me/Mercurygram)
 

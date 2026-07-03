@@ -26,8 +26,8 @@ import it.belloworld.mercurygram.HiddenAccountHelper;
 public class UserConfig extends BaseController {
 
     public static int selectedAccount;
-    public final static int MAX_ACCOUNT_DEFAULT_COUNT = 8;
-    public final static int MAX_ACCOUNT_COUNT = 8;
+    public final static int MAX_ACCOUNT_DEFAULT_COUNT = 32;
+    public final static int MAX_ACCOUNT_COUNT = 32;
 
     private final Object sync = new Object();
     private volatile boolean configLoaded;
@@ -65,6 +65,9 @@ public class UserConfig extends BaseController {
     public boolean suggestContacts = true;
     public boolean showCallsTab;
     public final it.belloworld.mercurygram.MgAccountConfig mg = new it.belloworld.mercurygram.MgAccountConfig();
+    public boolean batteryAccountNotificationsEnabled = true;
+    public boolean batteryAccountNotificationSound = true;
+    public boolean batteryAccountNotificationVibrate = true;
     public boolean hasSecureData;
     public int loginTime;
     public TLRPC.TL_help_termsOfService unacceptedTermsOfService;
@@ -166,6 +169,9 @@ public class UserConfig extends BaseController {
                     editor.putBoolean("showCallsTab", showCallsTab);
                     editor.putBoolean("suggestContacts", suggestContacts);
                     mg.save(editor);
+                    editor.putBoolean("batteryAccountNotificationsEnabled", batteryAccountNotificationsEnabled);
+                    editor.putBoolean("batteryAccountNotificationSound", batteryAccountNotificationSound);
+                    editor.putBoolean("batteryAccountNotificationVibrate", batteryAccountNotificationVibrate);
                     editor.putBoolean("hasSecureData", hasSecureData);
                     editor.putBoolean("notificationsSettingsLoaded4", notificationsSettingsLoaded);
                     editor.putBoolean("notificationsSignUpSettingsLoaded", notificationsSignUpSettingsLoaded);
@@ -319,6 +325,9 @@ public class UserConfig extends BaseController {
             showCallsTab = preferences.getBoolean("showCallsTab", false);
             suggestContacts = preferences.getBoolean("suggestContacts", true);
             mg.load(preferences);
+            batteryAccountNotificationsEnabled = preferences.getBoolean("batteryAccountNotificationsEnabled", true);
+            batteryAccountNotificationSound = preferences.getBoolean("batteryAccountNotificationSound", true);
+            batteryAccountNotificationVibrate = preferences.getBoolean("batteryAccountNotificationVibrate", true);
             hasSecureData = preferences.getBoolean("hasSecureData", false);
             notificationsSettingsLoaded = preferences.getBoolean("notificationsSettingsLoaded4", false);
             notificationsSignUpSettingsLoaded = preferences.getBoolean("notificationsSignUpSettingsLoaded", false);
@@ -493,6 +502,9 @@ public class UserConfig extends BaseController {
         showCallsTab = false;
         suggestContacts = true;
         mg.reset();
+        batteryAccountNotificationsEnabled = true;
+        batteryAccountNotificationSound = true;
+        batteryAccountNotificationVibrate = true;
         unreadDialogsLoaded = true;
         hasValidDialogLoadIds = true;
         unacceptedTermsOfService = null;

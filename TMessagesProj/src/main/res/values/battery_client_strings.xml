@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="BatteryClientSection">Battery client</string>
+    <string name="BatteryClientSectionAbout">Read-only diagnostics and the embedded VPN/proxy profile avoid background polling. VPN starts only after explicit user action.</string>
+    <string name="BatteryClientAccountNotificationsEnabled">Enable notifications for this account</string>
+    <string name="BatteryClientAccountNotificationSound">Sound for this account</string>
+    <string name="BatteryClientAccountNotificationVibrate">Vibration for this account</string>
+    <string name="BatteryClientAccountNotificationsAbout">These local rules apply only to the currently selected account and do not change Telegram server mute settings.</string>
+    <string name="BatteryClientLoadScreen">Load</string>
+    <string name="BatteryClientDiagnosticsScreen">Diagnostics</string>
+    <string name="BatteryClientVpnScreen">VPN / proxy profile</string>
+    <string name="BatteryClientNoData">No data</string>
+    <string name="BatteryClientActiveAccounts">Active accounts</string>
+    <string name="BatteryClientClientInstances">Client instances</string>
+    <string name="BatteryClientProcessCpu">Process CPU time</string>
+    <string name="BatteryClientBattery">Battery</string>
+    <string name="BatteryClientForegroundApp">Foreground app</string>
+    <string name="BatteryClientUsageStatsMissing">UsageStats permission is not granted</string>
+    <string name="BatteryClientConnectionStatus">Connection status</string>
+    <string name="BatteryClientLastUpdate">Last update</string>
+    <string name="BatteryClientPushMode">Push mode</string>
+    <string name="BatteryClientDatabaseSize">Database size</string>
+    <string name="BatteryClientVpnMode">Mode</string>
+    <string name="BatteryClientVpnModeOff">No VPN</string>
+    <string name="BatteryClientVpnModeSystem">System network</string>
+    <string name="BatteryClientVpnModeEmbedded">Built-in VPN/proxy profile</string>
+    <string name="BatteryClientVpnProfile">VLESS profile</string>
+    <string name="BatteryClientVpnPasteProfile">Paste vless:// profile</string>
+    <string name="BatteryClientVpnStart">Start VPN</string>
+    <string name="BatteryClientVpnStop">Stop VPN</string>
+    <string name="BatteryClientVpnStatus">VPN status</string>
+    <string name="BatteryClientVpnDisconnected">Disconnected</string>
+    <string name="BatteryClientVpnConnected">Connected</string>
+    <string name="BatteryClientVpnNeedsConsent">Approve Android VPN permission, then start again.</string>
+    <string name="BatteryClientVpnInvalidProfile">Invalid VLESS profile</string>
+    <string name="BatteryClientVpnSaved">Profile saved</string>
+    <string name="BatteryClientVpnAbout">The embedded profile uses sing-box/libbox with native TUN, stack=system, no mux, gc_percent=200, GOMAXPROCS=2, and DNS sniff+hijack rules for udp/53. Only this app package is routed through the VPN.</string>
+</resources>
