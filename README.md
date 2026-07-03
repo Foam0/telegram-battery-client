@@ -96,6 +96,7 @@ Same package ID across these entries; pick **one**. The plugin only ships a Rele
 - Add per-account toggle setting in Settings → Mercurygram to pre-tick "delete for everyone" (and "also delete for…" in private chats) by default in the delete-message dialog
 - Add a device-wide toggle setting in Settings → Mercurygram → Media to disable the proximity sensor: the screen stays on when the phone is near your face during calls and voice message playback (raise-to-listen and the switch to the ear speaker stop working)
 - Add a "Remove all proxies" bulk action to the proxy list (upstream only deletes one proxy at a time)
+- Add an app-only VLESS mode in Settings -> Mercurygram -> Battery client -> VPN / proxy profile. It keeps multiple user-added `vless://` profiles, lets the user switch the active profile manually, stores profile links and generated loopback SOCKS5 credentials through Android Keystore-backed app-private preferences, and routes Telegram MTProto through a sing-box/libbox loopback endpoint without Android VPN/TUN or system proxy changes. The built-in VPN/TUN mode remains available when the user explicitly starts it.
 - Add a custom emoji pack importer in Settings → Mercurygram → Custom emoji pack: load a `.zip` of emoji images or extract the emoji directly from an official Telegram APK (since the proprietary Apple set can't be bundled in a FOSS build). The pack is your own file, stored on-device and never shared; any emoji it's missing falls back per-glyph to the bundled Noto set
 - Add a "Translate" item to the text-selection toolbar in the message input field (and other caption/input editors): select text you're composing and translate it in place, with a "Use This Translation" button that replaces the selection. Uses the same [privacy-respecting translation engine](#privacy--anti-tracking-mercurygram-only) as message translation; in secret chats it's forced on-device only (offline, fail-closed)
 - Add a "Mention" item to the text-selection toolbar (next to "Create Link"): turn the selected text into a user mention by typing a user ID or picking from your contacts. Only works for users the app already knows (contacts, chat members) — a hard MTProto limitation, same as typing `@`; an unknown ID is rejected with a hint to use the picker
@@ -184,11 +185,13 @@ Notifications → UnifiedPush → Disable UnifiedPush*), nothing pushes to the a
 enable Background Connection or Keep-Alive Service in *Settings → Notifications
 and Sounds* if you still want messages while the app is closed.
 
-The built-in local SOCKS5 proxy mode is foreground-only. Mercurygram remembers
-the selected local proxy profile, stops the libbox proxy service shortly after
-the app leaves the foreground, and starts it again when the app is opened. Push
-notifications do not require this proxy service; they are delivered through the
-configured UnifiedPush/FCM distributor.
+The app-only VLESS mode is foreground-only and does not use Android VPN/TUN or
+a forever foreground service. Mercurygram remembers multiple VLESS profiles,
+starts the selected profile through libbox inside the app process when the app is
+opened, points Telegram MTProto at an authenticated loopback SOCKS5 endpoint, and
+stops it shortly after the app leaves the foreground. Push notifications do not
+require this proxy core; they are delivered through the configured
+UnifiedPush/FCM distributor.
 
 In push-first mode, Mercurygram also suppresses Telegram's periodic
 `NotificationRepeat` wakeup alarm unless Keep-Alive Service or Background

@@ -4,6 +4,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
@@ -54,7 +55,7 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
     private static final int IFF_RUNNING = 0x40;
     private static final int IFF_MULTICAST = 0x1000;
 
-    private final Service service;
+    private final Context context;
     private final VpnService vpnService;
     private final BatteryVpnProfile profile;
     private final ConnectivityManager connectivityManager;
@@ -64,19 +65,23 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
     private final ConcurrentLinkedQueue<Integer> detachedTunFds = new ConcurrentLinkedQueue<>();
 
     public BatteryLibboxPlatform(BatteryVpnService service, BatteryVpnProfile profile) {
-        this(service, service, profile);
+        this((Context) service, service, profile);
     }
 
     public BatteryLibboxPlatform(Service service, BatteryVpnProfile profile) {
-        this(service, null, profile);
+        this((Context) service, null, profile);
     }
 
-    private BatteryLibboxPlatform(Service service, VpnService vpnService, BatteryVpnProfile profile) {
-        this.service = service;
+    public BatteryLibboxPlatform(Context context, BatteryVpnProfile profile) {
+        this(context, null, profile);
+    }
+
+    private BatteryLibboxPlatform(Context context, VpnService vpnService, BatteryVpnProfile profile) {
+        this.context = context.getApplicationContext();
         this.vpnService = vpnService;
         this.profile = profile;
-        connectivityManager = (ConnectivityManager) service.getSystemService(ConnectivityManager.class);
-        notificationManager = (NotificationManager) service.getSystemService(NotificationManager.class);
+        connectivityManager = (ConnectivityManager) this.context.getSystemService(ConnectivityManager.class);
+        notificationManager = (NotificationManager) this.context.getSystemService(NotificationManager.class);
     }
 
     @Override
@@ -233,11 +238,11 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
             return;
         }
         ensureNotificationChannel(EVENT_CHANNEL_ID, "VPN events", NotificationManager.IMPORTANCE_LOW);
-        Intent open = new Intent(service, LaunchActivity.class);
-        PendingIntent contentIntent = PendingIntent.getActivity(service, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        Intent open = new Intent(context, LaunchActivity.class);
+        PendingIntent contentIntent = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         android.app.Notification.Builder builder = Build.VERSION.SDK_INT >= 26
-                ? new android.app.Notification.Builder(service, EVENT_CHANNEL_ID)
-                : new android.app.Notification.Builder(service);
+                ? new android.app.Notification.Builder(context, EVENT_CHANNEL_ID)
+                : new android.app.Notification.Builder(context);
         android.app.Notification androidNotification = builder
                 .setSmallIcon(R.drawable.notification)
                 .setContentTitle(safeText(notification.getTitle(), profile.name))
@@ -245,7 +250,7 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
                 .setContentIntent(contentIntent)
                 .setAutoCancel(true)
                 .build();
-        if (Build.VERSION.SDK_INT < 33 || service.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             try {
                 notificationManager.notify(notification.getIdentifier().hashCode(), androidNotification);
             } catch (Throwable ignored) {

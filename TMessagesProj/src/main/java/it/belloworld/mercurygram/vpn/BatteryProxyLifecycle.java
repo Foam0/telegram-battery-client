@@ -1,8 +1,6 @@
 package it.belloworld.mercurygram.vpn;
 
 import android.content.Context;
-import android.content.Intent;
-import android.os.Build;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
@@ -66,18 +64,11 @@ public final class BatteryProxyLifecycle implements ForegroundDetector.Listener 
             BatteryVpnStore store = new BatteryVpnStore(appContext);
             if (!BatteryVpnStore.MODE_LOCAL_PROXY.equals(store.getMode())
                     || store.getProfile() == null
-                    || BatteryProxyService.isServiceActive()
-                    || BatteryProxyService.isCoreRunning()
+                    || BatteryAppVlessProxy.isCoreRunning()
                     || BatteryVpnService.isCoreRunning()) {
                 return;
             }
-            Intent intent = new Intent(appContext, BatteryProxyService.class)
-                    .setAction(BatteryProxyService.ACTION_CONNECT);
-            if (Build.VERSION.SDK_INT >= 26) {
-                appContext.startForegroundService(intent);
-            } else {
-                appContext.startService(intent);
-            }
+            BatteryAppVlessProxy.start(appContext);
         } catch (Throwable e) {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.e(e);
@@ -88,17 +79,11 @@ public final class BatteryProxyLifecycle implements ForegroundDetector.Listener 
     public static void stopLocalProxyIfRunning(Context context) {
         Context appContext = context.getApplicationContext();
         try {
-            if (!BatteryProxyService.isServiceActive() && !BatteryProxyService.isCoreRunning()) {
+            if (!BatteryAppVlessProxy.isCoreRunning()) {
                 return;
             }
-            Intent intent = new Intent(appContext, BatteryProxyService.class)
-                    .setAction(BatteryProxyService.ACTION_DISCONNECT);
-            appContext.startService(intent);
+            BatteryAppVlessProxy.stop(appContext);
         } catch (Throwable e) {
-            try {
-                appContext.stopService(new Intent(appContext, BatteryProxyService.class));
-            } catch (Throwable ignored) {
-            }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.e(e);
             }

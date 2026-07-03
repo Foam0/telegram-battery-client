@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import it.belloworld.mercurygram.BatteryClientDiagnostics;
+import it.belloworld.mercurygram.vpn.BatteryAppVlessProxy;
 import it.belloworld.mercurygram.vpn.BatteryProxyService;
 import it.belloworld.mercurygram.vpn.BatteryVpnService;
 
@@ -91,6 +92,11 @@ public class BatteryClientDiagnosticsActivity extends UniversalFragment {
     }
 
     private String connectionModeLabel() {
+        if (BatteryAppVlessProxy.isCoreRunning()) {
+            int port = BatteryAppVlessProxy.getLocalPort();
+            return LocaleController.getString(R.string.BatteryClientProxyConnected)
+                    + (port > 0 ? " 127.0.0.1:" + port : "");
+        }
         if (BatteryProxyService.isCoreRunning()) {
             int port = BatteryProxyService.getLocalPort();
             return LocaleController.getString(R.string.BatteryClientProxyConnected)

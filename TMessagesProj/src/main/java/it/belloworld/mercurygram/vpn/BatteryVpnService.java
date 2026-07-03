@@ -108,6 +108,9 @@ public class BatteryVpnService extends VpnService implements CommandServerHandle
     }
 
     private void connect() {
+        if (BatteryAppVlessProxy.isCoreRunning()) {
+            BatteryAppVlessProxy.stop(this);
+        }
         if (BatteryProxyService.isServiceActive() || BatteryProxyService.isCoreRunning()) {
             try {
                 startService(new Intent(this, BatteryProxyService.class).setAction(BatteryProxyService.ACTION_DISCONNECT));

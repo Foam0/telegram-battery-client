@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:installLocation="auto">
+
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location.network" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.LOCATION" android:required="false" />
+
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" tools:node="remove" />
+    <uses-permission android:name="android.permission.CALL_PHONE" tools:node="remove" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" tools:node="remove" />
+    <uses-permission android:name="android.permission.MANAGE_ACCOUNTS" tools:node="remove" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_APP_BADGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
+    <uses-permission android:name="android.permission.INSTALL_SHORTCUT" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_PROFILE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.anddoes.launcher.permission.UPDATE_COUNT" tools:node="remove" />
+    <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" tools:node="remove" />
+    <uses-permission android:name="com.android.launcher.permission.UNINSTALL_SHORTCUT" tools:node="remove" />
+    <uses-permission android:name="com.htc.launcher.permission.READ_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.htc.launcher.permission.UPDATE_SHORTCUT" tools:node="remove" />
+    <uses-permission android:name="com.huawei.android.launcher.permission.CHANGE_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.huawei.android.launcher.permission.READ_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.huawei.android.launcher.permission.WRITE_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.majeur.launcher.permission.UPDATE_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.oppo.launcher.permission.READ_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.oppo.launcher.permission.WRITE_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="com.sec.android.provider.badge.permission.READ" tools:node="remove" />
+    <uses-permission android:name="com.sec.android.provider.badge.permission.WRITE" tools:node="remove" />
+    <uses-permission android:name="com.sonyericsson.home.permission.BROADCAST_BADGE" tools:node="remove" />
+    <uses-permission android:name="com.sonymobile.home.permission.PROVIDER_INSERT_BADGE" tools:node="remove" />
+    <uses-permission android:name="me.everything.badger.permission.BADGE_COUNT_READ" tools:node="remove" />
+    <uses-permission android:name="me.everything.badger.permission.BADGE_COUNT_WRITE" tools:node="remove" />
+
+    <application
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/AppName"
+        android:theme="@style/Theme.TMessages.Start"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        android:allowBackup="false"
+        android:restoreAnyVersion="false"
+        android:allowAudioPlaybackCapture="false"
+        android:usesCleartextTraffic="false"
+        android:supportsRtl="false"
+        android:requestLegacyExternalStorage="false"
+        tools:replace="android:supportsRtl">
+
+        <service android:name="org.telegram.messenger.GoogleVoiceClientService" tools:node="remove" />
+        <activity android:name="org.telegram.messenger.GoogleVoiceClientActivity" tools:node="remove" />
+
+        <activity-alias
+            android:name="org.telegram.ui.CallsActivity"
+            android:targetActivity="org.telegram.ui.LaunchActivity"
+            android:enabled="false"
+            android:exported="false"
+            tools:replace="android:enabled,android:exported" />
+        <activity
+            android:name="org.telegram.messenger.OpenChatReceiver"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <activity
+            android:name="org.telegram.messenger.OpenAttachedMenuBotReceiver"
+            android:exported="false"
+            tools:replace="android:exported" />
+
+        <service
+            android:name="org.telegram.messenger.AuthenticatorService"
+            android:enabled="false"
+            android:exported="false"
+            tools:replace="android:enabled,android:exported" />
+        <service
+            android:name="org.telegram.messenger.ContactsSyncAdapterService"
+            android:enabled="false"
+            android:exported="false"
+            tools:replace="android:enabled,android:exported" />
+        <service
+            android:name="org.telegram.messenger.BringAppForegroundService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <service
+            android:name="org.telegram.messenger.NotificationsService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <service
+            android:name="org.telegram.messenger.VideoEncodingService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <service
+            android:name="org.telegram.ui.Stories.recorder.StoryUploadingService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <service
+            android:name="org.telegram.messenger.ImportingService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <service
+            android:name="org.telegram.messenger.LocationSharingService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <service
+            android:name="org.telegram.messenger.MusicPlayerService"
+            android:exported="false"
+            tools:replace="android:exported" />
+        <service
+            android:name="org.telegram.messenger.MusicBrowserService"
+            android:permission="android.permission.BIND_MEDIA_BROWSER_SERVICE"
+            tools:replace="android:permission" />
+    </application>
+</manifest>
