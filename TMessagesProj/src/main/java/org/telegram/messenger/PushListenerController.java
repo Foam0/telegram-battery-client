@@ -130,7 +130,7 @@ public class PushListenerController {
                     if (!Arrays.equals(SharedConfig.pushAuthKeyId, inAuthKeyId)) {
                         onDecryptError();
                         if (BuildVars.LOGS_ENABLED) {
-                            FileLog.d(String.format(Locale.US, tag + " DECRYPT ERROR 2 k1=%s k2=%s, key=%s", Utilities.bytesToHex(SharedConfig.pushAuthKeyId), Utilities.bytesToHex(inAuthKeyId), Utilities.bytesToHex(SharedConfig.pushAuthKey)));
+                            FileLog.d(String.format(Locale.US, tag + " DECRYPT ERROR 2 k1=%s k2=%s", Utilities.bytesToHex(SharedConfig.pushAuthKeyId), Utilities.bytesToHex(inAuthKeyId)));
                         }
                         return;
                     }
@@ -145,7 +145,7 @@ public class PushListenerController {
                     if (!Utilities.arraysEquals(messageKey, 0, messageKeyFull, 8)) {
                         onDecryptError();
                         if (BuildVars.LOGS_ENABLED) {
-                            FileLog.d(String.format(tag + " DECRYPT ERROR 3, key = %s", Utilities.bytesToHex(SharedConfig.pushAuthKey)));
+                            FileLog.d(tag + " DECRYPT ERROR 3");
                         }
                         return;
                     }

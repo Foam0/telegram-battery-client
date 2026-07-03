@@ -123,8 +123,10 @@ public class FileStreamLoadOperation extends BaseDataSource implements FileLoadO
                 }
             }
         }
-        FileLog.e("FileStreamLoadOperation " + document.id + " open operation=" + loadOperation + " currentFile=" + currentFile + " file=" + file + " bytesRemaining=" + bytesRemaining + " me=" + this);
-        FileLog.e("FileStreamLoadOperation " + document.id + " " + MessageObject.getVideoWidth(document) + "x" + MessageObject.getVideoWidth(document) + " mime_type="+document.mime_type+" codec="+MessageObject.getVideoCodec(document)+" size="+ document.size);
+        if (BuildVars.LOGS_ENABLED) {
+            FileLog.d("FileStreamLoadOperation open document=" + document.id + " bytesRemaining=" + bytesRemaining);
+            FileLog.d("FileStreamLoadOperation media " + MessageObject.getVideoWidth(document) + "x" + MessageObject.getVideoHeight(document) + " size=" + document.size);
+        }
         return bytesRemaining;
     }
 

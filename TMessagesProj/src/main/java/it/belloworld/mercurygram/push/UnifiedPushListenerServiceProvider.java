@@ -83,7 +83,7 @@ public final class UnifiedPushListenerServiceProvider implements PushListenerCon
         String currentPushString = SharedConfig.pushString;
         if (!TextUtils.isEmpty(currentPushString)) {
             if (BuildVars.DEBUG_PRIVATE_VERSION && BuildVars.LOGS_ENABLED) {
-                FileLog.d("UnifiedPush endpoint = " + currentPushString);
+                FileLog.d("UnifiedPush endpoint present");
             }
         } else {
             if (BuildVars.LOGS_ENABLED) {

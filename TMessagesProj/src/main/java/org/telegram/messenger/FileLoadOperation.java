@@ -1310,7 +1310,9 @@ public class FileLoadOperation {
         if (isPreloadVideoOperation == value || value && totalBytesCount <= preloadMaxBytes) {
             return;
         }
-        FileLog.e("setIsPreloadVideoOperation " + value + " file=" + fileName);
+        if (BuildVars.LOGS_ENABLED) {
+            FileLog.d("setIsPreloadVideoOperation " + value);
+        }
         if (!value && isPreloadVideoOperation) {
             if (state == stateFinished) {
                 isPreloadVideoOperation = value;
