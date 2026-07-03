@@ -10,12 +10,37 @@
 #include "ConnectionsManager.h"
 #include "FileLog.h"
 
+#ifdef ANDROID
+static JNIEnv *getCurrentJNIEnv(bool *attached) {
+    JNIEnv *env = nullptr;
+    *attached = false;
+    if (javaVm == nullptr) {
+        return nullptr;
+    }
+    if (javaVm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_OK) {
+        return env;
+    }
+    if (javaVm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+        *attached = true;
+        return env;
+    }
+    return nullptr;
+}
+#endif
+
 ProxyCheckInfo::~ProxyCheckInfo() {
 #ifdef ANDROID
     if (ptr1 != nullptr) {
+        bool attached = false;
+        JNIEnv *env = getCurrentJNIEnv(&attached);
         DEBUG_DELREF("tgnet (2) request ptr1");
-        jniEnv[instanceNum]->DeleteGlobalRef(ptr1);
+        if (env != nullptr) {
+            env->DeleteGlobalRef(ptr1);
+        }
         ptr1 = nullptr;
+        if (attached) {
+            javaVm->DetachCurrentThread();
+        }
     }
 #endif
 }

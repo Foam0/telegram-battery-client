@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <cinttypes>
+#include <mutex>
 #include "ConnectionsManager.h"
 #include "FileLog.h"
 #include "EventObject.h"
@@ -136,33 +137,18 @@ ConnectionsManager::~ConnectionsManager() {
 }
 
 ConnectionsManager& ConnectionsManager::getInstance(int32_t instanceNum) {
-    switch (instanceNum) {
-        case 0:
-            static ConnectionsManager instance0(0);
-            return instance0;
-        case 1:
-            static ConnectionsManager instance1(1);
-            return instance1;
-        case 2:
-            static ConnectionsManager instance2(2);
-            return instance2;
-        case 3:
-            static ConnectionsManager instance3(3);
-            return instance3;
-        case 4:
-            static ConnectionsManager instance4(4);
-            return instance4;
-        case 5:
-            static ConnectionsManager instance5(5);
-            return instance5;
-        case 6:
-            static ConnectionsManager instance6(6);
-            return instance6;
-        case 7:
-        default:
-            static ConnectionsManager instance7(7);
-            return instance7;
+    if (instanceNum < 0) {
+        instanceNum = 0;
+    } else if (instanceNum >= MAX_ACCOUNT_COUNT) {
+        instanceNum = MAX_ACCOUNT_COUNT - 1;
     }
+    static std::mutex instancesMutex;
+    static ConnectionsManager *instances[MAX_ACCOUNT_COUNT] = {};
+    std::lock_guard<std::mutex> lock(instancesMutex);
+    if (instances[instanceNum] == nullptr) {
+        instances[instanceNum] = new ConnectionsManager(instanceNum);
+    }
+    return *instances[instanceNum];
 }
 
 int ConnectionsManager::callEvents(int64_t now) {
@@ -365,7 +351,14 @@ void *ConnectionsManager::ThreadProc(void *data) {
     if (LOGS_ENABLED) DEBUG_D("network thread started");
     auto networkManager = (ConnectionsManager *) (data);
 #ifdef ANDROID
-    javaVm->AttachCurrentThread(&jniEnv[networkManager->instanceNum], nullptr);
+    bool attached = false;
+    JNIEnv *threadEnv = nullptr;
+    if (javaVm != nullptr) {
+        jint envStatus = javaVm->GetEnv((void **) &threadEnv, JNI_VERSION_1_6);
+        if (envStatus == JNI_EDETACHED && javaVm->AttachCurrentThread(&threadEnv, nullptr) == JNI_OK) {
+            attached = true;
+        }
+    }
 #endif
     if (networkManager->currentUserId != 0 && networkManager->pushConnectionEnabled) {
         Datacenter *datacenter = networkManager->getDatacenterWithId(networkManager->currentDatacenterId);
@@ -377,6 +370,11 @@ void *ConnectionsManager::ThreadProc(void *data) {
     do {
         networkManager->select();
     } while (!done);
+#ifdef ANDROID
+    if (attached && javaVm != nullptr) {
+        javaVm->DetachCurrentThread();
+    }
+#endif
     return nullptr;
 }
 
