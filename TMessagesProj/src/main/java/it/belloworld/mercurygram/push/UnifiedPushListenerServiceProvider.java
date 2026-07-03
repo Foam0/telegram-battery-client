@@ -119,6 +119,11 @@ public final class UnifiedPushListenerServiceProvider implements PushListenerCon
                         "Mercurygram WebPush",
                         null
                 );
+                if (TextUtils.isEmpty(SharedConfig.pushString)
+                        && !TextUtils.isEmpty(SharedConfig.unifiedPushEndpointUrl)) {
+                    SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
+                    UnifiedPushReceiver.registerEndpointUrl(SharedConfig.unifiedPushEndpointUrl);
+                }
             } catch (Throwable e) {
                 FileLog.e(e);
             }

@@ -19,6 +19,14 @@
     <string name="BatteryClientConnectionStatus">Connection status</string>
     <string name="BatteryClientLastUpdate">Last update</string>
     <string name="BatteryClientPushMode">Push mode</string>
+    <string name="BatteryClientPushProvider">Push provider</string>
+    <string name="BatteryClientUnifiedPushDistributor">UnifiedPush distributor</string>
+    <string name="BatteryClientUnifiedPushEndpoint">UnifiedPush endpoint</string>
+    <string name="BatteryClientPushToken">Telegram push token</string>
+    <string name="BatteryClientKeepAliveService">Keep-alive fallback service</string>
+    <string name="BatteryClientBackgroundConnection">Background fallback connection</string>
+    <string name="BatteryClientPresent">Present</string>
+    <string name="BatteryClientMissing">Missing</string>
     <string name="BatteryClientDatabaseSize">Database size</string>
     <string name="BatteryClientVpnMode">Mode</string>
     <string name="BatteryClientVpnModeOff">No VPN/proxy</string>

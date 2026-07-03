@@ -174,8 +174,10 @@ Mercurygram adds MTProto-layer mitigations that upstream Telegram and Telegram-F
 In order to have reliable notifications, it may be necessary to set battery
 optimization to **Not optimized** for Mercurygram (no, it won't use more battery).
 
-Background Connections setting is not necessary and uses lot of battery, so
-please disable it when you use UnifiedPush.
+Background Connection is a fallback tweak. The battery-saving default is
+Firebase/UnifiedPush-first with no always-on Telegram connection while the app
+is closed. Enable Background Connection only if push notifications are unreliable
+on your device/ROM.
 
 The converse also holds: if you turn UnifiedPush off (*Settings → Mercurygram →
 Notifications → UnifiedPush → Disable UnifiedPush*), nothing pushes to the app any more, so

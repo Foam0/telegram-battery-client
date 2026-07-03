@@ -101,52 +101,7 @@ public class UnifiedPushReceiver extends PushService {
         lastRegistrationFailure = null;
         Utilities.globalQueue.postRunnable(() -> {
             SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
-
-            // Persist the raw endpoint URL so we can detect ntfy.sh usage
-            SharedConfig.setUnifiedPushEndpointUrl(endpoint.getUrl());
-
-            // Ensure WebPush ECDH keys exist before registering
-            SharedConfig.ensureWebPushKeys();
-
-            // All distributors route through the /aesgcm gateway which serializes
-            // WebPush headers into the body (common-proxies compatible format)
-            String gateway = SharedConfig.unifiedPushGateway;
-            if (!gateway.endsWith("/")) gateway += "/";
-
-            try {
-                // The embedded FCM distributor already points at the gateway's /fcm route,
-                // which folds the headers itself and signs the push for FCM. Wrapping it in
-                // /aesgcm would fold twice and strip the VAPID signing.
-                boolean fcm = it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor.isFcmEndpoint(endpoint.getUrl());
-                String gatewayUrl = fcm
-                        ? endpoint.getUrl()
-                        : gateway + "aesgcm?e=" + URLEncoder.encode(endpoint.getUrl(), StandardCharsets.UTF_8.name());
-
-                // WebPush JSON token: endpoint + client keys for Telegram to encrypt payloads
-                String p256dh = android.util.Base64.encodeToString(SharedConfig.webPushPublicKey,
-                        android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
-                String auth = android.util.Base64.encodeToString(SharedConfig.webPushAuthSecret,
-                        android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
-
-                org.json.JSONObject keys = new org.json.JSONObject();
-                keys.put("p256dh", p256dh);
-                keys.put("auth", auth);
-                org.json.JSONObject tokenObj = new org.json.JSONObject();
-                tokenObj.put("endpoint", gatewayUrl);
-                tokenObj.put("keys", keys);
-                PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, tokenObj.toString());
-
-                // Also register Simple Push (token_type=4) for encrypted chat wake-ups.
-                // Telegram sends a PUT to this URL for events where no content can be included
-                // (e.g. secret chats). The gateway correlates it with the Web Push POST and
-                // triggers a synthetic wake-up if no encrypted payload arrives.
-                String simplePushUrl = fcm
-                        ? endpoint.getUrl()
-                        : gateway + URLEncoder.encode(endpoint.getUrl(), StandardCharsets.UTF_8.name());
-                it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.sendSimplePushRegistration(simplePushUrl);
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
+            registerEndpointUrl(endpoint.getUrl());
 
             // Notify NotificationsSettingsActivity to rebuild its rows (shows/hides ntfy.sh warning)
             AndroidUtilities.runOnUIThread(() -> {
@@ -158,6 +113,47 @@ public class UnifiedPushReceiver extends PushService {
             });
             it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.notifyStateChanged();
         });
+    }
+
+    public static void registerEndpointUrl(String endpointUrl) {
+        if (TextUtils.isEmpty(endpointUrl)) {
+            return;
+        }
+
+        SharedConfig.setUnifiedPushEndpointUrl(endpointUrl);
+        SharedConfig.ensureWebPushKeys();
+
+        String gateway = SharedConfig.unifiedPushGateway;
+        if (!gateway.endsWith("/")) gateway += "/";
+
+        try {
+            // The embedded FCM distributor already points at the gateway's /fcm route,
+            // which folds the headers itself and signs the push for FCM. Wrapping it in
+            // /aesgcm would fold twice and strip the VAPID signing.
+            boolean fcm = it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor.isFcmEndpoint(endpointUrl);
+            String gatewayUrl = fcm
+                    ? endpointUrl
+                    : gateway + "aesgcm?e=" + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
+            String p256dh = android.util.Base64.encodeToString(SharedConfig.webPushPublicKey,
+                    android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
+            String auth = android.util.Base64.encodeToString(SharedConfig.webPushAuthSecret,
+                    android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
+
+            org.json.JSONObject keys = new org.json.JSONObject();
+            keys.put("p256dh", p256dh);
+            keys.put("auth", auth);
+            org.json.JSONObject tokenObj = new org.json.JSONObject();
+            tokenObj.put("endpoint", gatewayUrl);
+            tokenObj.put("keys", keys);
+            PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, tokenObj.toString());
+
+            String simplePushUrl = fcm
+                    ? endpointUrl
+                    : gateway + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
+            it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.sendSimplePushRegistration(simplePushUrl);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
     }
 
     @Override

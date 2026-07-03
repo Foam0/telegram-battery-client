@@ -1,20 +1,27 @@
 package it.belloworld.mercurygram.ui;
 
+import android.content.SharedPreferences;
+import android.text.TextUtils;
 import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
+import org.unifiedpush.android.connector.UnifiedPush;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import it.belloworld.mercurygram.BatteryClientDiagnostics;
 import it.belloworld.mercurygram.vpn.BatteryProxyService;
@@ -33,6 +40,7 @@ public class BatteryClientDiagnosticsActivity extends UniversalFragment {
                 Integer.toString(UserConfig.getActivatedAccountsCount())));
         items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientVpnStatus),
                 connectionModeLabel()));
+        addPushDiagnostics(items);
         items.add(UItem.asShadow(null));
 
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
@@ -92,5 +100,52 @@ public class BatteryClientDiagnosticsActivity extends UniversalFragment {
             return LocaleController.getString(R.string.BatteryClientVpnConnected);
         }
         return LocaleController.getString(R.string.BatteryClientVpnDisconnected);
+    }
+
+    private void addPushDiagnostics(ArrayList<UItem> items) {
+        SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
+        items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientPushProvider),
+                SharedConfig.disableUnifiedPush ? "fallback" : "UnifiedPush"));
+        items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientUnifiedPushDistributor),
+                unifiedPushDistributorLabel()));
+        items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientUnifiedPushEndpoint),
+                presentLabel(!TextUtils.isEmpty(SharedConfig.unifiedPushEndpointUrl))));
+        items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientPushToken),
+                pushTokenLabel()));
+        items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientKeepAliveService),
+                enabledLabel(preferences.getBoolean("pushService",
+                        MessagesController.getMainSettings(UserConfig.selectedAccount).getBoolean("keepAliveService", false)))));
+        items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientBackgroundConnection),
+                enabledLabel(ConnectionsManager.getInstance(UserConfig.selectedAccount).isPushConnectionEnabled())));
+    }
+
+    private String unifiedPushDistributorLabel() {
+        if (SharedConfig.disableUnifiedPush) {
+            return LocaleController.getString(R.string.PopupDisabled);
+        }
+        List<String> distributors = UnifiedPush.getDistributors(ApplicationLoader.applicationContext);
+        if (distributors.isEmpty()) {
+            return LocaleController.getString(R.string.BatteryClientMissing);
+        }
+        String current = UnifiedPush.getAckDistributor(ApplicationLoader.applicationContext);
+        return current != null ? current : distributors.get(0);
+    }
+
+    private String pushTokenLabel() {
+        if (!TextUtils.isEmpty(SharedConfig.pushString)) {
+            return LocaleController.getString(R.string.BatteryClientPresent);
+        }
+        if (!TextUtils.isEmpty(SharedConfig.pushStringStatus)) {
+            return SharedConfig.pushStringStatus;
+        }
+        return LocaleController.getString(R.string.BatteryClientMissing);
+    }
+
+    private String presentLabel(boolean present) {
+        return LocaleController.getString(present ? R.string.BatteryClientPresent : R.string.BatteryClientMissing);
+    }
+
+    private String enabledLabel(boolean enabled) {
+        return LocaleController.getString(enabled ? R.string.PopupEnabled : R.string.PopupDisabled);
     }
 }

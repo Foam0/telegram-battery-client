@@ -29,6 +29,7 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.system.Os;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -281,6 +282,13 @@ public class ApplicationLoader extends Application {
         SharedConfig.maybeClearReducedTrackingExhaustedOnUpgrade();
 
         ApplicationLoader app = (ApplicationLoader) ApplicationLoader.applicationContext;
+        if (!SharedConfig.disableUnifiedPush
+                && TextUtils.isEmpty(SharedConfig.pushString)
+                && !TextUtils.isEmpty(SharedConfig.unifiedPushEndpointUrl)) {
+            SharedConfig.pushStringGetTimeStart = SystemClock.elapsedRealtime();
+            SharedConfig.pushStringGetTimeEnd = SharedConfig.pushStringGetTimeStart;
+            UnifiedPushReceiver.registerEndpointUrl(SharedConfig.unifiedPushEndpointUrl);
+        }
         app.initPushServices();
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("app initied");
@@ -444,7 +452,7 @@ public class ApplicationLoader extends Application {
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("No valid " + getPushProvider().getLogTitle() + " APK found.");
                 }
-                SharedConfig.pushStringStatus = "__NO_GOOGLE_PLAY_SERVICES__";
+                SharedConfig.pushStringStatus = "__NO_UNIFIEDPUSH_DISTRIBUTOR__";
                 PushListenerController.sendRegistrationToServer(getPushProvider().getPushType(), null);
             }
         }, 1000);

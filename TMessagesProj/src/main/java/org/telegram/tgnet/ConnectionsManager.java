@@ -277,7 +277,7 @@ public class ConnectionsManager extends BaseController {
     public boolean isPushConnectionEnabled() {
         SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
         if (preferences.contains("pushConnection")) {
-            return preferences.getBoolean("pushConnection", true);
+            return preferences.getBoolean("pushConnection", false);
         } else {
             return MessagesController.getMainSettings(UserConfig.selectedAccount).getBoolean("backgroundConnection", false);
         }
