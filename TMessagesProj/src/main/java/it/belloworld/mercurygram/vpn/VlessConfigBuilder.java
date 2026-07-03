@@ -12,10 +12,49 @@ public final class VlessConfigBuilder {
 
     public static String build(BatteryVpnProfile profile) throws Exception {
         ParsedVless parsed = VlessUriParser.parse(profile.link);
+        return buildConfig(parsed, "cache.db", new JSONArray().put(new JSONObject()
+                        .put("type", "tun")
+                        .put("tag", "tun-in")
+                        .put("address", new JSONArray().put("172.19.0.1/30").put("fdfe:dcba:9876::1/126"))
+                        .put("mtu", 9000)
+                        .put("auto_route", true)
+                        .put("strict_route", true)
+                        .put("stack", "system")),
+                new JSONArray()
+                        .put(new JSONObject()
+                                .put("inbound", "tun-in")
+                                .put("network", "udp")
+                                .put("port", 53)
+                                .put("action", "sniff")
+                                .put("sniffer", new JSONArray().put("dns"))
+                                .put("timeout", "300ms"))
+                        .put(new JSONObject()
+                                .put("inbound", "tun-in")
+                                .put("protocol", "dns")
+                                .put("action", "hijack-dns")));
+    }
+
+    public static String buildLocalSocks(BatteryVpnProfile profile, int listenPort, String username, String password) throws Exception {
+        if (!notEmpty(username) || !notEmpty(password)) {
+            throw new IllegalArgumentException("SOCKS5 username and password are required");
+        }
+        ParsedVless parsed = VlessUriParser.parse(profile.link);
+        return buildConfig(parsed, "cache_socks.db", new JSONArray().put(new JSONObject()
+                        .put("type", "socks")
+                        .put("tag", "socks-in")
+                        .put("listen", "127.0.0.1")
+                        .put("listen_port", listenPort)
+                        .put("users", new JSONArray().put(new JSONObject()
+                                .put("username", username)
+                                .put("password", password)))),
+                new JSONArray());
+    }
+
+    private static String buildConfig(ParsedVless parsed, String cachePath, JSONArray inbounds, JSONArray rules) throws Exception {
         JSONObject config = new JSONObject()
                 .put("log", new JSONObject().put("level", "info").put("timestamp", true))
                 .put("experimental", new JSONObject()
-                        .put("cache_file", new JSONObject().put("enabled", true).put("path", "cache.db"))
+                        .put("cache_file", new JSONObject().put("enabled", true).put("path", cachePath))
                         .put("debug", new JSONObject().put("gc_percent", 200)))
                 .put("dns", new JSONObject()
                         .put("servers", new JSONArray()
@@ -27,30 +66,12 @@ public final class VlessConfigBuilder {
                                 .put(buildDohServer("cloudflare-dns.com", "/dns-query")))
                         .put("final", "remote-dns")
                         .put("strategy", "prefer_ipv4"))
-                .put("inbounds", new JSONArray().put(new JSONObject()
-                        .put("type", "tun")
-                        .put("tag", "tun-in")
-                        .put("address", new JSONArray().put("172.19.0.1/30").put("fdfe:dcba:9876::1/126"))
-                        .put("mtu", 9000)
-                        .put("auto_route", true)
-                        .put("strict_route", true)
-                        .put("stack", "system")))
+                .put("inbounds", inbounds)
                 .put("outbounds", new JSONArray()
                         .put(buildProxyOutbound(parsed))
                         .put(new JSONObject().put("type", "direct").put("tag", "direct")))
                 .put("route", new JSONObject()
-                        .put("rules", new JSONArray()
-                                .put(new JSONObject()
-                                        .put("inbound", "tun-in")
-                                        .put("network", "udp")
-                                        .put("port", 53)
-                                        .put("action", "sniff")
-                                        .put("sniffer", new JSONArray().put("dns"))
-                                        .put("timeout", "300ms"))
-                                .put(new JSONObject()
-                                        .put("inbound", "tun-in")
-                                        .put("protocol", "dns")
-                                        .put("action", "hijack-dns")))
+                        .put("rules", rules)
                         .put("final", "proxy")
                         .put("auto_detect_interface", true)
                         .put("default_domain_resolver", new JSONObject()

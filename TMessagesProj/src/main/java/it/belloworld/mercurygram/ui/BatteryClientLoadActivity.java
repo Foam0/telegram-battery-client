@@ -20,6 +20,7 @@ import org.telegram.ui.Components.UniversalFragment;
 import java.util.ArrayList;
 import java.util.List;
 
+import it.belloworld.mercurygram.vpn.BatteryProxyService;
 import it.belloworld.mercurygram.vpn.BatteryVpnService;
 
 public class BatteryClientLoadActivity extends UniversalFragment {
@@ -43,9 +44,7 @@ public class BatteryClientLoadActivity extends UniversalFragment {
         items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientClientInstances),
                 Integer.toString(activeClientInstances())));
         items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientVpnStatus),
-                BatteryVpnService.isCoreRunning()
-                        ? LocaleController.getString(R.string.BatteryClientVpnConnected)
-                        : LocaleController.getString(R.string.BatteryClientVpnDisconnected)));
+                connectionModeLabel()));
         items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientSectionAbout)));
     }
 
@@ -148,5 +147,17 @@ public class BatteryClientLoadActivity extends UniversalFragment {
             }
         }
         return count;
+    }
+
+    private String connectionModeLabel() {
+        if (BatteryProxyService.isCoreRunning()) {
+            int port = BatteryProxyService.getLocalPort();
+            return LocaleController.getString(R.string.BatteryClientProxyConnected)
+                    + (port > 0 ? " 127.0.0.1:" + port : "");
+        }
+        if (BatteryVpnService.isCoreRunning()) {
+            return LocaleController.getString(R.string.BatteryClientVpnConnected);
+        }
+        return LocaleController.getString(R.string.BatteryClientVpnDisconnected);
     }
 }

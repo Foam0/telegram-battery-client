@@ -56,13 +56,13 @@ The debug APK is written to:
 TMessagesProj_App/build/outputs/apk/afatFdArm64/debug/afatFdArm64.apk
 ```
 
-The Gradle `preBuild` task runs `scripts/check_sample_config.sh`, which builds `sing-box v1.13.14` and validates `config/sample-vless-config.json` with `sing-box check`.
+The Gradle `preBuild` task runs `scripts/check_sample_config.sh`, which builds `sing-box v1.13.14` and validates both `config/sample-vless-config.json` and `config/sample-vless-socks-config.json` with `sing-box check`.
 
 ## Battery Changes
 
 - Uses the existing Mercurygram UnifiedPush/WebPush path for push-first delivery.
 - Does not add a permanent foreground service for idle operation.
-- Starts the embedded VPN only after explicit user action and fully stops it on disconnect.
+- Starts embedded VPN or local SOCKS proxy mode only after explicit user action and fully stops the selected service on disconnect.
 - Keeps reconnect/backoff behavior in the existing Telegram networking layer.
 - Avoids wake locks beyond existing Telegram flows.
 - Raises the local account ceiling from 8 to 32. This removes the practical Mercurygram local cap for normal use, but it is still a fixed technical ceiling because upstream Telegram Android stores many account singletons in static arrays.
@@ -94,9 +94,11 @@ The main expected battery win is from push-first behavior, avoiding extra backgr
 
 The embedded profile is intentionally narrow:
 
-- Modes: off, system network, embedded VPN/proxy profile.
+- Modes: off, system network/direct, local SOCKS5 proxy, embedded VPN/TUN profile.
 - Minimum supported import: `vless://`.
 - Engine: sing-box/libbox, not Xray.
+- Local SOCKS5 mode starts sing-box on `127.0.0.1` with generated username/password authentication and points Telegram's native proxy setting at that loopback port. It does not create Android VPN permission prompts, a TUN interface, or a system-wide proxy.
+- Android system-wide proxy changes are not implemented because ordinary apps cannot change global proxy settings without privileged/device-owner rights.
 - TUN inbound uses `stack: "system"`.
 - Mux is not enabled.
 - Runtime battery settings:

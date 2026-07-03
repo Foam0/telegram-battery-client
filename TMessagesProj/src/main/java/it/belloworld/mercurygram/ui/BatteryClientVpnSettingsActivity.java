@@ -23,6 +23,7 @@ import org.telegram.ui.Components.UniversalFragment;
 
 import java.util.ArrayList;
 
+import it.belloworld.mercurygram.vpn.BatteryProxyService;
 import it.belloworld.mercurygram.vpn.BatteryVpnProfile;
 import it.belloworld.mercurygram.vpn.BatteryVpnService;
 import it.belloworld.mercurygram.vpn.BatteryVpnStore;
@@ -53,12 +54,12 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
                 LocaleController.getString(R.string.BatteryClientVpnProfile),
                 profile != null ? profile.name : LocaleController.getString(R.string.BatteryClientVpnPasteProfile)));
         items.add(UItem.asButton(0, LocaleController.getString(R.string.BatteryClientVpnStatus),
-                BatteryVpnService.isCoreRunning()
-                        ? LocaleController.getString(R.string.BatteryClientVpnConnected)
-                        : LocaleController.getString(R.string.BatteryClientVpnDisconnected)));
-        if (BatteryVpnService.isCoreRunning()) {
+                statusLabel()));
+        if (BatteryVpnService.isCoreRunning() || BatteryProxyService.isCoreRunning()) {
             items.add(UItem.asButton(ID_STOP, LocaleController.getString(R.string.BatteryClientVpnStop)));
-        } else {
+        } else if (BatteryVpnStore.MODE_LOCAL_PROXY.equals(store.getMode())) {
+            items.add(UItem.asButton(ID_START, LocaleController.getString(R.string.BatteryClientProxyStart)));
+        } else if (BatteryVpnStore.MODE_EMBEDDED.equals(store.getMode())) {
             items.add(UItem.asButton(ID_START, LocaleController.getString(R.string.BatteryClientVpnStart)));
         }
         items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientVpnAbout)));
@@ -74,10 +75,10 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
                 showProfileDialog();
                 break;
             case ID_START:
-                startVpn();
+                startSelectedMode();
                 break;
             case ID_STOP:
-                stopVpn();
+                stopConnection();
                 break;
         }
     }
@@ -91,7 +92,9 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
     public void onActivityResultFragment(int requestCode, int resultCode, Intent data) {
         super.onActivityResultFragment(requestCode, resultCode, data);
         if (requestCode == REQUEST_VPN && resultCode == Activity.RESULT_OK) {
-            startVpn();
+            if (BatteryVpnStore.MODE_EMBEDDED.equals(store().getMode())) {
+                startVpn();
+            }
         }
     }
 
@@ -107,10 +110,19 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
         if (BatteryVpnStore.MODE_OFF.equals(mode)) {
             store.setMode(BatteryVpnStore.MODE_SYSTEM);
         } else if (BatteryVpnStore.MODE_SYSTEM.equals(mode)) {
+            store.setMode(BatteryVpnStore.MODE_LOCAL_PROXY);
+        } else if (BatteryVpnStore.MODE_LOCAL_PROXY.equals(mode)) {
             store.setMode(BatteryVpnStore.MODE_EMBEDDED);
         } else {
             store.setMode(BatteryVpnStore.MODE_OFF);
+        }
+        String newMode = store.getMode();
+        if (BatteryVpnStore.MODE_OFF.equals(newMode) || BatteryVpnStore.MODE_SYSTEM.equals(newMode)) {
+            stopConnection();
+        } else if (BatteryVpnStore.MODE_LOCAL_PROXY.equals(newMode)) {
             stopVpn();
+        } else if (BatteryVpnStore.MODE_EMBEDDED.equals(newMode)) {
+            stopProxy();
         }
         refresh();
     }
@@ -145,8 +157,12 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
         try {
             ParsedVless parsed = VlessUriParser.parse(raw);
             String name = parsed.name != null && !parsed.name.isEmpty() ? parsed.name : parsed.server;
-            store().saveProfile(new BatteryVpnProfile(name, raw.trim()));
-            store().setMode(BatteryVpnStore.MODE_EMBEDDED);
+            BatteryVpnStore store = store();
+            store.saveProfile(new BatteryVpnProfile(name, raw.trim()));
+            String mode = store.getMode();
+            if (BatteryVpnStore.MODE_OFF.equals(mode) || BatteryVpnStore.MODE_SYSTEM.equals(mode)) {
+                store.setMode(BatteryVpnStore.MODE_LOCAL_PROXY);
+            }
             if (context != null) {
                 Toast.makeText(context, LocaleController.getString(R.string.BatteryClientVpnSaved), Toast.LENGTH_SHORT).show();
             }
@@ -156,6 +172,36 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
                 Toast.makeText(context, LocaleController.getString(R.string.BatteryClientVpnInvalidProfile), Toast.LENGTH_SHORT).show();
             }
         }
+    }
+
+    private void startSelectedMode() {
+        String mode = store().getMode();
+        if (BatteryVpnStore.MODE_LOCAL_PROXY.equals(mode)) {
+            startProxy();
+        } else if (BatteryVpnStore.MODE_EMBEDDED.equals(mode)) {
+            startVpn();
+        }
+    }
+
+    private void startProxy() {
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        BatteryVpnStore store = store();
+        if (store.getProfile() == null) {
+            showProfileDialog();
+            return;
+        }
+        stopVpn();
+        store.setMode(BatteryVpnStore.MODE_LOCAL_PROXY);
+        Intent intent = new Intent(context, BatteryProxyService.class).setAction(BatteryProxyService.ACTION_CONNECT);
+        if (Build.VERSION.SDK_INT >= 26) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
+        refresh();
     }
 
     private void startVpn() {
@@ -168,6 +214,7 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
             showProfileDialog();
             return;
         }
+        stopProxy();
         store.setMode(BatteryVpnStore.MODE_EMBEDDED);
         Intent prepare = VpnService.prepare(context);
         if (prepare != null) {
@@ -184,14 +231,34 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
         refresh();
     }
 
+    private void stopConnection() {
+        stopProxy();
+        stopVpn();
+        refresh();
+    }
+
+    private void stopProxy() {
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        if (!BatteryProxyService.isServiceActive() && !BatteryProxyService.isCoreRunning()) {
+            return;
+        }
+        Intent intent = new Intent(context, BatteryProxyService.class).setAction(BatteryProxyService.ACTION_DISCONNECT);
+        context.startService(intent);
+    }
+
     private void stopVpn() {
         Context context = getParentActivity();
         if (context == null) {
             return;
         }
+        if (!BatteryVpnService.isServiceActive() && !BatteryVpnService.isCoreRunning()) {
+            return;
+        }
         Intent intent = new Intent(context, BatteryVpnService.class).setAction(BatteryVpnService.ACTION_DISCONNECT);
         context.startService(intent);
-        refresh();
     }
 
     private BatteryVpnStore store() {
@@ -206,10 +273,25 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
         if (BatteryVpnStore.MODE_SYSTEM.equals(mode)) {
             return LocaleController.getString(R.string.BatteryClientVpnModeSystem);
         }
+        if (BatteryVpnStore.MODE_LOCAL_PROXY.equals(mode)) {
+            return LocaleController.getString(R.string.BatteryClientVpnModeLocalProxy);
+        }
         if (BatteryVpnStore.MODE_EMBEDDED.equals(mode)) {
             return LocaleController.getString(R.string.BatteryClientVpnModeEmbedded);
         }
         return LocaleController.getString(R.string.BatteryClientVpnModeOff);
+    }
+
+    private String statusLabel() {
+        if (BatteryProxyService.isCoreRunning()) {
+            int port = BatteryProxyService.getLocalPort();
+            return LocaleController.getString(R.string.BatteryClientProxyConnected)
+                    + (port > 0 ? " 127.0.0.1:" + port : "");
+        }
+        if (BatteryVpnService.isCoreRunning()) {
+            return LocaleController.getString(R.string.BatteryClientVpnConnected);
+        }
+        return LocaleController.getString(R.string.BatteryClientVpnDisconnected);
     }
 
     private void refresh() {

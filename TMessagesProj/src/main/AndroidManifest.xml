@@ -605,6 +605,15 @@
                 android:value="embedded VPN for explicitly enabled Telegram traffic proxying" />
         </service>
 
+        <service
+            android:name="it.belloworld.mercurygram.vpn.BatteryProxyService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="local SOCKS5 proxy for explicitly enabled Telegram traffic proxying" />
+        </service>
+
         <receiver android:name=".AppStartReceiver" android:enabled="true" android:exported="false">
             <intent-filter>
                 <action android:name="org.telegram.start" />

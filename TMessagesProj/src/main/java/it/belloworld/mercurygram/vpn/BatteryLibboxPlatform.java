@@ -3,6 +3,7 @@ package it.belloworld.mercurygram.vpn;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
@@ -53,7 +54,8 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
     private static final int IFF_RUNNING = 0x40;
     private static final int IFF_MULTICAST = 0x1000;
 
-    private final BatteryVpnService service;
+    private final Service service;
+    private final VpnService vpnService;
     private final BatteryVpnProfile profile;
     private final ConnectivityManager connectivityManager;
     private final NotificationManager notificationManager;
@@ -62,7 +64,16 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
     private final ConcurrentLinkedQueue<Integer> detachedTunFds = new ConcurrentLinkedQueue<>();
 
     public BatteryLibboxPlatform(BatteryVpnService service, BatteryVpnProfile profile) {
+        this(service, service, profile);
+    }
+
+    public BatteryLibboxPlatform(Service service, BatteryVpnProfile profile) {
+        this(service, null, profile);
+    }
+
+    private BatteryLibboxPlatform(Service service, VpnService vpnService, BatteryVpnProfile profile) {
         this.service = service;
+        this.vpnService = vpnService;
         this.profile = profile;
         connectivityManager = (ConnectivityManager) service.getSystemService(ConnectivityManager.class);
         notificationManager = (NotificationManager) service.getSystemService(NotificationManager.class);
@@ -70,7 +81,10 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
 
     @Override
     public void autoDetectInterfaceControl(int fd) throws Exception {
-        if (!service.protect(fd)) {
+        if (vpnService == null) {
+            return;
+        }
+        if (!vpnService.protect(fd)) {
             throw new IllegalStateException("VpnService.protect failed");
         }
     }
@@ -155,7 +169,10 @@ public final class BatteryLibboxPlatform implements PlatformInterface {
 
     @Override
     public int openTun(TunOptions options) throws Exception {
-        VpnService.Builder builder = service.new Builder()
+        if (vpnService == null) {
+            throw new UnsupportedOperationException("TUN is not available in local proxy mode");
+        }
+        VpnService.Builder builder = vpnService.new Builder()
                 .setSession(profile.name)
                 .setMtu(options.getMTU() > 0 ? options.getMTU() : 9000);
 

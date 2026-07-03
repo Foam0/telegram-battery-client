@@ -2363,9 +2363,17 @@ public class SharedConfig {
     // currentProxy so ConnectionsManager.isProxyEnabled() returns true and
     // LaunchActivity's drawer/proxy-active indicator updates. Idempotent.
     public static ProxyInfo publishMgInternalTorProxy(int port) {
+        return publishMgInternalProxy(port, "", "");
+    }
+
+    public static ProxyInfo publishMgInternalLocalProxy(int port, String username, String password) {
+        return publishMgInternalProxy(port, username, password);
+    }
+
+    private static ProxyInfo publishMgInternalProxy(int port, String username, String password) {
         loadProxyList();
         clearMgInternalTorProxy();
-        ProxyInfo info = new ProxyInfo("127.0.0.1", port, "", "", "");
+        ProxyInfo info = new ProxyInfo("127.0.0.1", port, username, password, "");
         info.mgInternal = true;
         info.available = true;
         proxyList.add(0, info);

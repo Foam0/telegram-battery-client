@@ -21,18 +21,21 @@
     <string name="BatteryClientPushMode">Push mode</string>
     <string name="BatteryClientDatabaseSize">Database size</string>
     <string name="BatteryClientVpnMode">Mode</string>
-    <string name="BatteryClientVpnModeOff">No VPN</string>
-    <string name="BatteryClientVpnModeSystem">System network</string>
-    <string name="BatteryClientVpnModeEmbedded">Built-in VPN/proxy profile</string>
+    <string name="BatteryClientVpnModeOff">No VPN/proxy</string>
+    <string name="BatteryClientVpnModeSystem">System network (direct)</string>
+    <string name="BatteryClientVpnModeLocalProxy">Local SOCKS5 proxy</string>
+    <string name="BatteryClientVpnModeEmbedded">Built-in VPN/TUN profile</string>
     <string name="BatteryClientVpnProfile">VLESS profile</string>
     <string name="BatteryClientVpnPasteProfile">Paste vless:// profile</string>
     <string name="BatteryClientVpnStart">Start VPN</string>
-    <string name="BatteryClientVpnStop">Stop VPN</string>
-    <string name="BatteryClientVpnStatus">VPN status</string>
+    <string name="BatteryClientProxyStart">Start proxy</string>
+    <string name="BatteryClientVpnStop">Stop connection</string>
+    <string name="BatteryClientVpnStatus">VPN / proxy status</string>
     <string name="BatteryClientVpnDisconnected">Disconnected</string>
     <string name="BatteryClientVpnConnected">Connected</string>
+    <string name="BatteryClientProxyConnected">SOCKS5 proxy connected</string>
     <string name="BatteryClientVpnNeedsConsent">Approve Android VPN permission, then start again.</string>
     <string name="BatteryClientVpnInvalidProfile">Invalid VLESS profile</string>
     <string name="BatteryClientVpnSaved">Profile saved</string>
-    <string name="BatteryClientVpnAbout">The embedded profile uses sing-box/libbox with native TUN, stack=system, no mux, gc_percent=200, GOMAXPROCS=2, and DNS sniff+hijack rules for udp/53. Only this app package is routed through the VPN.</string>
+    <string name="BatteryClientVpnAbout">Local SOCKS5 mode starts sing-box/libbox on 127.0.0.1 with generated username/password auth and points Telegram MTProto to it without Android VPN/TUN. Built-in VPN/TUN mode uses stack=system, no mux, gc_percent=200, GOMAXPROCS=2, and DNS sniff+hijack rules for udp/53. Android system-wide proxy changes are not available to a normal app.</string>
 </resources>

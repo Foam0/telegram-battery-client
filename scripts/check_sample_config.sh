@@ -23,3 +23,4 @@ LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=$SING_BOX_VERSION -X i
 )
 
 "$BIN" check -c "$ROOT/config/sample-vless-config.json"
+"$BIN" check -c "$ROOT/config/sample-vless-socks-config.json"
