@@ -139,6 +139,33 @@ public final class BatteryVpnStore {
         return index;
     }
 
+    public void addProfilesIfMissing(ArrayList<BatteryVpnProfile> incomingProfiles) {
+        if (incomingProfiles == null || incomingProfiles.isEmpty()) {
+            return;
+        }
+        ArrayList<BatteryVpnProfile> profiles = getProfiles();
+        boolean hadProfiles = !profiles.isEmpty();
+        int activeIndex = getActiveProfileIndex();
+        boolean changed = false;
+        for (BatteryVpnProfile profile : incomingProfiles) {
+            BatteryVpnProfile normalized = normalizedProfile(profile);
+            if (normalized.link.length() == 0 || containsProfile(profiles, normalized.link)) {
+                continue;
+            }
+            profiles.add(normalized);
+            changed = true;
+        }
+        if (!changed) {
+            return;
+        }
+        saveProfiles(profiles);
+        if (!hadProfiles) {
+            setActiveProfileIndex(0);
+        } else if (activeIndex >= profiles.size()) {
+            setActiveProfileIndex(Math.max(0, profiles.size() - 1));
+        }
+    }
+
     public void selectProfile(int index) {
         ArrayList<BatteryVpnProfile> profiles = getProfiles();
         if (index >= 0 && index < profiles.size()) {
@@ -200,6 +227,15 @@ public final class BatteryVpnStore {
     private BatteryVpnProfile normalizedProfile(BatteryVpnProfile profile) {
         String link = profile != null && profile.link != null ? profile.link.trim() : "";
         return new BatteryVpnProfile(profileName(profile != null ? profile.name : "", link), link);
+    }
+
+    private static boolean containsProfile(ArrayList<BatteryVpnProfile> profiles, String link) {
+        for (BatteryVpnProfile profile : profiles) {
+            if (profile.link.equals(link)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String profileName(String name, String link) {
