@@ -71,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.IdentityHashMap;
+import java.util.Locale;
 import java.util.Set;
 
 public class MessageDetailsActivity extends BaseFragment {
@@ -97,6 +98,13 @@ public class MessageDetailsActivity extends BaseFragment {
     private int dateRow;
     private int editedRow;
     private int forwardRow;
+    private int recordingDateRow;
+    private int mediaTypeRow;
+    private int mimeTypeRow;
+    private int durationRow;
+    private int dimensionsRow;
+    private int codecRow;
+    private int metadataReportRow;
     private int fileNameRow;
     private int filePathRow;
     private int fileSizeRow;
@@ -105,6 +113,14 @@ public class MessageDetailsActivity extends BaseFragment {
     private int emptyRow;
     private int exportRow;
     private int endRow;
+
+    private String mimeType;
+    private double mediaDuration;
+    private int mediaWidth;
+    private int mediaHeight;
+    private String mediaCodec;
+    private Date mediaCreationDate;
+    private String metadataReport;
 
     private UndoView copyTooltip;
 
@@ -216,15 +232,38 @@ public class MessageDetailsActivity extends BaseFragment {
             }
         }
         if (messageObject.messageOwner.media != null && messageObject.messageOwner.media.document != null) {
-            if (TextUtils.isEmpty(messageObject.messageOwner.media.document.file_name)) {
-                for (int a = 0; a < messageObject.messageOwner.media.document.attributes.size(); a++) {
-                    if (messageObject.messageOwner.media.document.attributes.get(a) instanceof TLRPC.TL_documentAttributeFilename) {
-                        fileName = messageObject.messageOwner.media.document.attributes.get(a).file_name;
+            TLRPC.Document document = messageObject.messageOwner.media.document;
+            mimeType = document.mime_type;
+            if (TextUtils.isEmpty(document.file_name)) {
+                for (int a = 0; a < document.attributes.size(); a++) {
+                    TLRPC.DocumentAttribute attribute = document.attributes.get(a);
+                    if (attribute instanceof TLRPC.TL_documentAttributeFilename) {
+                        fileName = attribute.file_name;
+                    } else if (attribute instanceof TLRPC.TL_documentAttributeVideo) {
+                        mediaDuration = attribute.duration;
+                        mediaWidth = attribute.w;
+                        mediaHeight = attribute.h;
+                        mediaCodec = attribute.video_codec;
                     }
                 }
             } else {
-                fileName = messageObject.messageOwner.media.document.file_name;
+                fileName = document.file_name;
+                for (int a = 0; a < document.attributes.size(); a++) {
+                    TLRPC.DocumentAttribute attribute = document.attributes.get(a);
+                    if (attribute instanceof TLRPC.TL_documentAttributeVideo) {
+                        mediaDuration = attribute.duration;
+                        mediaWidth = attribute.w;
+                        mediaHeight = attribute.h;
+                        mediaCodec = attribute.video_codec;
+                        break;
+                    }
+                }
             }
+        }
+        if (messageObject.isRoundVideo() && !TextUtils.isEmpty(filePath)) {
+            Mp4MetadataReport.Result result = Mp4MetadataReport.read(new File(filePath));
+            mediaCreationDate = result.creationDate;
+            metadataReport = result.report;
         }
     }
 
@@ -347,6 +386,13 @@ public class MessageDetailsActivity extends BaseFragment {
         dateRow = messageObject.messageOwner.date != 0 ? rowCount++ : -1;
         editedRow = messageObject.messageOwner.edit_date != 0 ? rowCount++ : -1;
         forwardRow = messageObject.isForwarded() ? rowCount++ : -1;
+        recordingDateRow = messageObject.isRoundVideo() ? rowCount++ : -1;
+        mediaTypeRow = messageObject.isRoundVideo() ? rowCount++ : -1;
+        mimeTypeRow = TextUtils.isEmpty(mimeType) ? -1 : rowCount++;
+        durationRow = mediaDuration > 0 ? rowCount++ : -1;
+        dimensionsRow = mediaWidth > 0 && mediaHeight > 0 ? rowCount++ : -1;
+        codecRow = TextUtils.isEmpty(mediaCodec) ? -1 : rowCount++;
+        metadataReportRow = messageObject.isRoundVideo() ? rowCount++ : -1;
         fileNameRow = TextUtils.isEmpty(fileName) ? -1 : rowCount++;
         filePathRow = TextUtils.isEmpty(filePath) ? -1 : rowCount++;
         fileSizeRow = messageObject.getSize() != 0 ? rowCount++ : -1;
@@ -478,7 +524,7 @@ public class MessageDetailsActivity extends BaseFragment {
                                 textCell.setTextAndValue(LocaleController.formatString(R.string.MessageScheduledOn, ""), timeString, divider);
                             }
                         } else {
-                            textCell.setTextAndValue(LocaleController.getString(R.string.Date), timeString, divider);
+                            textCell.setTextAndValue(LocaleController.getString(messageObject.isRoundVideo() ? R.string.MessageDetailsMessageDate : R.string.Date), timeString, divider);
                         }
                     } else if (position == editedRow) {
                         long date = (long) messageObject.messageOwner.edit_date * 1000;
@@ -522,6 +568,37 @@ public class MessageDetailsActivity extends BaseFragment {
                         }
                         builder.append("\n").append(LocaleController.formatString(R.string.formatDateAtTime, LocaleController.getInstance().getFormatterYear().format(new Date(date)), LocaleController.getInstance().getFormatterDay().format(new Date(date))));
                         textCell.setTextAndValue(LocaleController.getString(R.string.Forward), builder.toString(), divider);
+                    } else if (position == recordingDateRow) {
+                        String value;
+                        if (mediaCreationDate != null) {
+                            value = LocaleController.formatString(R.string.formatDateAtTime, LocaleController.getInstance().getFormatterYear().format(mediaCreationDate), LocaleController.getInstance().getFormatterDay().format(mediaCreationDate));
+                        } else if (TextUtils.isEmpty(filePath)) {
+                            value = LocaleController.getString(R.string.MessageDetailsDownloadForMetadata);
+                        } else {
+                            value = LocaleController.getString(R.string.MessageDetailsRecordingDateMissing);
+                        }
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsRecordingDate), value, divider);
+                    } else if (position == mediaTypeRow) {
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsMediaType), LocaleController.getString(R.string.MessageDetailsVideoMessage), divider);
+                    } else if (position == mimeTypeRow) {
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsMimeType), mimeType, divider);
+                    } else if (position == durationRow) {
+                        String exactDuration = String.format(Locale.US, "%.3f s", mediaDuration);
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsDuration), AndroidUtilities.formatShortDuration((int) Math.ceil(mediaDuration)) + " (" + exactDuration + ")", divider);
+                    } else if (position == dimensionsRow) {
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsDimensions), mediaWidth + " × " + mediaHeight, divider);
+                    } else if (position == codecRow) {
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsCodec), mediaCodec, divider);
+                    } else if (position == metadataReportRow) {
+                        String value;
+                        if (!TextUtils.isEmpty(metadataReport)) {
+                            value = metadataReport;
+                        } else if (TextUtils.isEmpty(filePath)) {
+                            value = LocaleController.getString(R.string.MessageDetailsDownloadForMetadata);
+                        } else {
+                            value = LocaleController.getString(R.string.MessageDetailsMetadataUnavailable);
+                        }
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsFullMp4Metadata), value, divider);
                     } else if (position == fileNameRow) {
                         textCell.setTextAndValue(LocaleController.getString(R.string.Filename), fileName, divider);
                     } else if (position == filePathRow) {

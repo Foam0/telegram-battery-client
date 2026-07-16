@@ -48,7 +48,7 @@ import org.telegram.ui.LauncherIconController;
 import java.io.File;
 import java.util.Locale;
 
-import it.belloworld.mercurygram.vpn.BatteryBundledVlessImporter;
+import it.belloworld.mercurygram.vpn.BatteryLegacyVlessCleanup;
 import it.belloworld.mercurygram.vpn.BatteryProxyLifecycle;
 import io.nekohasekai.libbox.Libbox;
 import io.nekohasekai.libbox.SetupOptions;
@@ -254,7 +254,7 @@ public class ApplicationLoader extends Application {
 
         SharedConfig.loadConfig();
         SharedPrefsHelper.init(applicationContext);
-        BatteryBundledVlessImporter.importIfPresent(applicationContext);
+        BatteryLegacyVlessCleanup.runOnce(applicationContext);
         // Clear stale Orbot proxy entries from the pre-embedded-Tor era so
         // upgrades don't silently keep routing MTProto through 127.0.0.1:9050.
         it.belloworld.mercurygram.tor.MgTorClient.migrateLegacyOrbotEntry();

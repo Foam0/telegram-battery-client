@@ -137,7 +137,11 @@ android {
             applicationIdSuffix ".beta"
             debuggable false
             jniDebuggable false
-            signingConfig signingConfigs.release
+            // Hardened beta APKs are sideloaded directly on OEM ROMs such as
+            // MIUI/HyperOS. The debug signing config uses the same private key
+            // as release but additionally emits the legacy v1 signature, while
+            // retaining v2/v3, for maximum PackageInstaller compatibility.
+            signingConfig signingConfigs.debug
             minifyEnabled true
             shrinkResources false
             multiDexEnabled true

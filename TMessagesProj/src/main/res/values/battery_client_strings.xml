@@ -51,4 +51,18 @@
     <string name="BatteryClientVpnInvalidProfile">Invalid VLESS profile</string>
     <string name="BatteryClientVpnSaved">Profile saved</string>
     <string name="BatteryClientVpnAbout">App-only VLESS starts sing-box/libbox inside the app process, exposes an authenticated loopback SOCKS5 endpoint only to Telegram MTProto, and does not create Android VPN/TUN or a system proxy. Built-in VPN/TUN mode uses stack=system, no mux, gc_percent=200, GOMAXPROCS=2, and DNS sniff+hijack rules for udp/53. Android system-wide proxy changes are not available to a normal app.</string>
+    <string name="MessageDetailsMediaType">Media type</string>
+    <string name="MessageDetailsVideoMessage">Video message</string>
+    <string name="MessageDetailsMimeType">MIME type</string>
+    <string name="MessageDetailsDuration">Duration</string>
+    <string name="MessageDetailsDimensions">Dimensions</string>
+    <string name="MessageDetailsCodec">Codec</string>
+    <string name="MessageDetailsMessageDate">Message date</string>
+    <string name="MessageDetailsRecordingDate">Recording date (MP4)</string>
+    <string name="MessageDetailsFullMp4Metadata">Full MP4 metadata (ExifTool-style)</string>
+    <string name="MessageDetailsDownloadForMetadata">Download the video message first, then reopen Message Details.</string>
+    <string name="MessageDetailsRecordingDateMissing">The recording date is not stored in this MP4 file.</string>
+    <string name="MessageDetailsMetadataUnavailable">MP4 metadata could not be read.</string>
+    <string name="PhoneCallAction">Call</string>
+    <string name="PhoneTransferAction">Transfer</string>
 </resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="MessageDetailsMediaType">Тип медиа</string>
+    <string name="MessageDetailsVideoMessage">Видеосообщение</string>
+    <string name="MessageDetailsMimeType">MIME-тип</string>
+    <string name="MessageDetailsDuration">Длительность</string>
+    <string name="MessageDetailsDimensions">Размер кадра</string>
+    <string name="MessageDetailsCodec">Кодек</string>
+    <string name="MessageDetailsMessageDate">Дата сообщения</string>
+    <string name="MessageDetailsRecordingDate">Дата записи (MP4)</string>
+    <string name="MessageDetailsFullMp4Metadata">Полные метаданные MP4 (как ExifTool)</string>
+    <string name="MessageDetailsDownloadForMetadata">Сначала скачайте кружок, затем снова откройте «Данные сообщения».</string>
+    <string name="MessageDetailsRecordingDateMissing">Дата записи не сохранена в этом MP4-файле.</string>
+    <string name="MessageDetailsMetadataUnavailable">Не удалось прочитать метаданные MP4.</string>
+    <string name="PhoneCallAction">Позвонить</string>
+    <string name="PhoneTransferAction">Перевести</string>
+</resources>
