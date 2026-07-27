@@ -24,6 +24,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.Components.AlertsCreator;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -558,7 +559,12 @@ public class MgUpdateChecker {
 
     public static void installUpdate(Activity activity, File apkFile) {
         try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && !ApplicationLoader.applicationContext.getPackageManager().canRequestPackageInstalls()) {
+                AlertsCreator.createApkRestrictedDialog(activity, null).show();
+                return;
+            }
+            Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             if (Build.VERSION.SDK_INT >= 24) {
                 Uri uri = FileProvider.getUriForFile(activity,
