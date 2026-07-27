@@ -7304,8 +7304,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 }
                 builder.setMessage(span);
                 if (type.startsWith("AUTH_KEY_DROP_")) {
+                    builder.setTitle(LocaleController.formatString(
+                            R.string.BatteryAuthKeyDropAccount, account + 1));
                     builder.setPositiveButton(LocaleController.getString(R.string.Cancel), null);
-                    builder.setNegativeButton(LocaleController.getString(R.string.LogOut), (dialog, which) -> MessagesController.getInstance(currentAccount).performLogout(2));
+                    builder.setNegativeButton(LocaleController.getString(R.string.LogOut), (dialog, which) -> MessagesController.getInstance(account).performLogout(2));
                 } else if (type.startsWith("PREMIUM_")) {
                     builder.setTitle(LocaleController.getString(R.string.TelegramPremium));
                     builder.setPositiveButton(LocaleController.getString(R.string.OK), null);

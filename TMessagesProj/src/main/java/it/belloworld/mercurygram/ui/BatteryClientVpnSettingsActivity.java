@@ -271,9 +271,6 @@ public class BatteryClientVpnSettingsActivity extends UniversalFragment {
         if (context == null) {
             return;
         }
-        if (!BatteryAppVlessProxy.isCoreRunning() && !BatteryProxyService.isServiceActive() && !BatteryProxyService.isCoreRunning()) {
-            return;
-        }
         BatteryAppVlessProxy.stop(context);
         if (BatteryProxyService.isServiceActive() || BatteryProxyService.isCoreRunning()) {
             Intent intent = new Intent(context, BatteryProxyService.class).setAction(BatteryProxyService.ACTION_DISCONNECT);

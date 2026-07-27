@@ -4,8 +4,11 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
+import android.util.AtomicFile;
 import android.util.Base64;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -40,12 +43,25 @@ public final class BatteryVpnStore {
     private static final String KEYSTORE_ALIAS = "MercurygramBatteryVpnPrefs";
     private static final String CIPHER = "AES/GCM/NoPadding";
     private static final String ENCRYPTED_PREFIX = "enc:v1:";
+    private static final String PROFILE_DIRECTORY = "battery_vpn";
+    private static final String PROFILE_FILE = "vless_profiles.enc";
     private static final int GCM_TAG_BITS = 128;
 
     private final SharedPreferences prefs;
+    private final AtomicFile profileFile;
 
     public BatteryVpnStore(Context context) {
-        prefs = context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        Context appContext = context.getApplicationContext();
+        prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        profileFile = new AtomicFile(new File(
+                new File(appContext.getNoBackupFilesDir(), PROFILE_DIRECTORY),
+                PROFILE_FILE));
+    }
+
+    public static boolean isLocalProxyModeEnabled(Context context) {
+        return context != null && MODE_LOCAL_PROXY.equals(context.getApplicationContext()
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_MODE, MODE_OFF));
     }
 
     public String getMode() {
@@ -72,7 +88,16 @@ public final class BatteryVpnStore {
     }
 
     public ArrayList<BatteryVpnProfile> getProfiles() {
-        String stored = getSensitiveString(KEY_PROFILE_LIST);
+        String stored = readProfileFile();
+        boolean hadProfileFile = stored != null;
+        if (!hadProfileFile) {
+            stored = getSensitiveString(KEY_PROFILE_LIST);
+            if (stored != null && !stored.isEmpty()) {
+                writeProfileFile(stored);
+                prefs.edit().remove(KEY_PROFILE_LIST).apply();
+                hadProfileFile = true;
+            }
+        }
         ArrayList<BatteryVpnProfile> profiles = new ArrayList<>();
         if (stored != null && stored.length() > 0) {
             try {
@@ -93,7 +118,7 @@ public final class BatteryVpnStore {
                 profiles.clear();
             }
         }
-        if (profiles.isEmpty()) {
+        if (profiles.isEmpty() && !hadProfileFile) {
             BatteryVpnProfile legacy = getLegacyProfile();
             if (legacy != null) {
                 profiles.add(legacy);
@@ -210,9 +235,45 @@ public final class BatteryVpnStore {
             } catch (Exception ignored) {
             }
         }
-        SharedPreferences.Editor editor = prefs.edit();
-        putSensitiveString(editor, KEY_PROFILE_LIST, array.toString());
-        editor.apply();
+        writeProfileFile(array.toString());
+        prefs.edit()
+                .remove(KEY_PROFILE_LIST)
+                .remove(KEY_PROFILE_LINK)
+                .remove(KEY_PROFILE_NAME)
+                .apply();
+    }
+
+    private String readProfileFile() {
+        if (!profileFile.getBaseFile().isFile()) {
+            return null;
+        }
+        try {
+            String encrypted = new String(profileFile.readFully(), StandardCharsets.UTF_8);
+            if (!encrypted.startsWith(ENCRYPTED_PREFIX)) {
+                return null;
+            }
+            return decrypt(encrypted);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void writeProfileFile(String value) {
+        File parent = profileFile.getBaseFile().getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+            throw new IllegalStateException("Failed to create private VPN storage");
+        }
+        FileOutputStream output = null;
+        try {
+            output = profileFile.startWrite();
+            output.write(encrypt(value != null ? value : "[]").getBytes(StandardCharsets.UTF_8));
+            profileFile.finishWrite(output);
+        } catch (Exception e) {
+            if (output != null) {
+                profileFile.failWrite(output);
+            }
+            throw new IllegalStateException("Failed to persist VPN profiles", e);
+        }
     }
 
     private BatteryVpnProfile getLegacyProfile() {

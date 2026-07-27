@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="BatteryAuthKeyDropAccount">Проблема авторизации в аккаунте %1$d</string>
     <string name="MessageDetailsMediaType">Тип медиа</string>
     <string name="MessageDetailsVideoMessage">Видеосообщение</string>
     <string name="MessageDetailsMimeType">MIME-тип</string>

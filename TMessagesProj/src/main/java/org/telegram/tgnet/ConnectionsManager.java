@@ -41,6 +41,9 @@ import org.telegram.messenger.Utilities;
 import org.telegram.ui.Components.VideoPlayer;
 import org.telegram.ui.LoginActivity;
 
+import it.belloworld.mercurygram.vpn.BatteryAppVlessProxy;
+import it.belloworld.mercurygram.vpn.BatteryVpnStore;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
@@ -638,7 +641,15 @@ public class ConnectionsManager extends BaseController {
         String proxySecret = preferences.getString("proxy_secret", "");
         int proxyPort = preferences.getInt("proxy_port", 1080);
 
-        if (preferences.getBoolean("proxy_enabled", false) && !TextUtils.isEmpty(proxyAddress)) {
+        if (BatteryVpnStore.isLocalProxyModeEnabled(ApplicationLoader.applicationContext)) {
+            native_setProxySettings(
+                    currentAccount,
+                    "127.0.0.1",
+                    BatteryAppVlessProxy.BLOCKING_STUB_PORT,
+                    "",
+                    "",
+                    "");
+        } else if (preferences.getBoolean("proxy_enabled", false) && !TextUtils.isEmpty(proxyAddress)) {
             native_setProxySettings(currentAccount, proxyAddress, proxyPort, proxyUsername, proxyPassword, proxySecret);
         }
         String installer = "";

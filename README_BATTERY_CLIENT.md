@@ -47,7 +47,7 @@ Use JDK 17 and the Android SDK/NDK versions above:
 export JAVA_HOME=/path/to/jdk17
 export ANDROID_HOME=/path/to/android-sdk
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-./gradlew -PMG_BUILD_TAG=12.8.1.2.5 :TMessagesProj_App:assembleAfatFdArm64Debug
+./gradlew -PMG_BUILD_TAG=12.9.0.1 :TMessagesProj_App:assembleAfatFdArm64Debug
 ```
 
 The debug APK is written to:
@@ -98,6 +98,11 @@ The embedded profile is intentionally narrow:
 - Minimum supported import: `vless://`.
 - Engine: sing-box/libbox, not Xray.
 - Local SOCKS5 mode starts sing-box on `127.0.0.1` with generated username/password authentication and points Telegram's native proxy setting at that loopback port. It does not create Android VPN permission prompts, a TUN interface, or a system-wide proxy.
+- Local SOCKS5 mode is fail-closed: before per-account native networking starts,
+  and whenever the in-process VLESS core is paused in the background, Telegram
+  is pinned to the non-listening loopback endpoint `127.0.0.1:1`. It switches to
+  the live authenticated loopback port only after sing-box is ready, so it never
+  silently falls through to the phone's direct IP while this mode is selected.
 - Android system-wide proxy changes are not implemented because ordinary apps cannot change global proxy settings without privileged/device-owner rights.
 - TUN inbound uses `stack: "system"`.
 - Mux is not enabled.
@@ -112,7 +117,18 @@ The embedded profile is intentionally narrow:
 - Default-interface cache keys include interface index; index `0` is never cached.
 - On disconnect, the libbox service and detached Android TUN file descriptors are closed so stale `tun0` instances are not left behind.
 
-Profiles and generated configs are stored in app-private storage. User profile files are not committed.
+The VLESS profile list is stored in the atomic, Android Keystore-encrypted
+app-private file:
+
+```text
+/data/user/0/it.belloworld.mercurygram.beta/no_backup/battery_vpn/vless_profiles.enc
+```
+
+Existing encrypted SharedPreferences profiles migrate into that file during app
+startup. A normal signed APK replacement preserves the file. Android removes it
+only when the user uninstalls the app or clears its app data. Generated runtime
+configs remain in app-private storage, and user profile files are never committed
+or embedded in release APKs.
 
 ## Security Rules
 

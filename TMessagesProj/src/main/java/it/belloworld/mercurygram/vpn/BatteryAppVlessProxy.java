@@ -25,6 +25,7 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
     public static final String ACTION_STATUS = "it.belloworld.mercurygram.proxy.STATUS";
     public static final String EXTRA_STATE = "state";
     public static final String EXTRA_MESSAGE = "message";
+    public static final int BLOCKING_STUB_PORT = 1;
 
     private static final Object LOCK = new Object();
     private static BatteryAppVlessProxy instance;
@@ -47,6 +48,7 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
             return;
         }
         Context appContext = context.getApplicationContext();
+        parkTelegramProxy();
         Utilities.globalQueue.postRunnable(() -> {
             synchronized (LOCK) {
                 if (coreRunning || starting) {
@@ -65,11 +67,25 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
     }
 
     public static void stop(Context context) {
+        Context appContext = context != null ? context.getApplicationContext() : null;
         Utilities.globalQueue.postRunnable(() -> {
             synchronized (LOCK) {
                 BatteryAppVlessProxy proxy = instance;
                 if (proxy != null) {
-                    proxy.shutdownCoreLocked(true);
+                    proxy.shutdownCoreLocked(true, true);
+                } else if (appContext != null) {
+                    restoreTelegramProxy();
+                }
+            }
+        });
+    }
+
+    public static void stopForBackground(Context context) {
+        Utilities.globalQueue.postRunnable(() -> {
+            synchronized (LOCK) {
+                BatteryAppVlessProxy proxy = instance;
+                if (proxy != null) {
+                    proxy.shutdownCoreLocked(true, false);
                 }
             }
         });
@@ -105,7 +121,7 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
 
     @Override
     public void serviceStop() {
-        stop(context);
+        stopForBackground(context);
     }
 
     @Override
@@ -166,11 +182,11 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
                 FileLog.e("App-only VLESS start failed");
             }
             publishStatus("error", "start failed");
-            shutdownCoreLocked(true);
+            shutdownCoreLocked(true, false);
         }
     }
 
-    private void shutdownCoreLocked(boolean clearInstance) {
+    private void shutdownCoreLocked(boolean clearInstance, boolean restoreUserProxy) {
         if (disconnecting) {
             if (clearInstance) {
                 instance = null;
@@ -186,6 +202,9 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
         BatteryVpnStore store = new BatteryVpnStore(context);
         store.setConnected(false);
         store.setLocalProxyPort(0);
+        if (hadLocalProxy && !restoreUserProxy) {
+            parkTelegramProxy();
+        }
         try {
             if (server != null) {
                 server.closeService();
@@ -204,7 +223,7 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
                 FileLog.e("App-only VLESS command server close failed");
             }
         }
-        if (hadLocalProxy) {
+        if (hadLocalProxy && restoreUserProxy) {
             restoreTelegramProxy();
         }
         publishStatus("disconnected", "");
@@ -228,7 +247,23 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
         });
     }
 
-    private void restoreTelegramProxy() {
+    private static void parkTelegramProxy() {
+        AndroidUtilities.runOnUIThread(() -> {
+            try {
+                SharedConfig.publishMgInternalLocalProxy(BLOCKING_STUB_PORT, "", "");
+                ConnectionsManager.setProxySettings(
+                        true, "127.0.0.1", BLOCKING_STUB_PORT, "", "", "");
+                NotificationCenter.getGlobalInstance().postNotificationName(
+                        NotificationCenter.proxySettingsChanged);
+            } catch (Throwable e) {
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.e("App-only VLESS Telegram proxy parking failed");
+                }
+            }
+        });
+    }
+
+    private static void restoreTelegramProxy() {
         AndroidUtilities.runOnUIThread(() -> {
             try {
                 SharedConfig.clearMgInternalTorProxy();
@@ -255,7 +290,7 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
         });
     }
 
-    private SharedConfig.ProxyInfo findProxyInList(String address, int port, String username, String password, String secret) {
+    private static SharedConfig.ProxyInfo findProxyInList(String address, int port, String username, String password, String secret) {
         SharedConfig.loadProxyList();
         for (SharedConfig.ProxyInfo info : SharedConfig.proxyList) {
             if (info.mgInternal) {
@@ -272,7 +307,7 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
         return null;
     }
 
-    private boolean safeEquals(String a, String b) {
+    private static boolean safeEquals(String a, String b) {
         return (a == null ? "" : a).equals(b == null ? "" : b);
     }
 

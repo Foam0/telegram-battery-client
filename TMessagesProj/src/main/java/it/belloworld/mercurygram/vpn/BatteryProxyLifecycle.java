@@ -25,6 +25,16 @@ public final class BatteryProxyLifecycle implements ForegroundDetector.Listener 
         }
         instance = new BatteryProxyLifecycle(context);
         detector.addListener(instance);
+        try {
+            int profileCount = new BatteryVpnStore(instance.context).getProfiles().size();
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("BatteryVpnStore profiles ready: " + profileCount);
+            }
+        } catch (Throwable e) {
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.e(e);
+            }
+        }
         if (detector.isForeground()) {
             startLocalProxyIfNeeded(instance.context);
         }
@@ -82,7 +92,7 @@ public final class BatteryProxyLifecycle implements ForegroundDetector.Listener 
             if (!BatteryAppVlessProxy.isCoreRunning()) {
                 return;
             }
-            BatteryAppVlessProxy.stop(appContext);
+            BatteryAppVlessProxy.stopForBackground(appContext);
         } catch (Throwable e) {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.e(e);

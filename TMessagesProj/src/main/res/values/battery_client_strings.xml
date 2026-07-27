@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="BatteryAuthKeyDropAccount">Authorization problem in account %1$d</string>
     <string name="BatteryClientSection">Battery client</string>
     <string name="BatteryClientSectionAbout">Read-only diagnostics and the embedded VPN/proxy profile avoid background polling. VPN starts only after explicit user action.</string>
     <string name="BatteryClientAccountNotificationsEnabled">Enable notifications for this account</string>
