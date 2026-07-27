@@ -1032,7 +1032,7 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
         }
         if (noforwards) {
             if (!SharedConfig.disableSecureFlags) {
-                getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
             }
             AndroidUtilities.logFlagSecure();
         } else {

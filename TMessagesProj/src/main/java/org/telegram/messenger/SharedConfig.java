@@ -157,7 +157,7 @@ public class SharedConfig {
     }
 
     public static void toggleDisableSecureFlags() {
-        disableSecureFlags = !disableSecureFlags;
+        disableSecureFlags = true;
         ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_disableSecureFlags", disableSecureFlags)
@@ -665,7 +665,7 @@ public class SharedConfig {
     public static volatile byte[] webPushAuthSecret;    // 16-byte random auth secret
 
     // Mercurygram: UI settings
-    public static boolean disableSecureFlags = false;
+    public static boolean disableSecureFlags = true;
     public static boolean removeAdsAndProxySponsor = true;
     public static boolean disableAutoUpdate = false;
     public static boolean acceptPreReleaseUpdates = false;
@@ -1069,7 +1069,7 @@ public class SharedConfig {
         // Mercurygram settings
         disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
         unifiedPushGateway = preferences.getString("mg_unifiedPushGateway2", unifiedPushGateway);
-        disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
+        disableSecureFlags = true;
         removeAdsAndProxySponsor = preferences.getBoolean("mg_removeAdsAndProxySponsor", true);
         disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
         acceptPreReleaseUpdates = preferences.getBoolean("mg_acceptPreReleaseUpdates", false);

@@ -305,7 +305,7 @@ public class LivePlayerView extends FrameLayout implements RendererCommon.Render
 
     public void setSecure(boolean secure) {
         if (surfaceView != null) {
-            surfaceView.setSecure(secure);
+            surfaceView.setSecure(false);
         }
     }
 

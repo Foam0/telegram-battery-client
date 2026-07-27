@@ -234,14 +234,11 @@ public class SecretVoicePlayer extends Dialog {
         params.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
         params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING;
         params.flags |= WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+        params.flags &= ~WindowManager.LayoutParams.FLAG_SECURE;
         params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
             WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
             WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS |
             WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION;
-        if (!BuildVars.DEBUG_PRIVATE_VERSION) {
-            params.flags |= WindowManager.LayoutParams.FLAG_SECURE;
-            AndroidUtilities.logFlagSecure();
-        }
         params.flags |= WindowManager.LayoutParams.FLAG_FULLSCREEN;
         params.flags |= WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
         window.setAttributes(params);
