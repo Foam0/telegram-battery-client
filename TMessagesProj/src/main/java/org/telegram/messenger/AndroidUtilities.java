@@ -4255,6 +4255,7 @@ public class AndroidUtilities {
             String realMimeType = null;
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            final boolean isApk = fileName != null && fileName.toLowerCase(Locale.US).endsWith(".apk");
             MimeTypeMap myMime = MimeTypeMap.getSingleton();
             int idx = fileName == null ? -1 : fileName.lastIndexOf('.');
             if (idx != -1) {
@@ -4270,17 +4271,23 @@ public class AndroidUtilities {
                     }
                 }
             }
-            if (realMimeType != null && realMimeType.equals("application/vnd.android.package-archive")) {
+            if (isApk) {
+                realMimeType = "application/vnd.android.package-archive";
                 if (restrict) return true;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ApplicationLoader.applicationContext.getPackageManager().canRequestPackageInstalls()) {
                     AlertsCreator.createApkRestrictedDialog(activity, resourcesProvider).show();
                     return true;
                 }
+                intent.setAction(Intent.ACTION_INSTALL_PACKAGE);
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 intent.setDataAndType(FileProvider.getUriForFile(activity, ApplicationLoader.getApplicationId() + ".provider", f), realMimeType != null ? realMimeType : "text/plain");
             } else {
                 intent.setDataAndType(Uri.fromFile(f), realMimeType != null ? realMimeType : "text/plain");
+            }
+            if (isApk) {
+                activity.startActivityForResult(intent, 500);
+                return true;
             }
             if (realMimeType != null) {
                 try {

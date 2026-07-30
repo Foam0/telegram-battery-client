@@ -8,6 +8,8 @@
 
 This is an unofficial fork of [Telegram App for Android](https://github.com/DrKLO/Telegram), maintained by rebasing Mercurygram patches and forward-ported de-googling patches on top of upstream Telegram.
 
+Battery-client fork notes, pinned versions, VPN details, and build instructions are in [README_BATTERY_CLIENT.md](README_BATTERY_CLIENT.md).
+
 [![Releases](https://img.shields.io/github/release/Mercurygram/Mercurygram.svg)](https://github.com/Mercurygram/Mercurygram/releases/latest)
 [![Discussions](https://img.shields.io/badge/Official-Group-blue.svg?logo=telegram)](https://t.me/Mercurygram)
 
@@ -88,6 +90,7 @@ Same package ID across these entries; pick **one**. The plugin only ships a Rele
 - Add per-account toggle setting in Settings → Mercurygram to hide the Telegram Premium promo UI: the Premium, Business and gifting rows in Settings and the Premium banners in the chat list. It only hides upsell affordances on top of the existing premium check, does not affect sponsored messages, and unlocks nothing
 - Add per-account toggle setting in Settings → Mercurygram to pre-tick "delete for everyone" (and "also delete for…" in private chats) by default in the delete-message dialog
 - Add a "Remove all proxies" bulk action to the proxy list (upstream only deletes one proxy at a time)
+- Add an app-only VLESS mode in Settings -> Mercurygram -> Battery client -> VPN / proxy profile. It keeps multiple user-added `vless://` profiles, lets the user switch the active profile manually, stores profile links and generated loopback SOCKS5 credentials through Android Keystore-backed app-private preferences, and routes Telegram MTProto through a sing-box/libbox loopback endpoint without Android VPN/TUN or system proxy changes. The built-in VPN/TUN mode remains available when the user explicitly starts it.
 - Add a custom emoji pack importer in Settings → Mercurygram → Custom emoji pack: load a `.zip` of emoji images or extract the emoji directly from an official Telegram APK (since the proprietary Apple set can't be bundled in a FOSS build). The pack is your own file, stored on-device and never shared; any emoji it's missing falls back per-glyph to the bundled Noto set
 - Add a "Translate" item to the text-selection toolbar in the message input field (and other caption/input editors): select text you're composing and translate it in place, with a "Use This Translation" button that replaces the selection. Uses the same [privacy-respecting translation engine](#privacy--anti-tracking-mercurygram-only) as message translation; in secret chats it's forced on-device only (offline, fail-closed)
 - Add a "Mention" item to the text-selection toolbar (next to "Create Link"): turn the selected text into a user mention by typing a user ID or picking from your contacts. Only works for users the app already knows (contacts, chat members) — a hard MTProto limitation, same as typing `@`; an unknown ID is rejected with a hint to use the picker
@@ -101,11 +104,11 @@ These patches were originally derived from the Telegram-FOSS effort, but Mercury
 *Replacement of non-FOSS, untrustworthy or suspicious binaries or source code:*
 - Do location sharing with OpenStreetMap via MapLibre instead of Google Maps
 - Use Noto emoji set instead of Apple's emoji
-- Google/Firebase push services replaced with [UnifiedPush](https://unifiedpush.org)
+- Google/Firebase push services are replaced with [UnifiedPush](https://unifiedpush.org) in the upstream de-googled base. This battery-client branch also includes an explicit opt-in Firebase Messaging provider that falls back to UnifiedPush when Firebase is unavailable or blocked for the unofficial build/signature.
 - **SECURITY:** BoringSSL, FFmpeg, libvpx, dav1d, and tde2e are built from source at compile time instead of shipping upstream prebuilts
 
 *Removal or stubbing of non-FOSS, untrustworthy or suspicious binaries or source code and their functionality:*
-- Google Play Services / Firebase dependencies from the default Mercurygram build and manifests
+- Google Play Services / Firebase dependencies from the default Mercurygram build and manifests. This battery-client branch re-adds Firebase Messaging only as an opt-in push experiment, with analytics disabled and UnifiedPush fallback retained.
 - Google Maps / Fused Location providers are stubbed out and replaced by MapLibre / Android location providers
 - Google Wallet, SafetyNet, Play Integrity, and related proprietary verification pieces are stubbed out through local compatibility classes
 - Google Cast integration
@@ -143,7 +146,7 @@ Mercurygram adds MTProto-layer mitigations that upstream Telegram and Telegram-F
 - **No voice replay from the lock screen** — always on. Voice and round-video messages can't be (re)started from the device lock screen or its media controls (including Bluetooth/headset keys) while the device is locked, so nobody can replay a private voice message without unlocking first. Sender name and avatar are also redacted from the lock-screen player for these messages. Music is unaffected — it stays fully controllable from the lock screen.
 - **Hidden accounts** — additional accounts can be marked hidden behind the existing passcode (*Settings → Mercurygram → General → Hidden accounts*); they don't appear in the account switcher when the passcode is locked.
 - **Anti-delete & anti-edit message history** — opt-in per-account (*Settings → Mercurygram → General → Save deleted & edited messages*). Server-deleted messages stay in the chat as a grayed-out ghost; edited messages keep all previous versions accessible from the message menu. Self-destructing / TTL / secret-chat messages are never recorded (api/terms §1.4).
-- **De-googled UnifiedPush + WebPush** — no Google Play Services / Firebase Cloud Messaging anywhere in the binary; push notifications use [UnifiedPush](https://unifiedpush.org) with end-to-end WebPush encryption (`aesgcm` Draft 4 — decrypted locally; the gateway only sees ciphertext). See [UnifiedPush WebPush gateway](#unifiedpush-webpush-gateway).
+- **Push-first notifications** — the upstream de-googled base uses [UnifiedPush](https://unifiedpush.org) with end-to-end WebPush encryption (`aesgcm` Draft 4 — decrypted locally; the gateway only sees ciphertext). This battery-client branch can try Firebase Messaging when the experimental toggle is enabled on devices with Google Play Services, but local tests show Telegram's Firebase project blocks unofficial app/signature combinations, so UnifiedPush/gCompat remains the practical fallback for reliable background notifications. See [UnifiedPush WebPush gateway](#unifiedpush-webpush-gateway).
 - **DoH resolving disabled** — upstream Telegram falls back to Google DoH when normal DNS fails, which leaks the user's proxy/IP to Google. Mercurygram drops that path; Android's system DNS-over-TLS handles the same encryption-in-transit need without the leak.
 - **Native crypto built from source** — BoringSSL, FFmpeg, libvpx, dav1d, and tde2e are compiled from source at build time instead of shipping upstream prebuilts (no opaque third-party binaries in the APK).
 
@@ -152,8 +155,22 @@ Mercurygram adds MTProto-layer mitigations that upstream Telegram and Telegram-F
 In order to have reliable notifications, it may be necessary to set battery
 optimization to **Not optimized** for Mercurygram (no, it won't use more battery).
 
-Background Connections setting is not necessary and uses lot of battery, so
-please disable it when you use UnifiedPush.
+Background Connection is a fallback tweak. The battery-saving default is
+Firebase/UnifiedPush-first with no always-on Telegram connection while the app
+is closed. Enable Background Connection only if push notifications are unreliable
+on your device/ROM.
+
+The app-only VLESS mode is foreground-only and does not use Android VPN/TUN or
+a forever foreground service. Mercurygram remembers multiple VLESS profiles,
+starts the selected profile through libbox inside the app process when the app is
+opened, points Telegram MTProto at an authenticated loopback SOCKS5 endpoint, and
+stops it shortly after the app leaves the foreground. Push notifications do not
+require this proxy core; they are delivered through the configured
+UnifiedPush/FCM distributor.
+
+In push-first mode, Mercurygram also suppresses Telegram's periodic
+`NotificationRepeat` wakeup alarm unless Keep-Alive Service or Background
+Connection is enabled as a fallback.
 
 If you set Battery optimization to Not optimized, Keep-Alive Service will be not
 necessary.

@@ -2890,10 +2890,10 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
             this.allowScreenshots = allowScreenshots;
 
             if (surfaceView != null) {
-                surfaceView.setSecure(!allowScreenshots);
+                surfaceView.setSecure(false);
             }
             if (liveView != null) {
-                liveView.setSecure(!allowScreenshots);
+                liveView.setSecure(false);
             }
             if (ATTACH_TO_FRAGMENT) {
                 if (fragment.getParentActivity() != null) {
@@ -2902,7 +2902,7 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
                         AndroidUtilities.logFlagSecure();
                     } else {
                         if (!SharedConfig.disableSecureFlags) {
-                            fragment.getParentActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                            fragment.getParentActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
                         }
                         AndroidUtilities.logFlagSecure();
                     }
@@ -2913,7 +2913,7 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
                     AndroidUtilities.logFlagSecure();
                 } else {
                     if (!SharedConfig.disableSecureFlags) {
-                        windowLayoutParams.flags |= WindowManager.LayoutParams.FLAG_SECURE;
+                        windowLayoutParams.flags &= ~WindowManager.LayoutParams.FLAG_SECURE;
                     }
                     AndroidUtilities.logFlagSecure();
                 }

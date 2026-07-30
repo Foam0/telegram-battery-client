@@ -153,8 +153,16 @@ public class SharedConfig {
                 .commit();
     }
 
+    public static void setEnableFirebasePush(boolean enabled) {
+        enableFirebasePush = enabled;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_enableFirebasePush", enableFirebasePush)
+                .commit();
+    }
+
     public static void toggleDisableSecureFlags() {
-        disableSecureFlags = !disableSecureFlags;
+        disableSecureFlags = true;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_disableSecureFlags", disableSecureFlags)
@@ -667,6 +675,7 @@ public class SharedConfig {
 
     // Mercurygram: UnifiedPush
     public static boolean disableUnifiedPush = false;
+    public static boolean enableFirebasePush = false;
     public static String unifiedPushGateway = "https://p2p.belloworld.it/";
     public static String unifiedPushEndpointUrl = "";   // raw UP endpoint URL from last onNewEndpoint
     public static volatile byte[] webPushPrivateKey;    // PKCS#8-encoded P-256 private key
@@ -674,8 +683,8 @@ public class SharedConfig {
     public static volatile byte[] webPushAuthSecret;    // 16-byte random auth secret
 
     // Mercurygram: UI settings
-    public static boolean disableSecureFlags = false;
-    public static boolean removeAdsAndProxySponsor = false;
+    public static boolean disableSecureFlags = true;
+    public static boolean removeAdsAndProxySponsor = true;
     public static boolean disableAutoUpdate = false;
     public static boolean acceptPreReleaseUpdates = false;
     // Last 5-dotted prerelease tag this install ran, so MgUpdateChecker can
@@ -1019,6 +1028,7 @@ public class SharedConfig {
         editor.putString("mg_pushStringSimple", pushStringSimple);
         // Mercurygram settings
         editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
+        editor.putBoolean("mg_enableFirebasePush", enableFirebasePush);
         editor.putString("mg_unifiedPushGateway2", unifiedPushGateway);
         editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
         editor.putBoolean("mg_removeAdsAndProxySponsor", removeAdsAndProxySponsor);
@@ -1071,9 +1081,10 @@ public class SharedConfig {
         pushStringSimple = preferences.getString("mg_pushStringSimple", "");
         // Mercurygram settings
         disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
+        enableFirebasePush = preferences.getBoolean("mg_enableFirebasePush", false);
         unifiedPushGateway = preferences.getString("mg_unifiedPushGateway2", unifiedPushGateway);
-        disableSecureFlags = preferences.getBoolean("mg_disableSecureFlags", false);
-        removeAdsAndProxySponsor = preferences.getBoolean("mg_removeAdsAndProxySponsor", false);
+        disableSecureFlags = true;
+        removeAdsAndProxySponsor = preferences.getBoolean("mg_removeAdsAndProxySponsor", true);
         disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
         acceptPreReleaseUpdates = preferences.getBoolean("mg_acceptPreReleaseUpdates", false);
         mgLastPreReleaseTag = preferences.getString("mg_lastPreReleaseTag", "");
@@ -2365,9 +2376,17 @@ public class SharedConfig {
     // currentProxy so ConnectionsManager.isProxyEnabled() returns true and
     // LaunchActivity's drawer/proxy-active indicator updates. Idempotent.
     public static ProxyInfo publishMgInternalTorProxy(int port) {
+        return publishMgInternalProxy(port, "", "");
+    }
+
+    public static ProxyInfo publishMgInternalLocalProxy(int port, String username, String password) {
+        return publishMgInternalProxy(port, username, password);
+    }
+
+    private static ProxyInfo publishMgInternalProxy(int port, String username, String password) {
         loadProxyList();
         clearMgInternalTorProxy();
-        ProxyInfo info = new ProxyInfo("127.0.0.1", port, "", "", "");
+        ProxyInfo info = new ProxyInfo("127.0.0.1", port, username, password, "");
         info.mgInternal = true;
         info.available = true;
         proxyList.add(0, info);

@@ -32,7 +32,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
 
     @Override
     protected PushListenerController.IPushListenerServiceProvider onCreatePushProvider() {
-        return it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.INSTANCE;
+        return BatteryPushProvider.INSTANCE;
     }
 
     @Override

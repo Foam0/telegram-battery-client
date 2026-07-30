@@ -7440,17 +7440,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     }
                 }
                 if (!isFragmentPhoneNumber) {
-                    o.add(R.drawable.msg_calls_regular, getString(R.string.Call), () -> {
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:+" + user.phone));
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            getParentActivity().startActivityForResult(intent, 500);
-                        } catch (Exception e) {
-                            FileLog.e(e);
-                        }
+                    o.add(R.drawable.msg_calls_regular, getString(R.string.PhoneCallAction), () -> {
+                        it.belloworld.mercurygram.ui.PhoneActionHelper.call(getContext(), "+" + user.phone);
                     });
                 }
             }
+            o.add(R.drawable.msg_payment_card, getString(R.string.PhoneTransferAction), () -> {
+                it.belloworld.mercurygram.ui.PhoneActionHelper.transfer(getContext(), "+" + user.phone);
+            });
             o.add(R.drawable.msg_copy, getString(R.string.Copy), () -> {
                 try {
                     android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);

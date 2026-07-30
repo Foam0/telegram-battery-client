@@ -41,6 +41,9 @@ import org.telegram.messenger.Utilities;
 import org.telegram.ui.Components.VideoPlayer;
 import org.telegram.ui.LoginActivity;
 
+import it.belloworld.mercurygram.vpn.BatteryAppVlessProxy;
+import it.belloworld.mercurygram.vpn.BatteryVpnStore;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
@@ -277,7 +280,7 @@ public class ConnectionsManager extends BaseController {
     public boolean isPushConnectionEnabled() {
         SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
         if (preferences.contains("pushConnection")) {
-            return preferences.getBoolean("pushConnection", true);
+            return preferences.getBoolean("pushConnection", false);
         } else {
             return MessagesController.getMainSettings(UserConfig.selectedAccount).getBoolean("backgroundConnection", false);
         }
@@ -454,6 +457,7 @@ public class ConnectionsManager extends BaseController {
                             onCompleteTimestamp.run(finalResponse, finalError, timestamp);
                         } else if (finalResponse instanceof TLRPC.Updates) {
                             KeepAliveJob.finishJob();
+                            it.belloworld.mercurygram.BatteryClientDiagnostics.markUpdate(currentAccount);
                             AccountInstance.getInstance(currentAccount).getMessagesController().processUpdates((TLRPC.Updates) finalResponse, false);
                         }
                         if (finalResponse != null) {
@@ -637,7 +641,15 @@ public class ConnectionsManager extends BaseController {
         String proxySecret = preferences.getString("proxy_secret", "");
         int proxyPort = preferences.getInt("proxy_port", 1080);
 
-        if (preferences.getBoolean("proxy_enabled", false) && !TextUtils.isEmpty(proxyAddress)) {
+        if (BatteryVpnStore.isLocalProxyModeEnabled(ApplicationLoader.applicationContext)) {
+            native_setProxySettings(
+                    currentAccount,
+                    "127.0.0.1",
+                    BatteryAppVlessProxy.BLOCKING_STUB_PORT,
+                    "",
+                    "",
+                    "");
+        } else if (preferences.getBoolean("proxy_enabled", false) && !TextUtils.isEmpty(proxyAddress)) {
             native_setProxySettings(currentAccount, proxyAddress, proxyPort, proxyUsername, proxyPassword, proxySecret);
         }
         String installer = "";
@@ -806,6 +818,7 @@ public class ConnectionsManager extends BaseController {
                     FileLog.d("java received " + message);
                 }
                 KeepAliveJob.finishJob();
+                it.belloworld.mercurygram.BatteryClientDiagnostics.markUpdate(currentAccount);
                 Utilities.stageQueue.postRunnable(() -> AccountInstance.getInstance(currentAccount).getMessagesController().processUpdates((TLRPC.Updates) message, false));
             } else {
                 if (BuildVars.LOGS_ENABLED) {
@@ -818,6 +831,7 @@ public class ConnectionsManager extends BaseController {
     }
 
     public static void onUpdate(final int currentAccount) {
+        it.belloworld.mercurygram.BatteryClientDiagnostics.markUpdate(currentAccount);
         Utilities.stageQueue.postRunnable(() -> AccountInstance.getInstance(currentAccount).getMessagesController().updateTimerProc());
     }
 
@@ -826,6 +840,7 @@ public class ConnectionsManager extends BaseController {
     }
 
     public static void onConnectionStateChanged(final int state, final int currentAccount) {
+        it.belloworld.mercurygram.BatteryClientDiagnostics.markConnectionState(currentAccount, state);
         AndroidUtilities.runOnUIThread(() -> {
             getInstance(currentAccount).connectionState = state;
             AccountInstance.getInstance(currentAccount).getNotificationCenter().postNotificationName(NotificationCenter.didUpdateConnectionState);

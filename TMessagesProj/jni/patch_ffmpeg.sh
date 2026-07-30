@@ -3,6 +3,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALL_BIN=install
+if command -v ginstall >/dev/null 2>&1; then
+    INSTALL_BIN="$(command -v ginstall)"
+fi
 
 # Determine which ABIs to process (default: all 4)
 if [ $# -eq 0 ]; then
@@ -15,13 +19,13 @@ fi
 # then apply C++ compatibility patches to the COPIES only (never to source).
 # The ffmpeg source must remain unpatched for its own C compilation.
 for ABI in "${ABIS[@]}"; do
-    install -D ffmpeg/libavformat/dv.h        "ffmpeg/build/${ABI}/include/libavformat/dv.h"
-    install -D ffmpeg/libavformat/isom.h      "ffmpeg/build/${ABI}/include/libavformat/isom.h"
-    install -D ffmpeg/libavcodec/bytestream.h "ffmpeg/build/${ABI}/include/libavcodec/bytestream.h"
-    install -D ffmpeg/libavcodec/get_bits.h   "ffmpeg/build/${ABI}/include/libavcodec/get_bits.h"
-    install -D ffmpeg/libavcodec/golomb.h     "ffmpeg/build/${ABI}/include/libavcodec/golomb.h"
-    install -D ffmpeg/libavcodec/vlc.h        "ffmpeg/build/${ABI}/include/libavcodec/vlc.h"
-    install -D ffmpeg/libavutil/intmath.h     "ffmpeg/build/${ABI}/include/libavutil/intmath.h"
+    "${INSTALL_BIN}" -D ffmpeg/libavformat/dv.h        "ffmpeg/build/${ABI}/include/libavformat/dv.h"
+    "${INSTALL_BIN}" -D ffmpeg/libavformat/isom.h      "ffmpeg/build/${ABI}/include/libavformat/isom.h"
+    "${INSTALL_BIN}" -D ffmpeg/libavcodec/bytestream.h "ffmpeg/build/${ABI}/include/libavcodec/bytestream.h"
+    "${INSTALL_BIN}" -D ffmpeg/libavcodec/get_bits.h   "ffmpeg/build/${ABI}/include/libavcodec/get_bits.h"
+    "${INSTALL_BIN}" -D ffmpeg/libavcodec/golomb.h     "ffmpeg/build/${ABI}/include/libavcodec/golomb.h"
+    "${INSTALL_BIN}" -D ffmpeg/libavcodec/vlc.h        "ffmpeg/build/${ABI}/include/libavcodec/vlc.h"
+    "${INSTALL_BIN}" -D ffmpeg/libavutil/intmath.h     "ffmpeg/build/${ABI}/include/libavutil/intmath.h"
 
     # Apply patches to copies (--forward makes it idempotent: skip if already applied)
     (cd "ffmpeg/build/${ABI}/include" && \

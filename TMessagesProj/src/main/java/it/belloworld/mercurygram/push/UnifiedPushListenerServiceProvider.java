@@ -42,9 +42,11 @@ public final class UnifiedPushListenerServiceProvider implements PushListenerCon
             UnifiedPush.unregister(ApplicationLoader.applicationContext, "default");
         } else {
             String currentPushString = SharedConfig.pushString;
-            if (!TextUtils.isEmpty(currentPushString)) {
+            boolean shouldRefreshExistingEndpoint =
+                    SharedConfig.pushType != PushListenerController.PUSH_TYPE_WEB;
+            if (!TextUtils.isEmpty(currentPushString) && !shouldRefreshExistingEndpoint) {
                 if (BuildVars.DEBUG_PRIVATE_VERSION && BuildVars.LOGS_ENABLED) {
-                    FileLog.d("UnifiedPush endpoint = " + currentPushString);
+                    FileLog.d("UnifiedPush endpoint present");
                 }
             } else {
                 if (BuildVars.LOGS_ENABLED) {
@@ -67,6 +69,13 @@ public final class UnifiedPushListenerServiceProvider implements PushListenerCon
                             "Mercurygram WebPush",
                             null
                     );
+                    if ((TextUtils.isEmpty(SharedConfig.pushString)
+                            || SharedConfig.pushType != PushListenerController.PUSH_TYPE_WEB)
+                            && !TextUtils.isEmpty(SharedConfig.unifiedPushEndpointUrl)) {
+                        SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
+                        org.telegram.messenger.UnifiedPushReceiver.registerEndpointUrl(
+                                SharedConfig.unifiedPushEndpointUrl);
+                    }
                 } catch (Throwable e) {
                     FileLog.e(e);
                 }

@@ -252,6 +252,7 @@ import java.util.zip.ZipInputStream;
 
 import it.belloworld.mercurygram.HiddenAccountHelper;
 import it.belloworld.mercurygram.MgNetworkChangeWatcher;
+import it.belloworld.mercurygram.vpn.BatteryProxyLifecycle;
 import tw.nekomimi.nekogram.helpers.MonetHelper;
 
 public class LaunchActivity extends BasePermissionsActivity implements INavigationLayout.INavigationLayoutDelegate, NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, IPipActivity {
@@ -6791,6 +6792,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
         ApplicationLoader.mainInterfacePaused = true;
         MgNetworkChangeWatcher.onForegroundStateChanged(true);
+        BatteryProxyLifecycle.pauseLocalProxy(this);
         int account = currentAccount;
         Utilities.stageQueue.postRunnable(() -> {
             ApplicationLoader.mainInterfacePausedStageQueue = true;
@@ -6856,6 +6858,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         pipActivityHandler.onStop();
         Browser.unbindCustomTabsService(this);
         ApplicationLoader.mainInterfaceStopped = true;
+        BatteryProxyLifecycle.pauseLocalProxy(this);
         if (!isChangingConfigurations() && HiddenAccountHelper.isUnlockedHiddenAccount(currentAccount)) {
             HiddenAccountHelper.clearUnlockedHiddenAccount();
         }
@@ -7037,6 +7040,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         MediaController.getInstance().setFeedbackView(feedbackView = actionBarLayout.getView(), true);
         ApplicationLoader.mainInterfacePaused = false;
         MgNetworkChangeWatcher.onForegroundStateChanged(false);
+        BatteryProxyLifecycle.resumeLocalProxy(this);
         MessagesController.getInstance(currentAccount).sortDialogs(null);
         showLanguageAlert(false);
         Utilities.stageQueue.postRunnable(() -> {
@@ -7306,8 +7310,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 }
                 builder.setMessage(span);
                 if (type.startsWith("AUTH_KEY_DROP_")) {
+                    builder.setTitle(LocaleController.formatString(
+                            R.string.BatteryAuthKeyDropAccount, account + 1));
                     builder.setPositiveButton(LocaleController.getString(R.string.Cancel), null);
-                    builder.setNegativeButton(LocaleController.getString(R.string.LogOut), (dialog, which) -> MessagesController.getInstance(currentAccount).performLogout(2));
+                    builder.setNegativeButton(LocaleController.getString(R.string.LogOut), (dialog, which) -> MessagesController.getInstance(account).performLogout(2));
                 } else if (type.startsWith("PREMIUM_")) {
                     builder.setTitle(LocaleController.getString(R.string.TelegramPremium));
                     builder.setPositiveButton(LocaleController.getString(R.string.OK), null);

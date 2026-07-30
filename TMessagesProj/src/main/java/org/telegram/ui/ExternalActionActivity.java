@@ -80,7 +80,7 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
         getWindow().setBackgroundDrawableResource(R.drawable.transparent);
         if (!SharedConfig.passcodeHash.isEmpty() && !SharedConfig.allowScreenCapture && !SharedConfig.disableSecureFlags) {
             try {
-                getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
                 AndroidUtilities.logFlagSecure();
             } catch (Exception e) {
                 FileLog.e(e);

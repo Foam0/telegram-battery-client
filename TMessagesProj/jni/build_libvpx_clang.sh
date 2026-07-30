@@ -28,7 +28,7 @@ function build_one {
 	export LDFLAGS=""
 
 	if [ "x86" = ${ARCH} ]; then
-		sed -i '20s/^/#define rand() ((int)lrand48())\n/' vpx_dsp/add_noise.c
+		perl -0pi -e 's/((?:[^\n]*\n){19})/$1#define rand() ((int)lrand48())\n/' vpx_dsp/add_noise.c
 	fi
 
 	echo "Cleaning..."
@@ -67,14 +67,14 @@ function build_one {
 	--disable-webm-io
 
 	# Normalize absolute NDK path in vpx_config for reproducible builds.
-	find . -name "vpx_config.*" -exec sed -i "s|${NDK}|/opt/android-sdk/ndk/${NDK_VERSION}|g" {} +
+	find . -name "vpx_config.*" -exec perl -pi -e "s|${NDK}|/opt/android-sdk/ndk/${NDK_VERSION}|g" {} +
 
 	_quiet_redir make -j$COMPILATION_PROC_COUNT install
 
 	touch "${PREFIX}/.ndk-${NDK_VERSION}"
 
 	if [ "x86" = ${ARCH} ]; then
-		sed -i '20d' vpx_dsp/add_noise.c
+		perl -0pi -e 's/^#define rand\(\) \(\(int\)lrand48\(\)\)\n//' vpx_dsp/add_noise.c
 	fi
 }
 
@@ -122,7 +122,7 @@ checkPreRequisites
 cd libvpx
 
 ## common
-LLVM_PREFIX="${NDK}/toolchains/llvm/prebuilt/linux-x86_64"
+LLVM_PREFIX="${NDK}/toolchains/llvm/prebuilt/${BUILD_PLATFORM}"
 LLVM_BIN="${LLVM_PREFIX}/bin"
 ANDROID_API=21
 

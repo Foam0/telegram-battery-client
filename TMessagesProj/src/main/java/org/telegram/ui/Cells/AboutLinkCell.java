@@ -25,12 +25,14 @@ import android.net.Uri;
 import android.os.Build;
 import android.text.Layout;
 import android.text.Spannable;
+import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.StaticLayout;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
 import android.text.style.URLSpan;
+import android.text.util.Linkify;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -44,6 +46,8 @@ import android.widget.TextView;
 
 import androidx.core.view.GestureDetectorCompat;
 import androidx.recyclerview.widget.RecyclerView;
+
+import it.belloworld.mercurygram.ui.PhoneActionHelper;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Emoji;
@@ -369,6 +373,7 @@ public class AboutLinkCell extends FrameLayout {
         stringBuilder = new SpannableStringBuilder(oldText);
         accessibilityText = null;
         MessageObject.addLinks(false, stringBuilder, false, false, !parseLinks);
+        addPhoneUriSpans(stringBuilder);
         Emoji.replaceEmoji(stringBuilder, Theme.profile_aboutTextPaint.getFontMetricsInt(), false);
         if (lastMaxWidth <= 0) {
             lastMaxWidth = AndroidUtilities.displaySize.x - dp(18 + 18);
@@ -386,6 +391,35 @@ public class AboutLinkCell extends FrameLayout {
             checkTextLayout(lastMaxWidth, true);
         }
         requestLayout();
+    }
+
+    /**
+     * Profile descriptions should always expose visible phone numbers as tel: URIs,
+     * independently of whether Telegram enables general bio link parsing for the
+     * account. Detect on a copy so existing web/Telegram spans stay untouched.
+     */
+    private static void addPhoneUriSpans(SpannableStringBuilder text) {
+        if (TextUtils.isEmpty(text)) {
+            return;
+        }
+        try {
+            SpannableString detected = new SpannableString(text.toString());
+            Linkify.addLinks(detected, Linkify.PHONE_NUMBERS);
+            URLSpan[] phoneSpans = detected.getSpans(0, detected.length(), URLSpan.class);
+            for (URLSpan phoneSpan : phoneSpans) {
+                String url = phoneSpan.getURL();
+                int start = detected.getSpanStart(phoneSpan);
+                int end = detected.getSpanEnd(phoneSpan);
+                if (url == null || !url.startsWith("tel:") || start < 0 || end <= start) {
+                    continue;
+                }
+                if (text.getSpans(start, end, ClickableSpan.class).length == 0) {
+                    text.setSpan(new URLSpan(url), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
     }
 
     Runnable longPressedRunnable = new Runnable() {
@@ -534,7 +568,9 @@ public class AboutLinkCell extends FrameLayout {
         } else {
             if (pressedLink instanceof URLSpan) {
                 String url = ((URLSpan) pressedLink).getURL();
-                if (AndroidUtilities.shouldShowUrlInAlert(url)) {
+                if (url != null && url.regionMatches(true, 0, "tel:", 0, 4)) {
+                    PhoneActionHelper.show(getContext(), url);
+                } else if (AndroidUtilities.shouldShowUrlInAlert(url)) {
                     AlertsCreator.showOpenUrlAlert(parentFragment, url, true, true, true, currentProgress, null);
                 } else {
                     Browser.openUrl(getContext(), Uri.parse(url), true, true, currentProgress);

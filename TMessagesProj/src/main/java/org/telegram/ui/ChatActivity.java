@@ -33771,13 +33771,7 @@ public class ChatActivity extends BaseFragment implements
                 break;
             }
             case OPTION_CALL: {
-                try {
-                    Intent intent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + selectedObject.messageOwner.media.phone_number));
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    getParentActivity().startActivityForResult(intent, 500);
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
+                it.belloworld.mercurygram.ui.PhoneActionHelper.transfer(getContext(), selectedObject.messageOwner.media.phone_number);
                 break;
             }
             case OPTION_CALL_AGAIN: {
@@ -44718,6 +44712,9 @@ public class ChatActivity extends BaseFragment implements
                 options.add(R.drawable.msg_calls_regular, getString(R.string.VoiceCallViaCarrier), () -> {
                     Browser.openUrl(getContext(), "tel:" + phone);
                 });
+                options.add(R.drawable.msg_payment_card, getString(R.string.PhoneTransferAction), () -> {
+                    it.belloworld.mercurygram.ui.PhoneActionHelper.transfer(getContext(), phone);
+                });
                 options.add(R.drawable.msg_copy, getString(R.string.CopyNumber), () -> {
                     AndroidUtilities.addToClipboard(phone);
                     BulletinFactory.of(this).createCopyBulletin(LocaleController.getString(R.string.PhoneCopied)).show();
@@ -44736,6 +44733,9 @@ public class ChatActivity extends BaseFragment implements
                 }
                 options.add(R.drawable.msg_calls_regular, getString(R.string.VoiceCallViaCarrier), () -> {
                     Browser.openUrl(getContext(), "tel:" + phone);
+                });
+                options.add(R.drawable.msg_payment_card, getString(R.string.PhoneTransferAction), () -> {
+                    it.belloworld.mercurygram.ui.PhoneActionHelper.transfer(getContext(), phone);
                 });
                 options.add(R.drawable.msg_copy, getString(R.string.CopyNumber), () -> {
                     AndroidUtilities.addToClipboard(phone);
@@ -45830,9 +45830,9 @@ public class ChatActivity extends BaseFragment implements
                             options.add(OPTION_COPY_PHONE_NUMBER);
                             icons.add(R.drawable.msg_copy);
                         }
-                        items.add(LocaleController.getString(R.string.Call));
+                        items.add(LocaleController.getString(R.string.PhoneTransferAction));
                         options.add(OPTION_CALL);
-                        icons.add(R.drawable.msg_callback);
+                        icons.add(R.drawable.msg_payment_card);
                     }
                 } else if (type == 9) {
                     TLRPC.Document document = selectedObject.getDocument();
@@ -45912,7 +45912,7 @@ public class ChatActivity extends BaseFragment implements
                     options.add(OPTION_EDIT_HISTORY);
                     icons.add(R.drawable.msg_edit);
                 }
-                if (getUserConfig().mg.messageDetailsMenu) {
+                if (getUserConfig().mg.messageDetailsMenu || selectedObject.isRoundVideo()) {
                     items.add(LocaleController.getString(R.string.MessageDetails));
                     options.add(OPTION_DETAILS);
                     icons.add(R.drawable.menu_info);
@@ -46010,9 +46010,9 @@ public class ChatActivity extends BaseFragment implements
                             options.add(OPTION_COPY_PHONE_NUMBER);
                             icons.add(R.drawable.msg_copy);
                         }
-                        items.add(LocaleController.getString(R.string.Call));
+                        items.add(LocaleController.getString(R.string.PhoneTransferAction));
                         options.add(OPTION_CALL);
-                        icons.add(R.drawable.msg_callback);
+                        icons.add(R.drawable.msg_payment_card);
                     }
                 }
                 items.add(LocaleController.getString(chatMode == MODE_SAVED && threadMessageId != getUserConfig().getClientUserId() ? R.string.Remove : R.string.Delete));

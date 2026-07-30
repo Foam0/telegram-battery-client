@@ -931,23 +931,6 @@ public class ContactsController extends BaseController {
                 FileLog.e(e);
             }
         }
-        /*if (BuildVars.LOGS_ENABLED && contactsMap != null) {
-            for (HashMap.Entry<String, Contact> entry : contactsMap.entrySet()) {
-                Contact contact = entry.getValue();
-                FileLog.e("contact = " + contact.first_name + " " + contact.last_name);
-                if (contact.first_name.length() == 0 && contact.last_name.length() == 0 && contact.phones.size() > 0) {
-                    FileLog.e("warning, empty name for contact = " + contact.key);
-                }
-                FileLog.e("phones:");
-                for (String s : contact.phones) {
-                    FileLog.e("phone = " + s);
-                }
-                FileLog.e("short phones:");
-                for (String s : contact.shortPhones) {
-                    FileLog.e("short phone = " + s);
-                }
-            }
-        }*/
         return contactsMap != null ? contactsMap : new HashMap<>();
     }
 

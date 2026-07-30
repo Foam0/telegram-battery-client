@@ -19,6 +19,10 @@ function build_one {
 	STRIP=${LLVM_BIN}/llvm-strip
 	NM=${LLVM_BIN}/llvm-nm
 	CROSS_PREFIX=${LLVM_BIN}/llvm-
+	INSTALL_BIN=install
+	if command -v ginstall >/dev/null 2>&1; then
+		INSTALL_BIN="$(command -v ginstall)"
+	fi
 
 	INCLUDES=" -I${LIBVPXPREFIX}/include"
 	LIBS=" -L${LIBVPXPREFIX}/lib"
@@ -33,6 +37,7 @@ function build_one {
 	--nm=${NM} \
 	--ar=${AR} \
 	--strip=${STRIP} \
+	--install=${INSTALL_BIN} \
 	--cc=${CC} \
 	--cxx=${CXX} \
 	--enable-stripping \
@@ -105,7 +110,7 @@ function build_one {
 	# Normalize config.h for reproducible builds.
 	# ffmpeg embeds the full configure command (including NDK paths) and the
 	# version string (from git describe) in libavutil's compiled-in strings.
-	sed -i "s|${NDK}|/opt/android-sdk/ndk/${NDK_VERSION}|g" config.h
+	perl -pi -e "s|${NDK}|/opt/android-sdk/ndk/${NDK_VERSION}|g" config.h
 	# Normalize ffmpeg version for reproducible builds.
 	# Shallow clones lack tags, so version.sh produces a git hash instead of "n4.4.4".
 	# The Makefile regenerates ffversion.h via version.sh during build, so we replace
@@ -176,7 +181,7 @@ checkPreRequisites
 cd ffmpeg
 
 ## common
-LLVM_PREFIX="${NDK}/toolchains/llvm/prebuilt/linux-x86_64"
+LLVM_PREFIX="${NDK}/toolchains/llvm/prebuilt/${BUILD_PLATFORM}"
 LLVM_BIN="${LLVM_PREFIX}/bin"
 
 function build {

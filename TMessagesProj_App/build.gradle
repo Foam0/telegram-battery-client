@@ -143,6 +143,24 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
+
+        hardened {
+            initWith release
+            matchingFallbacks = ['release']
+            applicationIdSuffix ".beta"
+            debuggable false
+            jniDebuggable false
+            // Hardened beta APKs are sideloaded directly on OEM ROMs such as
+            // MIUI/HyperOS. The debug signing config uses the same private key
+            // as release but additionally emits the legacy v1 signature, while
+            // retaining v2/v3, for maximum PackageInstaller compatibility.
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            shrinkResources false
+            multiDexEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
+            ndk.debugSymbolLevel = 'SYMBOL_TABLE'
+        }
     }
 
     sourceSets.debug {
@@ -155,6 +173,10 @@ android {
 
     sourceSets.release {
         manifest.srcFile '../TMessagesProj/config/release/AndroidManifest.xml'
+    }
+
+    sourceSets.hardened {
+        manifest.srcFile '../TMessagesProj/config/hardened/AndroidManifest.xml'
     }
 
     flavorDimensions "minApi"
@@ -179,6 +201,9 @@ android {
             sourceSets.release {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
             }
+            sourceSets.hardened {
+                manifest.srcFile '../TMessagesProj/config/hardened/AndroidManifest_SDK23.xml'
+            }
             minSdkVersion 23
             ext {
                 abiVersionCode = 2
@@ -198,6 +223,9 @@ android {
             sourceSets.standalone {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
             }
+            sourceSets.hardened {
+                manifest.srcFile '../TMessagesProj/config/hardened/AndroidManifest_SDK23.xml'
+            }
             ext {
                 abiVersionCode = 9
             }
@@ -212,6 +240,9 @@ android {
             }
             sourceSets.release {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
+            }
+            sourceSets.hardened {
+                manifest.srcFile '../TMessagesProj/config/hardened/AndroidManifest_SDK23.xml'
             }
             ext {
                 abiVersionCode = 7
@@ -228,6 +259,9 @@ android {
             sourceSets.release {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
             }
+            sourceSets.hardened {
+                manifest.srcFile '../TMessagesProj/config/hardened/AndroidManifest_SDK23.xml'
+            }
             ext {
                 abiVersionCode = 8
             }
@@ -243,6 +277,9 @@ android {
             sourceSets.release {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
             }
+            sourceSets.hardened {
+                manifest.srcFile '../TMessagesProj/config/hardened/AndroidManifest_SDK23.xml'
+            }
             ext {
                 abiVersionCode = 3
             }
@@ -257,6 +294,9 @@ android {
             }
             sourceSets.release {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
+            }
+            sourceSets.hardened {
+                manifest.srcFile '../TMessagesProj/config/hardened/AndroidManifest_SDK23.xml'
             }
             ext {
                 abiVersionCode = 4
@@ -317,4 +357,3 @@ android {
         checkReleaseBuilds false
     }
 }
-

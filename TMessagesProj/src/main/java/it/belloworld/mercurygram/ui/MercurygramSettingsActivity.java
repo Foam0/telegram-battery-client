@@ -15,9 +15,11 @@ import android.widget.Toast;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.FcmPushProvider;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UnifiedPushReceiver;
@@ -66,6 +68,7 @@ public class MercurygramSettingsActivity extends UniversalFragment {
     private static final int ID_DISABLE_UNIFIED_PUSH = 30;
     private static final int ID_UNIFIED_PUSH_DISTRIBUTOR = 31;
     private static final int ID_UNIFIED_PUSH_GATEWAY = 32;
+    private static final int ID_ENABLE_FIREBASE_PUSH = 33;
     private static final int ID_REDUCE_TRACKING_FINGERPRINT = 40;
     private static final int ID_USE_TOR = 41;
     private static final int ID_TOR_IDLE_TIMEOUT = 42;
@@ -78,6 +81,12 @@ public class MercurygramSettingsActivity extends UniversalFragment {
     private static final int ID_TRANSLATION = 50;
     private static final int ID_TRANSCRIPTION = 51;
     private static final int ID_EMOJI_PACK = 60;
+    private static final int ID_ACCOUNT_NOTIFICATIONS_ENABLED = 70;
+    private static final int ID_ACCOUNT_NOTIFICATION_SOUND = 71;
+    private static final int ID_ACCOUNT_NOTIFICATION_VIBRATE = 72;
+    private static final int ID_BATTERY_LOAD = 73;
+    private static final int ID_BATTERY_DIAGNOSTICS = 74;
+    private static final int ID_BATTERY_VPN = 75;
 
     @Override
     protected CharSequence getTitle() {
@@ -279,6 +288,29 @@ public class MercurygramSettingsActivity extends UniversalFragment {
         }
 
         items.add(UItem.asHeader(LocaleController.getString(R.string.MercurygramSettingsNotifications)));
+        items.add(UItem.asCheck(ID_ACCOUNT_NOTIFICATIONS_ENABLED,
+                        LocaleController.getString(R.string.BatteryClientAccountNotificationsEnabled))
+                .setChecked(getUserConfig().batteryAccountNotificationsEnabled));
+        if (getUserConfig().batteryAccountNotificationsEnabled) {
+            items.add(UItem.asCheck(ID_ACCOUNT_NOTIFICATION_SOUND,
+                            LocaleController.getString(R.string.BatteryClientAccountNotificationSound))
+                    .setChecked(getUserConfig().batteryAccountNotificationSound));
+            items.add(UItem.asCheck(ID_ACCOUNT_NOTIFICATION_VIBRATE,
+                            LocaleController.getString(R.string.BatteryClientAccountNotificationVibrate))
+                    .setChecked(getUserConfig().batteryAccountNotificationVibrate));
+        }
+        items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientAccountNotificationsAbout)));
+
+        items.add(UItem.asHeader(LocaleController.getString(R.string.BatteryClientSection)));
+        items.add(UItem.asButton(ID_BATTERY_LOAD, LocaleController.getString(R.string.BatteryClientLoadScreen)));
+        items.add(UItem.asButton(ID_BATTERY_DIAGNOSTICS, LocaleController.getString(R.string.BatteryClientDiagnosticsScreen)));
+        items.add(UItem.asButton(ID_BATTERY_VPN, LocaleController.getString(R.string.BatteryClientVpnScreen)));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientSectionAbout)));
+
+        items.add(UItem.asCheck(ID_ENABLE_FIREBASE_PUSH, LocaleController.getString(R.string.BatteryClientFirebasePush))
+                .setChecked(SharedConfig.enableFirebasePush));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientFirebasePushAbout)));
+
         items.add(UItem.asCheck(ID_DISABLE_UNIFIED_PUSH, LocaleController.getString(R.string.MercurygramDisableUnifiedPush))
                 .setChecked(SharedConfig.disableUnifiedPush));
         if (!SharedConfig.disableUnifiedPush) {
@@ -381,6 +413,36 @@ public class MercurygramSettingsActivity extends UniversalFragment {
                 break;
             case ID_DISABLE_UNIFIED_PUSH:
                 confirmAndRestartForUnifiedPushToggle();
+                break;
+            case ID_ENABLE_FIREBASE_PUSH:
+                handleFirebasePushToggle();
+                break;
+            case ID_ACCOUNT_NOTIFICATIONS_ENABLED:
+                getUserConfig().batteryAccountNotificationsEnabled = !getUserConfig().batteryAccountNotificationsEnabled;
+                getUserConfig().saveConfig(false);
+                if (!getUserConfig().batteryAccountNotificationsEnabled) {
+                    NotificationsController.getInstance(currentAccount).hideNotifications();
+                }
+                refreshList();
+                break;
+            case ID_ACCOUNT_NOTIFICATION_SOUND:
+                getUserConfig().batteryAccountNotificationSound = !getUserConfig().batteryAccountNotificationSound;
+                getUserConfig().saveConfig(false);
+                refreshList();
+                break;
+            case ID_ACCOUNT_NOTIFICATION_VIBRATE:
+                getUserConfig().batteryAccountNotificationVibrate = !getUserConfig().batteryAccountNotificationVibrate;
+                getUserConfig().saveConfig(false);
+                refreshList();
+                break;
+            case ID_BATTERY_LOAD:
+                presentFragment(new BatteryClientLoadActivity());
+                break;
+            case ID_BATTERY_DIAGNOSTICS:
+                presentFragment(new BatteryClientDiagnosticsActivity());
+                break;
+            case ID_BATTERY_VPN:
+                presentFragment(new BatteryClientVpnSettingsActivity());
                 break;
             case ID_UNIFIED_PUSH_DISTRIBUTOR:
                 showDistributorDialog();
@@ -1117,6 +1179,31 @@ public class MercurygramSettingsActivity extends UniversalFragment {
                         activity.startActivity(intent);
                         System.exit(0);
                     }
+                })
+                .show();
+    }
+
+    private void handleFirebasePushToggle() {
+        if (SharedConfig.enableFirebasePush) {
+            SharedConfig.setEnableFirebasePush(false);
+            FcmPushProvider.onPreferenceChanged(false);
+            ApplicationLoader.getPushProvider().onRequestPushToken();
+            refreshList();
+            return;
+        }
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        new AlertDialog.Builder(context)
+                .setTitle(LocaleController.getString(R.string.BatteryClientFirebasePushEnableTitle))
+                .setMessage(LocaleController.getString(R.string.BatteryClientFirebasePushEnableMessage))
+                .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                .setPositiveButton(LocaleController.getString(R.string.Enable), (dialog, which) -> {
+                    SharedConfig.setEnableFirebasePush(true);
+                    FcmPushProvider.onPreferenceChanged(true);
+                    ApplicationLoader.getPushProvider().onRequestPushToken();
+                    refreshList();
                 })
                 .show();
     }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="google_app_id" translatable="false">1:760348033671:android:f6afd7b67eae3860</string>
+    <string name="gcm_defaultSenderId" translatable="false">760348033671</string>
+    <string name="firebase_database_url" translatable="false">https://tmessages2.firebaseio.com</string>
+    <string name="google_api_key" translatable="false">AIzaSyA-t0jLPjUt2FxrA8VPK2EiYHcYcboIR6k</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyA-t0jLPjUt2FxrA8VPK2EiYHcYcboIR6k</string>
+    <string name="project_id" translatable="false">tmessages2</string>
+    <string name="google_storage_bucket" translatable="false">tmessages2.appspot.com</string>
+</resources>

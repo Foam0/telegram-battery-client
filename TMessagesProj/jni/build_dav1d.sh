@@ -21,7 +21,15 @@ if ! command -v ninja &>/dev/null; then
 fi
 
 ANDROID_API=21
-BUILD_PLATFORM=linux-x86_64
+CURRENT_PLATFORM="$(uname -s)"
+case "${CURRENT_PLATFORM}" in
+    Darwin*) BUILD_PLATFORM=darwin-x86_64 ;;
+    Linux*) BUILD_PLATFORM=linux-x86_64 ;;
+    *)
+        echo "Warning! Unknown platform ${CURRENT_PLATFORM}; falling back to linux-x86_64"
+        BUILD_PLATFORM=linux-x86_64
+        ;;
+esac
 LLVM_PREFIX="${NDK}/toolchains/llvm/prebuilt/${BUILD_PLATFORM}"
 LLVM_BIN="${LLVM_PREFIX}/bin"
 SOURCE_DIR="$(cd "$(dirname "$0")/dav1d" && pwd)"

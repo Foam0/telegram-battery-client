@@ -2,7 +2,7 @@
 
 Since [Android 8.0 Oreo, Google doesn't allow apps to run in the background anymore](https://developer.android.com/about/versions/oreo/background#services), requiring all apps which were previously keeping a background connection to exclusively use Firebase push messaging.
 
-Mercurygram can't use Google's push messaging in a FOSS app. The preferred replacement is [UnifiedPush](https://unifiedpush.org) — install a distributor, or simply disable battery optimization for Mercurygram. If you can use neither, the **Keep-Alive Service** falls back to holding a background connection open, but Android then requires the app to show an ongoing notification; otherwise the OS kills the service and you wouldn't be notified about new messages.
+Mercurygram normally uses [UnifiedPush](https://unifiedpush.org) instead of Google's push messaging. This battery-client branch also contains an explicit opt-in Firebase Messaging provider, but Telegram's Firebase project may reject unofficial package/signature combinations, so UnifiedPush/gCompat is still the reliable fallback. If you can use neither, the **Keep-Alive Service** falls back to holding a background connection open, but Android then requires the app to show an ongoing notification; otherwise the OS kills the service and you wouldn't be notified about new messages.
 
 Sadly, if the app set the notification to lower priority (to hide it a bit in the lower part of the notification screen), you would immediately get a system notification about Mercurygram "using battery", which is confusing and is the reason for this not being the default. Despite Google's misleading warnings, there is no real difference in battery usage.
 

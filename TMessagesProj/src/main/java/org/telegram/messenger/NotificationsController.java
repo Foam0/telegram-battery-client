@@ -103,6 +103,7 @@ public class NotificationsController extends BaseController implements Notificat
 
     public static final String EXTRA_VOICE_REPLY = "extra_voice_reply";
     public static String OTHER_NOTIFICATIONS_CHANNEL = null;
+    private static final int NOTIFICATION_REPEAT_REQUEST_CODE_BASE = 21000;
 
     private static final DispatchQueue notificationsQueue = new DispatchQueue("notificationsQueue");
     private final ArrayList<MessageObject> pushMessages = new ArrayList<>();
@@ -219,6 +220,7 @@ public class NotificationsController extends BaseController implements Notificat
         }
         try {
             alarmManager = (AlarmManager) ApplicationLoader.applicationContext.getSystemService(Context.ALARM_SERVICE);
+            cancelNotificationRepeatIfPushFirst();
         } catch (Exception e) {
             FileLog.e(e);
         }
@@ -3210,19 +3212,74 @@ public class NotificationsController extends BaseController implements Notificat
 
     private void scheduleNotificationRepeat() {
         try {
-            Intent intent = new Intent(ApplicationLoader.applicationContext, NotificationRepeat.class);
-            intent.putExtra("currentAccount", currentAccount);
-            PendingIntent pintent = PendingIntent.getService(ApplicationLoader.applicationContext, 0, intent, PendingIntent.FLAG_MUTABLE);
+            PendingIntent pintent = createNotificationRepeatPendingIntent(false);
+            if (shouldSuppressNotificationRepeatAlarm()) {
+                cancelNotificationRepeatIfPushFirst();
+                return;
+            }
             SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
             int minutes = preferences.getInt("repeat_messages", 60);
             if (minutes > 0 && personalCount > 0) {
                 alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + minutes * 60 * 1000, pintent);
             } else {
-                alarmManager.cancel(pintent);
+                cancelNotificationRepeat();
             }
         } catch (Exception e) {
             FileLog.e(e);
         }
+    }
+
+    private PendingIntent createNotificationRepeatPendingIntent(boolean noCreate) {
+        Intent intent = new Intent(ApplicationLoader.applicationContext, NotificationRepeat.class);
+        intent.putExtra("currentAccount", currentAccount);
+        int flags = PendingIntent.FLAG_MUTABLE;
+        if (noCreate) {
+            flags |= PendingIntent.FLAG_NO_CREATE;
+        } else {
+            flags |= PendingIntent.FLAG_UPDATE_CURRENT;
+        }
+        return PendingIntent.getService(ApplicationLoader.applicationContext, NOTIFICATION_REPEAT_REQUEST_CODE_BASE + currentAccount, intent, flags);
+    }
+
+    private PendingIntent createLegacyNotificationRepeatPendingIntent() {
+        Intent intent = new Intent(ApplicationLoader.applicationContext, NotificationRepeat.class);
+        intent.putExtra("currentAccount", currentAccount);
+        return PendingIntent.getService(ApplicationLoader.applicationContext, 0, intent, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_NO_CREATE);
+    }
+
+    private void cancelNotificationRepeatIfPushFirst() {
+        if (shouldSuppressNotificationRepeatAlarm()) {
+            cancelNotificationRepeat();
+        }
+    }
+
+    private void cancelNotificationRepeat() {
+        if (alarmManager == null) {
+            return;
+        }
+        PendingIntent current = createNotificationRepeatPendingIntent(true);
+        if (current != null) {
+            alarmManager.cancel(current);
+        }
+        PendingIntent legacy = createLegacyNotificationRepeatPendingIntent();
+        if (legacy != null) {
+            alarmManager.cancel(legacy);
+        }
+    }
+
+    private boolean shouldSuppressNotificationRepeatAlarm() {
+        if (SharedConfig.disableUnifiedPush || TextUtils.isEmpty(SharedConfig.pushString)) {
+            return false;
+        }
+        SharedPreferences globalPreferences = MessagesController.getGlobalNotificationsSettings();
+        SharedPreferences mainPreferences = MessagesController.getMainSettings(currentAccount);
+        boolean keepAliveFallback = globalPreferences.contains("pushService")
+                ? globalPreferences.getBoolean("pushService", false)
+                : mainPreferences.getBoolean("keepAliveService", false);
+        boolean backgroundFallback = globalPreferences.contains("pushConnection")
+                ? globalPreferences.getBoolean("pushConnection", false)
+                : mainPreferences.getBoolean("backgroundConnection", false);
+        return !keepAliveFallback && !backgroundFallback;
     }
 
     private boolean isPersonalMessage(MessageObject messageObject) {
@@ -3371,6 +3428,10 @@ public class NotificationsController extends BaseController implements Notificat
 
     protected void repeatNotificationMaybe() {
         notificationsQueue.postRunnable(() -> {
+            if (shouldSuppressNotificationRepeatAlarm()) {
+                cancelNotificationRepeat();
+                return;
+            }
             int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
             if (hour >= 11 && hour <= 22) {
                 notificationManager.cancel(notificationId);
@@ -4079,7 +4140,11 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     private void showOrUpdateNotification(boolean notifyAboutLast) {
-        if (!getUserConfig().isClientActivated() || HiddenAccountHelper.isAccountHidden(currentAccount) || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
+        if (!getUserConfig().isClientActivated()
+                || !getUserConfig().batteryAccountNotificationsEnabled
+                || HiddenAccountHelper.isAccountHidden(currentAccount)
+                || pushMessages.isEmpty() && storyPushMessages.isEmpty()
+                || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
             dismissNotification();
             return;
         }
@@ -4500,6 +4565,15 @@ public class NotificationsController extends BaseController implements Notificat
                 } catch (Exception e) {
                     FileLog.e(e);
                 }
+            }
+
+            if (!getUserConfig().batteryAccountNotificationSound) {
+                soundPath = "NoSound";
+                isDefault = false;
+            }
+            if (!getUserConfig().batteryAccountNotificationVibrate) {
+                vibrate = 2;
+                isDefault = false;
             }
 
             if (notifyDisabled) {

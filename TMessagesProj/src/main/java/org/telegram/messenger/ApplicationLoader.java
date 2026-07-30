@@ -27,7 +27,9 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.system.Os;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -45,6 +47,10 @@ import org.telegram.ui.LauncherIconController;
 
 import java.io.File;
 import java.util.Locale;
+
+import it.belloworld.mercurygram.vpn.BatteryProxyLifecycle;
+import io.nekohasekai.libbox.Libbox;
+import io.nekohasekai.libbox.SetupOptions;
 
 public class ApplicationLoader extends Application {
 
@@ -77,6 +83,10 @@ public class ApplicationLoader extends Application {
 
     @Override
     protected void attachBaseContext(Context base) {
+        try {
+            Os.setenv("GOMAXPROCS", "2", true);
+        } catch (Throwable ignored) {
+        }
         super.attachBaseContext(base);
     }
 
@@ -242,6 +252,7 @@ public class ApplicationLoader extends Application {
         }
 
         SharedConfig.loadConfig();
+        FcmPushProvider.onPreferenceChanged(SharedConfig.enableFirebasePush);
         SharedPrefsHelper.init(applicationContext);
         // Clear stale Orbot proxy entries from the pre-embedded-Tor era so
         // upgrades don't silently keep routing MTProto through 127.0.0.1:9050.
@@ -257,7 +268,10 @@ public class ApplicationLoader extends Application {
             UserConfig.getInstance(a).loadConfig();
             MessagesController.getInstance(a);
             if (a == 0) {
-                SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
+                SharedConfig.pushStringStatus = (FcmPushProvider.shouldUseFirebaseAsPrimary()
+                        ? "__FIREBASE_GENERATING_SINCE_"
+                        : "__UNIFIEDPUSH_GENERATING_SINCE_")
+                        + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
             } else {
                 ConnectionsManager.getInstance(a);
             }
@@ -273,7 +287,17 @@ public class ApplicationLoader extends Application {
         SharedConfig.maybeClearReducedTrackingExhaustedOnUpgrade();
 
         ApplicationLoader app = (ApplicationLoader) ApplicationLoader.applicationContext;
+        if (!FcmPushProvider.shouldUseFirebaseAsPrimary()
+                && !SharedConfig.disableUnifiedPush
+                && (TextUtils.isEmpty(SharedConfig.pushString)
+                || SharedConfig.pushType != PushListenerController.PUSH_TYPE_WEB)
+                && !TextUtils.isEmpty(SharedConfig.unifiedPushEndpointUrl)) {
+            SharedConfig.pushStringGetTimeStart = SystemClock.elapsedRealtime();
+            SharedConfig.pushStringGetTimeEnd = SharedConfig.pushStringGetTimeStart;
+            UnifiedPushReceiver.registerEndpointUrl(SharedConfig.unifiedPushEndpointUrl);
+        }
         app.initPushServices();
+        startPushService();
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("app initied");
         }
@@ -331,6 +355,7 @@ public class ApplicationLoader extends Application {
         }
 
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
+        initBatteryLibbox();
 
         try {
             ConnectionsManager.native_setJava(false);
@@ -352,6 +377,7 @@ public class ApplicationLoader extends Application {
         }
 
         applicationHandler = new Handler(applicationContext.getMainLooper());
+        BatteryProxyLifecycle.init(applicationContext, ForegroundDetector.getInstance());
 
         AndroidUtilities.runOnUIThread(ApplicationLoader::startPushService);
 
@@ -361,6 +387,31 @@ public class ApplicationLoader extends Application {
         SharedConfig.applyReduceTrackingFingerprintToNative();
         it.belloworld.mercurygram.tor.MgTorClient.init(applicationContext);
 
+    }
+
+    private void initBatteryLibbox() {
+        try {
+            Libbox.touch();
+            File basePath = getFilesDirFixed("libbox");
+            File workingPath = getFilesDirFixed("libbox-working");
+            File tempPath = new File(getCacheDir(), "libbox-temp");
+            tempPath.mkdirs();
+            SetupOptions options = new SetupOptions();
+            options.setBasePath(basePath.getAbsolutePath());
+            options.setWorkingPath(workingPath.getAbsolutePath());
+            options.setTempPath(tempPath.getAbsolutePath());
+            options.setFixAndroidStack(true);
+            options.setCommandServerListenPort(0);
+            options.setCommandServerSecret("");
+            options.setLogMaxLines(200);
+            options.setDebug(BuildVars.DEBUG_VERSION);
+            Libbox.setup(options);
+            Libbox.setLocale(Locale.getDefault().toLanguageTag());
+        } catch (Throwable t) {
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.e(t);
+            }
+        }
     }
 
     public static void startPushService() {
@@ -410,7 +461,7 @@ public class ApplicationLoader extends Application {
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("No valid " + getPushProvider().getLogTitle() + " APK found.");
                 }
-                SharedConfig.pushStringStatus = "__NO_GOOGLE_PLAY_SERVICES__";
+                SharedConfig.pushStringStatus = "__NO_UNIFIEDPUSH_DISTRIBUTOR__";
                 PushListenerController.sendRegistrationToServer(getPushProvider().getPushType(), null);
             }
         }, 1000);

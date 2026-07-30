@@ -2,6 +2,7 @@ package org.telegram.messenger;
 
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.text.TextUtils;
 
 import org.telegram.tgnet.ConnectionsManager;
 import org.unifiedpush.android.connector.FailedReason;
@@ -64,44 +65,7 @@ public class UnifiedPushReceiver extends PushService {
     public void onNewEndpoint(PushEndpoint endpoint, String instance) {
         Utilities.globalQueue.postRunnable(() -> {
             SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
-
-            // Persist the raw endpoint URL so we can detect ntfy.sh usage
-            SharedConfig.setUnifiedPushEndpointUrl(endpoint.getUrl());
-
-            // Ensure WebPush ECDH keys exist before registering
-            SharedConfig.ensureWebPushKeys();
-
-            // All distributors route through the /aesgcm gateway which serializes
-            // WebPush headers into the body (common-proxies compatible format)
-            String gateway = SharedConfig.unifiedPushGateway;
-            if (!gateway.endsWith("/")) gateway += "/";
-
-            try {
-                String gatewayUrl = gateway + "aesgcm?e=" + URLEncoder.encode(endpoint.getUrl(), StandardCharsets.UTF_8.name());
-
-                // WebPush JSON token: endpoint + client keys for Telegram to encrypt payloads
-                String p256dh = android.util.Base64.encodeToString(SharedConfig.webPushPublicKey,
-                        android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
-                String auth = android.util.Base64.encodeToString(SharedConfig.webPushAuthSecret,
-                        android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
-
-                org.json.JSONObject keys = new org.json.JSONObject();
-                keys.put("p256dh", p256dh);
-                keys.put("auth", auth);
-                org.json.JSONObject tokenObj = new org.json.JSONObject();
-                tokenObj.put("endpoint", gatewayUrl);
-                tokenObj.put("keys", keys);
-                PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, tokenObj.toString());
-
-                // Also register Simple Push (token_type=4) for encrypted chat wake-ups.
-                // Telegram sends a PUT to this URL for events where no content can be included
-                // (e.g. secret chats). The gateway correlates it with the Web Push POST and
-                // triggers a synthetic wake-up if no encrypted payload arrives.
-                String simplePushUrl = gateway + URLEncoder.encode(endpoint.getUrl(), StandardCharsets.UTF_8.name());
-                it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.sendSimplePushRegistration(simplePushUrl);
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
+            registerEndpointUrl(endpoint.getUrl());
 
             // Notify NotificationsSettingsActivity to rebuild its rows (shows/hides ntfy.sh warning)
             AndroidUtilities.runOnUIThread(() -> {
@@ -112,6 +76,39 @@ public class UnifiedPushReceiver extends PushService {
                 }
             });
         });
+    }
+
+    public static void registerEndpointUrl(String endpointUrl) {
+        if (TextUtils.isEmpty(endpointUrl)) {
+            return;
+        }
+
+        SharedConfig.setUnifiedPushEndpointUrl(endpointUrl);
+        SharedConfig.ensureWebPushKeys();
+
+        String gateway = SharedConfig.unifiedPushGateway;
+        if (!gateway.endsWith("/")) gateway += "/";
+
+        try {
+            String gatewayUrl = gateway + "aesgcm?e=" + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
+            String p256dh = android.util.Base64.encodeToString(SharedConfig.webPushPublicKey,
+                    android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
+            String auth = android.util.Base64.encodeToString(SharedConfig.webPushAuthSecret,
+                    android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
+
+            org.json.JSONObject keys = new org.json.JSONObject();
+            keys.put("p256dh", p256dh);
+            keys.put("auth", auth);
+            org.json.JSONObject tokenObj = new org.json.JSONObject();
+            tokenObj.put("endpoint", gatewayUrl);
+            tokenObj.put("keys", keys);
+            PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, tokenObj.toString());
+
+            String simplePushUrl = gateway + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
+            it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.sendSimplePushRegistration(simplePushUrl);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
     }
 
     @Override
