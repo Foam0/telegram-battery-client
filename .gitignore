@@ -16,7 +16,7 @@ sessions/
 tmp_sensitive/
 last-config.json
 profiles.json
-third_party/
+/third_party/
 TMessagesProj/.cxx/
 TMessagesProj/jniLibs/
 TMessagesProj/jniRes/
