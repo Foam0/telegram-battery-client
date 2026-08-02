@@ -27,7 +27,7 @@ public class BuildVars {
 
     // SafetyNet key for Google Identity SDK, disabled on FOSS builds
     public static String SAFETYNET_KEY = "";
-    public static String PLAYSTORE_APP_URL = "https://github.com/Mercurygram/Mercurygram/releases";
+    public static String PLAYSTORE_APP_URL = "https://github.com/Foam0/telegram-battery-client/releases";
     public static String HUAWEI_STORE_URL = PLAYSTORE_APP_URL; // Huawei store not used; redirect to GitHub
     public static String GOOGLE_AUTH_CLIENT_ID = "";
 

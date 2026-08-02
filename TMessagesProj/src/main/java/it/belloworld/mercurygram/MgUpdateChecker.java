@@ -39,10 +39,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MgUpdateChecker {
 
-    private static final String GITHUB_LATEST_URL = "https://api.github.com/repos/Mercurygram/Mercurygram/releases/latest";
-    private static final String GITHUB_LIST_URL = "https://api.github.com/repos/Mercurygram/Mercurygram/releases";
-    private static final String GITHUB_TAG_URL_PREFIX = "https://api.github.com/repos/Mercurygram/Mercurygram/releases/tags/";
-    private static final String MG_CERT_SHA256 = "1E73DE100E2646BE671AFAD2CB4BB471538E062A745AE5ADBE6C7D1666FD1EE9";
+    private static final String GITHUB_LATEST_URL = "https://api.github.com/repos/Foam0/telegram-battery-client/releases/latest";
+    private static final String GITHUB_LIST_URL = "https://api.github.com/repos/Foam0/telegram-battery-client/releases";
+    private static final String GITHUB_TAG_URL_PREFIX = "https://api.github.com/repos/Foam0/telegram-battery-client/releases/tags/";
+    private static final String RELEASE_ASSET_PREFIX = "BatteryTelegramClient";
+    private static final String MG_CERT_SHA256 = "A08D7DC323DDF71EF3201944397E0D3CCE7D40847263E11F328B68BBE19229AB";
     private static final long CHECK_INTERVAL = 3600 * 1000; // 1 hour
     // Tighter throttle while a pending update is staged: a newer tag
     // landing 5+ minutes after the previous check should not stay hidden
@@ -281,7 +282,7 @@ public class MgUpdateChecker {
                 // tag accidentally.
                 String infix = ApplicationLoader.applicationContext.getPackageName()
                         .endsWith(".beta") ? "-debug" : "";
-                String abiApkName = "Mercurygram" + infix + "-" + tagName + "-" + targetAbi + ".apk";
+                String abiApkName = RELEASE_ASSET_PREFIX + infix + "-" + tagName + "-" + targetAbi + ".apk";
                 for (int i = 0; i < assets.length(); i++) {
                     JSONObject asset = assets.getJSONObject(i);
                     String name = asset.getString("name");
