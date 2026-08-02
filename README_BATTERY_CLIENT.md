@@ -196,13 +196,19 @@ or embedded in release APKs.
 
 ## GitHub Actions build
 
-The `Build debug APK` workflow builds the arm64 debug APK on pushes to `main`,
-pull requests, and manual runs. It uses compile-only Telegram API placeholders
-when repository secrets are unavailable. Maintainers can configure `APP_ID`,
-`APP_HASH`, `RELEASE_KEYSTORE`, `RELEASE_KEYSTORE_PASSWORD`,
-`RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` as GitHub Actions secrets for a
-usable, consistently signed artifact. Secrets are written only into ignored
-files on the ephemeral runner and are never bundled as VLESS defaults.
+The `Build signed release APK` workflow builds the optimized, non-debuggable
+arm64 release APK on pushes to `main` and on manual runs. The signing job uses
+the protected `release` environment and cannot start until a required reviewer
+approves it. Pull requests run the separate security checks only and never
+receive signing credentials.
+
+`APP_ID`, `APP_HASH`, `RELEASE_KEYSTORE`, `RELEASE_KEYSTORE_PASSWORD`,
+`RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` are stored as environment
+secrets. They are exposed only to the single shell step that builds the APK;
+temporary `API_KEYS` and keystore files are deleted before artifact upload.
+External Actions are pinned to immutable commit SHAs. The resulting artifact is
+named `battery-client-arm64-release-<version>` and is retained for 30 days.
+VLESS profiles are never embedded as defaults.
 
 ## License
 

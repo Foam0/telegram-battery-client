@@ -1,11 +1,10 @@
-name: Build debug APK
+name: Build signed release APK
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-  pull_request:
 
 concurrency:
   group: battery-client-build-${{ github.ref }}
@@ -15,13 +14,13 @@ permissions:
   contents: read
 
 jobs:
-  build-arm64-debug:
+  build-arm64-release:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
+    environment:
+      name: release
     env:
       SING_BOX_VERSION: v1.13.14
-      TELEGRAM_APP_ID: ${{ secrets.APP_ID }}
-      TELEGRAM_APP_HASH: ${{ secrets.APP_HASH }}
 
     steps:
       - name: Checkout
@@ -37,13 +36,13 @@ jobs:
           cache: gradle
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.3"
-          cache: true
+          cache: false
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
 
       - name: Install Android and native build tools
         run: |
@@ -57,67 +56,65 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake gperf meson nasm ninja-build pkg-config
 
-      - name: Create Telegram API configuration
-        run: |
-          app_id="${TELEGRAM_APP_ID:-0}"
-          app_hash="${TELEGRAM_APP_HASH:-00000000000000000000000000000000}"
-          printf 'APP_ID = %s\nAPP_HASH = %s\n' "$app_id" "$app_hash" > API_KEYS
-
-      - name: Prepare signing key
-        env:
-          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
-          STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          keystore="$RUNNER_TEMP/battery-client-ci.keystore"
-          if [ -n "${KEYSTORE_B64:-}" ]; then
-            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
-            store_password="$STORE_PASSWORD"
-            key_alias="$KEY_ALIAS"
-            key_password="$KEY_PASSWORD"
-          else
-            store_password=ci-placeholder-password
-            key_alias=ci-placeholder
-            key_password=ci-placeholder-password
-            keytool -genkeypair -noprompt \
-              -keystore "$keystore" \
-              -storepass "$store_password" \
-              -alias "$key_alias" \
-              -keypass "$key_password" \
-              -keyalg RSA -keysize 2048 -validity 3650 \
-              -dname "CN=CI Placeholder, O=Battery Telegram Client"
-          fi
-          {
-            echo "CI_KEYSTORE=$keystore"
-            echo "CI_STORE_PASSWORD=$store_password"
-            echo "CI_KEY_ALIAS=$key_alias"
-            echo "CI_KEY_PASSWORD=$key_password"
-          } >> "$GITHUB_ENV"
-
       - name: Compute build version
         run: |
           base_version=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
           test -n "$base_version"
           echo "MG_BUILD_TAG=${base_version}.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
-      - name: Build arm64 debug APK
+      - name: Build signed arm64 release APK
         env:
           NINJA_PATH: ninja
+          TELEGRAM_APP_ID: ${{ secrets.APP_ID }}
+          TELEGRAM_APP_HASH: ${{ secrets.APP_HASH }}
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_APP_ID:-}" ] || [ -z "${TELEGRAM_APP_HASH:-}" ] || \
+             [ -z "${KEYSTORE_B64:-}" ] || [ -z "${STORE_PASSWORD:-}" ] || \
+             [ -z "${KEY_ALIAS:-}" ] || [ -z "${KEY_PASSWORD:-}" ]; then
+            echo "::error::Release environment secrets are incomplete"
+            exit 1
+          fi
+
+          api_keys="$GITHUB_WORKSPACE/API_KEYS"
+          keystore="$RUNNER_TEMP/battery-client-release.keystore"
+          cleanup() {
+            rm -f "$api_keys" "$keystore"
+          }
+          trap cleanup EXIT
+
+          printf 'APP_ID = %s\nAPP_HASH = %s\n' \
+            "$TELEGRAM_APP_ID" "$TELEGRAM_APP_HASH" > "$api_keys"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
+
           ./gradlew \
             -PMG_BUILD_TAG="$MG_BUILD_TAG" \
-            -PRELEASE_STORE_FILE="$CI_KEYSTORE" \
-            -PRELEASE_STORE_PASSWORD="$CI_STORE_PASSWORD" \
-            -PRELEASE_KEY_ALIAS="$CI_KEY_ALIAS" \
-            -PRELEASE_KEY_PASSWORD="$CI_KEY_PASSWORD" \
-            :TMessagesProj_App:assembleAfatFdArm64Debug \
+            -PRELEASE_STORE_FILE="$keystore" \
+            -PRELEASE_STORE_PASSWORD="$STORE_PASSWORD" \
+            -PRELEASE_KEY_ALIAS="$KEY_ALIAS" \
+            -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD" \
+            :TMessagesProj_App:assembleAfatFdArm64Release \
             --no-daemon
+
+      - name: Verify and package release APK
+        run: |
+          set -euo pipefail
+          source_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/release/afatFdArm64.apk
+          release_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/release/BatteryTelegramClient-${MG_BUILD_TAG}-arm64-v8a-release.apk
+          test -f "$source_apk"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$source_apk"
+          cp "$source_apk" "$release_apk"
+          sha256sum "$release_apk"
+          echo "RELEASE_APK=$release_apk" >> "$GITHUB_ENV"
 
       - name: Upload APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: battery-client-arm64-debug-${{ env.MG_BUILD_TAG }}
-          path: TMessagesProj_App/build/outputs/apk/afatFdArm64/debug/afatFdArm64.apk
+          name: battery-client-arm64-release-${{ env.MG_BUILD_TAG }}
+          path: ${{ env.RELEASE_APK }}
           if-no-files-found: error
+          retention-days: 30
