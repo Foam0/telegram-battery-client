@@ -115,8 +115,21 @@ jobs:
           beta_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/BatteryTelegramClient-beta-${MG_BUILD_TAG}-arm64-v8a.apk
           test -f "$source_release_apk"
           test -f "$source_beta_apk"
-          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$source_release_apk"
-          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$source_beta_apk"
+
+          verify_release_apk() {
+            apk=$1
+            label=$2
+            "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+            badging=$("$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$apk")
+            if [[ "$badging" == *application-debuggable* ]]; then
+              echo "::error::$label APK is debuggable"
+              exit 1
+            fi
+            echo "$label APK is signed and non-debuggable"
+          }
+
+          verify_release_apk "$source_release_apk" "Stable"
+          verify_release_apk "$source_beta_apk" "Beta"
           cp "$source_release_apk" "$release_apk"
           cp "$source_beta_apk" "$beta_apk"
           sha256sum "$release_apk" "$beta_apk"
@@ -154,8 +167,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          release_apk=release-apk/BatteryTelegramClient-${RELEASE_TAG}-arm64-v8a.apk
-          beta_apk=release-apk/BatteryTelegramClient-beta-${RELEASE_TAG}-arm64-v8a.apk
+          release_apk=release-apk/release/BatteryTelegramClient-${RELEASE_TAG}-arm64-v8a.apk
+          beta_apk=release-apk/hardened/BatteryTelegramClient-beta-${RELEASE_TAG}-arm64-v8a.apk
           test -f "$release_apk"
           test -f "$beta_apk"
           if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
