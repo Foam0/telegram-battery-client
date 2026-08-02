@@ -67,7 +67,7 @@ jobs:
           echo "MG_BUILD_TAG=$build_tag" >> "$GITHUB_ENV"
           echo "build_tag=$build_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Build signed arm64 release APK
+      - name: Build signed arm64 release APKs
         env:
           NINJA_PATH: ninja
           TELEGRAM_APP_ID: ${{ secrets.APP_ID }}
@@ -103,24 +103,33 @@ jobs:
             -PRELEASE_KEY_ALIAS="$KEY_ALIAS" \
             -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD" \
             :TMessagesProj_App:assembleAfatFdArm64Release \
+            :TMessagesProj_App:assembleAfatFdArm64Hardened \
             --no-daemon
 
-      - name: Verify and package release APK
+      - name: Verify and package release APKs
         run: |
           set -euo pipefail
-          source_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/release/afatFdArm64.apk
+          source_release_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/release/afatFdArm64.apk
+          source_beta_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/afatFdArm64.apk
           release_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/release/BatteryTelegramClient-${MG_BUILD_TAG}-arm64-v8a.apk
-          test -f "$source_apk"
-          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$source_apk"
-          cp "$source_apk" "$release_apk"
-          sha256sum "$release_apk"
+          beta_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/BatteryTelegramClient-beta-${MG_BUILD_TAG}-arm64-v8a.apk
+          test -f "$source_release_apk"
+          test -f "$source_beta_apk"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$source_release_apk"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$source_beta_apk"
+          cp "$source_release_apk" "$release_apk"
+          cp "$source_beta_apk" "$beta_apk"
+          sha256sum "$release_apk" "$beta_apk"
           echo "RELEASE_APK=$release_apk" >> "$GITHUB_ENV"
+          echo "BETA_APK=$beta_apk" >> "$GITHUB_ENV"
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: battery-client-arm64-release-${{ env.MG_BUILD_TAG }}
-          path: ${{ env.RELEASE_APK }}
+          path: |
+            ${{ env.RELEASE_APK }}
+            ${{ env.BETA_APK }}
           if-no-files-found: error
           retention-days: 30
 
@@ -145,15 +154,17 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          apk=release-apk/BatteryTelegramClient-${RELEASE_TAG}-arm64-v8a.apk
-          test -f "$apk"
+          release_apk=release-apk/BatteryTelegramClient-${RELEASE_TAG}-arm64-v8a.apk
+          beta_apk=release-apk/BatteryTelegramClient-beta-${RELEASE_TAG}-arm64-v8a.apk
+          test -f "$release_apk"
+          test -f "$beta_apk"
           if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$apk" --repo "$REPOSITORY" --clobber
+            gh release upload "$RELEASE_TAG" "$release_apk" "$beta_apk" --repo "$REPOSITORY" --clobber
           else
-            gh release create "$RELEASE_TAG" "$apk" \
+            gh release create "$RELEASE_TAG" "$release_apk" "$beta_apk" \
               --repo "$REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "Battery Telegram Client $RELEASE_TAG" \
-              --notes "Signed arm64 release build. The APK signature is verified in GitHub Actions before publication." \
+              --notes "Signed arm64 stable and non-debuggable beta builds. Both APK signatures are verified in GitHub Actions before publication." \
               --latest
           fi

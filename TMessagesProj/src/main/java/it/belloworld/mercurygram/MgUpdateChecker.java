@@ -233,14 +233,33 @@ public class MgUpdateChecker {
                     // GitHub orders /releases by created_at desc, not by version
                     // or published_at — scan the whole list and keep the
                     // highest-version eligible release instead of the first.
+                    // The Battery Client publishes stable and hardened .beta
+                    // APKs together, so beta installs accept either release
+                    // type but only consider releases containing their asset.
                     JSONArray releases = new JSONArray(body);
                     JSONObject best = null;
                     long[] bestVec = null;
                     for (int i = 0; i < releases.length(); i++) {
                         JSONObject r = releases.getJSONObject(i);
                         if (r.optBoolean("draft", false)) continue;
-                        if (beta && !r.optBoolean("prerelease", false)) continue;
-                        long[] vec = toVersionVector(r.optString("tag_name", ""));
+                        String candidateTag = r.optString("tag_name", "");
+                        if (beta) {
+                            if (Build.SUPPORTED_ABIS.length == 0) continue;
+                            String expectedAsset = RELEASE_ASSET_PREFIX + "-beta-" + candidateTag
+                                    + "-" + Build.SUPPORTED_ABIS[0] + ".apk";
+                            JSONArray candidateAssets = r.optJSONArray("assets");
+                            boolean hasExpectedAsset = false;
+                            if (candidateAssets != null) {
+                                for (int j = 0; j < candidateAssets.length(); j++) {
+                                    if (expectedAsset.equals(candidateAssets.getJSONObject(j).optString("name"))) {
+                                        hasExpectedAsset = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!hasExpectedAsset) continue;
+                        }
+                        long[] vec = toVersionVector(candidateTag);
                         if (vec == null) continue;
                         if (bestVec == null || compareVectors(vec, bestVec) > 0) {
                             bestVec = vec;
@@ -274,14 +293,10 @@ public class MgUpdateChecker {
                 String downloadUrl = null;
                 long fileSize = 0;
 
-                // Beta channel publishes both Release (no infix, stable package)
-                // and Debug (-debug infix, .beta package) APKs per push. A
-                // .beta-installed runtime fetches the debug variant; stable
-                // installs use /releases/latest (set above), which excludes
-                // prereleases, so the empty-infix lookup never matches a beta
-                // tag accidentally.
+                // Each Battery Client release contains the stable package and
+                // a non-debuggable hardened APK for the .beta package.
                 String infix = ApplicationLoader.applicationContext.getPackageName()
-                        .endsWith(".beta") ? "-debug" : "";
+                        .endsWith(".beta") ? "-beta" : "";
                 String abiApkName = RELEASE_ASSET_PREFIX + infix + "-" + tagName + "-" + targetAbi + ".apk";
                 for (int i = 0; i < assets.length(); i++) {
                     JSONObject asset = assets.getJSONObject(i);

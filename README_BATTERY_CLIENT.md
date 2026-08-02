@@ -196,8 +196,10 @@ or embedded in release APKs.
 
 ## GitHub Actions build
 
-The `Build signed release APK` workflow builds the optimized, non-debuggable
-arm64 release APK on pushes to `main` and on manual runs. The signing job uses
+The `Build signed release APK` workflow builds two optimized, non-debuggable
+arm64 APKs on pushes to `main` and on manual runs: the stable
+`it.belloworld.mercurygram` package and a hardened
+`it.belloworld.mercurygram.beta` package. The signing job uses
 the protected `release` environment and cannot start until a required reviewer
 approves it. Pull requests run the separate security checks only and never
 receive signing credentials.
@@ -208,14 +210,16 @@ secrets. They are exposed only to the single shell step that builds the APK;
 temporary `API_KEYS` and keystore files are deleted before artifact upload.
 External Actions are pinned to immutable commit SHAs. The resulting artifact is
 named `battery-client-arm64-release-<version>` and is retained for 30 days.
-On `main`, the verified APK is also published as a permanent GitHub Release
-asset named `BatteryTelegramClient-<version>-arm64-v8a.apk`.
+On `main`, both verified APKs are also published as permanent GitHub Release
+assets named `BatteryTelegramClient-<version>-arm64-v8a.apk` and
+`BatteryTelegramClient-beta-<version>-arm64-v8a.apk`.
 
 The existing **Check for updates now** button under Mercurygram settings reads
-the latest release from `Foam0/telegram-battery-client`, downloads the matching
-APK, verifies that it is signed by the same release certificate as the installed
-app, and only then opens Android's system package installer. VLESS profiles are
-never embedded as defaults.
+the latest compatible release from `Foam0/telegram-battery-client`, downloads
+the APK matching the installed stable or beta package, verifies that it is
+signed by the same release certificate as the installed app, and only then
+opens Android's system package installer. VLESS profiles are never embedded as
+defaults.
 
 ## License
 
