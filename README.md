@@ -17,6 +17,11 @@ Battery-client fork notes, pinned versions, VPN details, and build instructions 
 
 </div>
 
+> **Battery-client release policy:** this repository permanently publishes only
+> the signed, optimized, non-debuggable `it.belloworld.mercurygram.beta` package.
+> The stable-package channel described below belongs to upstream Mercurygram and
+> is not emitted by this repository's GitHub Actions workflow.
+
 ## Install
 
 Mercurygram publishes two kinds of build. The tag shape tells you which:

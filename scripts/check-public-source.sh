@@ -6,7 +6,16 @@ cd "$ROOT"
 
 failed=0
 
-if git ls-files | rg -i '(^|/)(API_KEYS|local\.properties|.*\.keystore|.*\.jks|.*\.p12|.*\.p8|.*service-account.*\.json|firebase-adminsdk.*\.json|private-configs\..*)$'; then
+firebase_config="TMessagesProj_App/src/hardened/res/values/battery_firebase.xml"
+if [ ! -f "$firebase_config" ] || \
+   ! grep -Fq '1:136449433263:android:c0a5fae26b3e384915be5a' "$firebase_config" || \
+   ! grep -Fq '<string name="gcm_defaultSenderId" translatable="false">136449433263</string>' "$firebase_config" || \
+   ! grep -Fq '<string name="project_id" translatable="false">telegram-514ca</string>' "$firebase_config"; then
+  echo "The hardened Firebase client configuration is missing or unexpected." >&2
+  failed=1
+fi
+
+if git ls-files | grep -Ei '(^|/)(API_KEYS|local\.properties|.*\.keystore|.*\.jks|.*\.p12|.*\.p8|.*service-account.*\.json|firebase-adminsdk.*\.json|private-configs\..*)$'; then
   echo "A private configuration or credential file is tracked." >&2
   failed=1
 fi

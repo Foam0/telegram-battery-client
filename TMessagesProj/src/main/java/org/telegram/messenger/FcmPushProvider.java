@@ -16,6 +16,8 @@ public final class FcmPushProvider implements PushListenerController.IPushListen
     public static final FcmPushProvider INSTANCE = new FcmPushProvider();
     private static final String PREFS = "battery_fcm";
     private static final String KEY_DISABLED_UNTIL = "disabledUntil";
+    private static final String KEY_CONFIG_APP_ID = "configAppId";
+    private static final String KEY_AUTOMATIC_BACKGROUND_FALLBACK = "automaticBackgroundFallback";
     private static final long FAILURE_BACKOFF_MS = 24L * 60L * 60L * 1000L;
 
     private FcmPushProvider() {
@@ -23,6 +25,7 @@ public final class FcmPushProvider implements PushListenerController.IPushListen
 
     @Override
     public boolean hasServices() {
+        refreshFirebaseConfigState();
         if (!shouldUseFirebaseAsPrimary()) {
             return false;
         }
@@ -53,6 +56,7 @@ public final class FcmPushProvider implements PushListenerController.IPushListen
 
     @Override
     public void onRequestPushToken() {
+        refreshFirebaseConfigState();
         if (!shouldUseFirebaseAsPrimary()) {
             fallbackToUnifiedPush(false);
             return;
@@ -66,7 +70,7 @@ public final class FcmPushProvider implements PushListenerController.IPushListen
                 FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
                     SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
                     if (task.isSuccessful() && !TextUtils.isEmpty(task.getResult())) {
-                        clearFailureBackoff();
+                        onFirebaseTokenAvailable();
                         if (BuildVars.LOGS_ENABLED) {
                             FileLog.d("FCM token received");
                         }
@@ -98,6 +102,7 @@ public final class FcmPushProvider implements PushListenerController.IPushListen
     }
 
     public static void onPreferenceChanged(boolean enabled) {
+        refreshFirebaseConfigState();
         if (enabled) {
             clearFailureBackoff();
         }
@@ -162,6 +167,14 @@ public final class FcmPushProvider implements PushListenerController.IPushListen
 
     private static void enableBackgroundNotificationFallback() {
         try {
+            ApplicationLoader.applicationContext
+                    .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(KEY_AUTOMATIC_BACKGROUND_FALLBACK, true)
+                    .apply();
+        } catch (Throwable ignored) {
+        }
+        try {
             SharedPreferences.Editor editor = MessagesController.getGlobalNotificationsSettings().edit();
             editor.putBoolean("pushService", true);
             editor.putBoolean("pushConnection", true);
@@ -179,6 +192,81 @@ public final class FcmPushProvider implements PushListenerController.IPushListen
                 }
             }
         });
+    }
+
+    static void onFirebaseTokenAvailable() {
+        clearFailureBackoff();
+        disableAutomaticBackgroundNotificationFallback();
+    }
+
+    public static void onManualBackgroundFallbackChanged() {
+        try {
+            ApplicationLoader.applicationContext
+                    .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(KEY_AUTOMATIC_BACKGROUND_FALLBACK, false)
+                    .apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void refreshFirebaseConfigState() {
+        try {
+            String currentAppId = ApplicationLoader.applicationContext.getString(R.string.google_app_id);
+            if (TextUtils.isEmpty(currentAppId)) {
+                return;
+            }
+            SharedPreferences state = ApplicationLoader.applicationContext
+                    .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE);
+            String previousAppId = state.getString(KEY_CONFIG_APP_ID, null);
+            if (TextUtils.equals(currentAppId, previousAppId)) {
+                return;
+            }
+
+            SharedPreferences notifications = MessagesController.getGlobalNotificationsSettings();
+            boolean fallbackWasActive = notifications.getBoolean("pushService", false)
+                    || notifications.getBoolean("pushConnection", false);
+            boolean firebaseFailureWasRecorded = state.getLong(KEY_DISABLED_UNTIL, 0) > 0
+                    || "__FIREBASE_FAILED_BACKGROUND_FALLBACK__".equals(SharedConfig.pushStringStatus)
+                    || "__FIREBASE_BACKOFF_BACKGROUND_FALLBACK__".equals(SharedConfig.pushStringStatus);
+            boolean automaticFallbackWasActive = fallbackWasActive
+                    && (state.getBoolean(KEY_AUTOMATIC_BACKGROUND_FALLBACK, false)
+                    || firebaseFailureWasRecorded);
+            state.edit()
+                    .putString(KEY_CONFIG_APP_ID, currentAppId)
+                    .remove(KEY_DISABLED_UNTIL)
+                    .putBoolean(KEY_AUTOMATIC_BACKGROUND_FALLBACK, automaticFallbackWasActive)
+                    .apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void disableAutomaticBackgroundNotificationFallback() {
+        try {
+            SharedPreferences state = ApplicationLoader.applicationContext
+                    .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE);
+            if (!state.getBoolean(KEY_AUTOMATIC_BACKGROUND_FALLBACK, false)) {
+                return;
+            }
+            state.edit().putBoolean(KEY_AUTOMATIC_BACKGROUND_FALLBACK, false).apply();
+
+            MessagesController.getGlobalNotificationsSettings().edit()
+                    .putBoolean("pushService", false)
+                    .putBoolean("pushConnection", false)
+                    .apply();
+            AndroidUtilities.runOnUIThread(ApplicationLoader::startPushService);
+            Utilities.globalQueue.postRunnable(() -> {
+                for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    if (UserConfig.getInstance(a).isClientActivated()) {
+                        try {
+                            ConnectionsManager.getInstance(a).setPushConnectionEnabled(false);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }
+            });
+        } catch (Throwable ignored) {
+        }
     }
 
     private static void rememberFailureBackoff() {
