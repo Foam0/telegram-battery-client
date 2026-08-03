@@ -124,7 +124,7 @@ jobs:
           fi
 
           resources_dump="$RUNNER_TEMP/beta-resources.txt"
-          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump resources "$source_beta_apk" > "$resources_dump"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump --values resources "$source_beta_apk" > "$resources_dump"
           for expected in \
             '1:136449433263:android:c0a5fae26b3e384915be5a' \
             '136449433263' \
