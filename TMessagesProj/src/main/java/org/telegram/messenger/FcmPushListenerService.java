@@ -16,6 +16,7 @@ public class FcmPushListenerService extends FirebaseMessagingService {
         if (!FcmPushProvider.shouldUseFirebaseAsPrimary() || TextUtils.isEmpty(token)) {
             return;
         }
+        FcmPushProvider.onFirebaseTokenAvailable();
         Utilities.globalQueue.postRunnable(() -> {
             SharedConfig.pushStringGetTimeEnd = android.os.SystemClock.elapsedRealtime();
             if (BuildVars.LOGS_ENABLED) {
