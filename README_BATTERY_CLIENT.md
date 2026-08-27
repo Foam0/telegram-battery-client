@@ -62,6 +62,20 @@ TMessagesProj_App/build/outputs/apk/afatFdArm64/debug/afatFdArm64.apk
 
 The Gradle `preBuild` task runs `scripts/check_sample_config.sh`, which builds `sing-box v1.13.14` and validates both `config/sample-vless-config.json` and `config/sample-vless-socks-config.json` with `sing-box check`.
 
+## Releases and auto-updates
+
+The `Build signed beta APK` GitHub Actions workflow builds only the optimized,
+non-debuggable arm64 hardened package. Before publication it verifies the
+application id, version name, APK signature, and expected release certificate.
+The resulting GitHub Release asset is named
+`BatteryTelegramClient-beta-<version>-arm64-v8a.apk`.
+
+The in-app updater reads compatible releases from
+`Foam0/telegram-battery-client`, selects the asset matching the installed ABI,
+downloads it, verifies the Battery Client release certificate, and then opens
+Android's system package installer. A normal signed APK replacement preserves
+accounts, sessions, settings, and app-private VLESS profiles.
+
 ## Battery Changes
 
 - Uses the existing Mercurygram UnifiedPush/WebPush path for push-first delivery.

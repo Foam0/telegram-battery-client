@@ -1,0 +1,203 @@
+name: Build signed beta APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional X.Y.Z.M or X.Y.Z.M.K release tag
+        required: false
+        type: string
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: battery-client-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64-beta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    environment:
+      name: release
+    outputs:
+      build_tag: ${{ steps.version.outputs.build_tag }}
+    env:
+      SING_BOX_VERSION: v1.13.14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.25.3"
+          cache: false
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+
+      - name: Install Android and native build tools
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake gperf meson nasm ninja-build pkg-config
+
+      - name: Compute build version
+        id: version
+        env:
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${REQUESTED_TAG:-}" ]; then
+            build_tag=$REQUESTED_TAG
+          else
+            base_version=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
+            test -n "$base_version"
+            build_tag=${base_version}.${GITHUB_RUN_NUMBER}
+          fi
+          if ! [[ "$build_tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Invalid release tag: $build_tag"
+            exit 1
+          fi
+          echo "MG_BUILD_TAG=$build_tag" >> "$GITHUB_ENV"
+          echo "build_tag=$build_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed arm64 beta APK
+        env:
+          NINJA_PATH: ninja
+          TELEGRAM_APP_ID: ${{ secrets.APP_ID }}
+          TELEGRAM_APP_HASH: ${{ secrets.APP_HASH }}
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_APP_ID:-}" ] || [ -z "${TELEGRAM_APP_HASH:-}" ] || \
+             [ -z "${KEYSTORE_B64:-}" ] || [ -z "${STORE_PASSWORD:-}" ] || \
+             [ -z "${KEY_ALIAS:-}" ] || [ -z "${KEY_PASSWORD:-}" ]; then
+            echo "::error::Release environment secrets are incomplete"
+            exit 1
+          fi
+
+          api_keys="$GITHUB_WORKSPACE/API_KEYS"
+          keystore="$RUNNER_TEMP/battery-client-release.keystore"
+          cleanup() {
+            rm -f "$api_keys" "$keystore"
+          }
+          trap cleanup EXIT
+
+          printf 'APP_ID = %s\nAPP_HASH = %s\n' \
+            "$TELEGRAM_APP_ID" "$TELEGRAM_APP_HASH" > "$api_keys"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
+
+          ./gradlew \
+            -PMG_BUILD_TAG="$MG_BUILD_TAG" \
+            -PRELEASE_STORE_FILE="$keystore" \
+            -PRELEASE_STORE_PASSWORD="$STORE_PASSWORD" \
+            -PRELEASE_KEY_ALIAS="$KEY_ALIAS" \
+            -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD" \
+            :TMessagesProj_App:assembleAfatFdArm64Hardened \
+            --no-daemon
+
+      - name: Verify and package beta APK
+        run: |
+          set -euo pipefail
+          source_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/afatFdArm64.apk
+          release_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/BatteryTelegramClient-beta-${MG_BUILD_TAG}-arm64-v8a.apk
+          expected_cert=A08D7DC323DDF71EF3201944397E0D3CCE7D40847263E11F328B68BBE19229AB
+          test -f "$source_apk"
+
+          apksigner="$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt"
+          "$apksigner" verify --verbose "$source_apk"
+          cert=$($apksigner verify --print-certs "$source_apk" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            | tr '[:lower:]' '[:upper:]')
+          if [ "$cert" != "$expected_cert" ]; then
+            echo "::error::Unexpected signing certificate: $cert"
+            exit 1
+          fi
+
+          badging=$($aapt dump badging "$source_apk")
+          if [[ "$badging" == *application-debuggable* ]]; then
+            echo "::error::Release APK is debuggable"
+            exit 1
+          fi
+          if [[ "$badging" != *"package: name='it.belloworld.mercurygram.beta'"* ]]; then
+            echo "::error::Unexpected application id"
+            exit 1
+          fi
+          if [[ "$badging" != *"versionName='${MG_BUILD_TAG}'"* ]]; then
+            echo "::error::Unexpected version name"
+            exit 1
+          fi
+
+          cp "$source_apk" "$release_apk"
+          sha256sum "$release_apk"
+          echo "BETA_APK=$release_apk" >> "$GITHUB_ENV"
+
+      - name: Upload beta APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: battery-client-arm64-beta-${{ env.MG_BUILD_TAG }}
+          path: ${{ env.BETA_APK }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    if: github.ref == 'refs/heads/main'
+    needs: build-arm64-beta
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download verified APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: battery-client-arm64-beta-${{ needs.build-arm64-beta.outputs.build_tag }}
+          path: release-apk
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build-arm64-beta.outputs.build_tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release_apk=$(find release-apk -type f \
+            -name "BatteryTelegramClient-beta-${RELEASE_TAG}-arm64-v8a.apk" \
+            -print -quit)
+          test -f "$release_apk"
+          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$release_apk" --repo "$REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$release_apk" \
+              --repo "$REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Battery Telegram Client $RELEASE_TAG" \
+              --notes "Signed, non-debuggable arm64 hardened Battery Client build based on stable Mercurygram. Package, version, and signing certificate were verified before publication." \
+              --latest
+          fi

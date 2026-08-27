@@ -1,0 +1,10 @@
+# Battery Client 12.10 public release
+
+- Base: stable Mercurygram `12.10.0.1`, commit `6cdc1b2f3eada34c0c30d6922327c4d13f3ff3c3`.
+- Public branch: `codex/mercurygram-12.10-autoupdater`.
+- Auto-update source: `Foam0/telegram-battery-client` GitHub Releases.
+- Release asset: `BatteryTelegramClient-beta-<tag>-arm64-v8a.apk`.
+- Application id: `it.belloworld.mercurygram.beta`.
+- Expected signing certificate SHA-256: `A08D7DC323DDF71EF3201944397E0D3CCE7D40847263E11F328B68BBE19229AB`.
+- The private configuration backup commit and all of its files are excluded from this branch's history.
+- The release workflow builds only the non-debuggable hardened arm64 package and verifies its metadata and signature before publication.
