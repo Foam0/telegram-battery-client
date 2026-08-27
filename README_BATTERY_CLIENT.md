@@ -38,6 +38,9 @@ The implementation does not reimplement MTProto. It leaves authentication, stora
 
 ## Build
 
+The complete signed release procedure, including updater verification and the
+post-release phone smoke-test, is documented in [RELEASE_GUIDE.md](RELEASE_GUIDE.md).
+
 Create an ignored `API_KEYS` file before building. Real Telegram login requires a real Telegram API id and hash. The placeholder values are enough to compile, but not enough to log in.
 
 ```properties
