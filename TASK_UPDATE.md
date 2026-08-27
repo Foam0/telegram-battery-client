@@ -15,4 +15,4 @@
 - APK SHA-256: `9249ae6040d4d2722c4dbfd6e57bbb681758fb11413f39133e79ca59ed66531b`.
 - APK signature verification passed with v2 and v3 schemes; signer certificate SHA-256 is `a08d7dc323ddf71ef3201944397e0d3cce7d40847263e11f328b68bbe19229ab`.
 - `scripts/check-sensitive-logs.sh` and `git diff --check` passed.
-- Remaining: commit documentation and build portability fixes, then push the branch to origin.
+- Completed: documentation and portability fixes were committed and the branch was pushed to `origin/codex/mercurygram-12.10-update`.
