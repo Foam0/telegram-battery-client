@@ -107,11 +107,12 @@ for abi in $ABIS; do
         -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
         -DANDROID_ABI="$abi" \
         -DANDROID_PLATFORM="android-$API" \
-        "${extra[@]}" \
+        ${extra[@]+"${extra[@]}"} \
         -DOPUS_SOURCES="$srcs" \
         -DOPUS_DEFS="$defs" \
         -DOPUS_INCLUDES="$INCLUDES"
     cmake --build "$b"
-    install -D "$b/libopus.a" "$OUT_DIR/$abi/libopus.a"
+    mkdir -p "$OUT_DIR/$abi"
+    install -m 0644 "$b/libopus.a" "$OUT_DIR/$abi/libopus.a"
     echo "==> $OUT_DIR/$abi/libopus.a"
 done

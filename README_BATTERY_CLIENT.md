@@ -4,9 +4,9 @@ This fork keeps the Telegram client core from Mercurygram/Telegram Android and a
 
 ## Base
 
-- Telegram base: [Mercurygram](https://github.com/Mercurygram/Mercurygram), branch `Mercurygram`, version tag `12.8.1.2.5`, commit `a00d0392d5d14fa89f3aeff13c039045b2612357`.
+- Telegram base: [Mercurygram](https://github.com/Mercurygram/Mercurygram), stable version tag `12.10.0.1`, commit `6cdc1b2f3eada34c0c30d6922327c4d13f3ff3c3`.
 - Upstream core: [Telegram Android](https://github.com/DrKLO/Telegram), GPL-2.0 family according to Telegram's app source page.
-- Push model: Mercurygram's FOSS-compatible UnifiedPush/WebPush path is retained. The app does not add aggressive polling.
+- Push model: Mercurygram's FOSS-compatible UnifiedPush/WebPush path is retained, including its optional embedded FCM distributor that does not link the Firebase SDK. The app does not add aggressive polling.
 - VPN/proxy engine: [sing-box](https://github.com/SagerNet/sing-box) / `libbox.aar`, GPL-3.0-or-later.
 
 The implementation does not reimplement MTProto. It leaves authentication, storage, updates, media, and UI flows in the existing Telegram Android codebase.
@@ -25,9 +25,13 @@ The implementation does not reimplement MTProto. It leaves authentication, stora
 - TDLib/native submodules:
   - `TMessagesProj/jni/td`: `0ae923c493bceb75433de2682ba8ae29cc7bf88d`
   - `TMessagesProj/jni/boringssl`: `56383dabf472100181226cd14249f04c69a0c10b`
-  - `TMessagesProj/jni/dav1d`: `32cf02af50f32af108a3b281c452788dccdac648`
-  - `TMessagesProj/jni/ffmpeg`: `71fb6132637a2a430375c24afc381fff8b854fe7`
-  - `TMessagesProj/jni/libvpx`: `1024874c5919305883187e2953de8fcb4c3d7fa6`
+  - `TMessagesProj/jni/third_party/dav1d`: `54706fc6bc0cdecab7e9593974a4039cc038fca7`
+  - `TMessagesProj/jni/third_party/ffmpeg`: `45f1910444f34b02621f9f0426ea1a538a613c41`
+  - `TMessagesProj/jni/third_party/libvpx`: `1024874c5919305883187e2953de8fcb4c3d7fa6`
+  - `TMessagesProj/jni/third_party/xiph/ogg`: `be05b13e98b048f0b5a0f5fa8ce514d56db5f822`
+  - `TMessagesProj/jni/third_party/xiph/opus`: `22244de5a79bd1d6d623c32e72bf1954b56235be`
+  - `TMessagesProj/jni/third_party/xiph/opusfile`: `a55c164e9891a9326188b7d4d216ec9a88373739`
+  - `TMessagesProj/jni/tlottie`: `685f17e348c613d4d62896f49fc01f6ec4e8f028`
   - `TMessagesProj/jni/whisper`: `f24588a272ae8e23280d9c220536437164e6ed28`
 - sing-box config checker: `v1.13.14`.
 - Bundled `libbox.aar`: Java surface was inspected with `javap` before the Android glue was written.
@@ -47,7 +51,7 @@ Use JDK 17 and the Android SDK/NDK versions above:
 export JAVA_HOME=/path/to/jdk17
 export ANDROID_HOME=/path/to/android-sdk
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-./gradlew -PMG_BUILD_TAG=12.9.0.1 :TMessagesProj_App:assembleAfatFdArm64Debug
+./gradlew -PMG_BUILD_TAG=12.10.0.1 :TMessagesProj_App:assembleAfatFdArm64Debug
 ```
 
 The debug APK is written to:
@@ -85,7 +89,7 @@ The main expected battery win is from push-first behavior, avoiding extra backgr
 
 ## Ads, Promos, and Tracking
 
-- Mercurygram's de-Googled build removes/stubs Google Play Services, Firebase, Google Maps, SafetyNet/Play Integrity, and similar proprietary integrations from the default app.
+- Mercurygram's de-Googled build removes the proprietary Google/Firebase SDK integrations from the default app. Its optional embedded FCM distributor talks to Google Play Services through Android IPC and remains part of the UnifiedPush/WebPush flow.
 - The existing Mercurygram `removeAdsAndProxySponsor` path is enabled by default in this fork, preventing local sponsored-message/proxy-sponsor fetch and display paths from running.
 - Premium/business/gift upsell UI is hidden by default for new accounts.
 - This fork does not bypass Telegram server-enforced limits, paid features, or account policy. If a limit or ad decision is enforced by Telegram servers, it is documented as out of scope rather than bypassed.

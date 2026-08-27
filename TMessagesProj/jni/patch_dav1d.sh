@@ -18,7 +18,9 @@ grep -q "'/nonexistent'" "$MESON" && exit
 # back to vcs_tag's default, meson.project_version(), a fixed "1.5.4". Same
 # approach as GIT_EXE for ggml in CMakeLists.txt; ffmpeg gets the equivalent
 # treatment via its VERSION file in build.gradle's patchNativeSources.
-sed -i "s|join_paths(dav1d_src_root, '\.git')|'/nonexistent'|" "$MESON"
+tmp_file="${MESON}.tmp"
+sed "s|join_paths(dav1d_src_root, '\.git')|'/nonexistent'|" "$MESON" > "$tmp_file"
+mv "$tmp_file" "$MESON"
 
 grep -q "'/nonexistent'" "$MESON" || { echo "dav1d: vcs_tag patch did not apply" >&2; exit 1; }
 

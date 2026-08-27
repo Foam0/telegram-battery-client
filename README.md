@@ -2,18 +2,17 @@
 
 Персональный форк [Mercurygram](https://github.com/Mercurygram/Mercurygram) на базе Telegram Android. Я сделал его для двух основных задач: снизить фоновую нагрузку клиента и встроить VLESS-подключение, которое используется только Telegram и не поднимает системный VPN.
 
-Это не реализация Telegram или MTProto с нуля. Авторизация, чаты, хранение данных, медиа и основной интерфейс взяты из Mercurygram/Telegram Android. Ниже перечислены именно изменения этой ветки относительно Mercurygram `12.9.0.1`.
+Это не реализация Telegram или MTProto с нуля. Авторизация, чаты, хранение данных, медиа и основной интерфейс взяты из Mercurygram/Telegram Android. Ниже перечислены именно изменения этой ветки относительно стабильного Mercurygram `12.10.0.1`.
 
 ## Что я сделал
 
 ### 1. Push-уведомления с упором на экономию батареи
 
-- Оставил UnifiedPush/WebPush основным практическим способом получать уведомления без постоянного соединения Telegram в фоне.
-- Добавил экспериментальный Firebase Cloud Messaging. Его можно включить вручную; если дистрибьютора UnifiedPush нет, клиент также пробует FCM автоматически.
-- Сделал автоматический откат с FCM на UnifiedPush. После ошибки FCM повторные запросы приостанавливаются на 24 часа.
-- Если недоступны оба push-провайдера, клиент включает штатное фоновое соединение Telegram как последний резервный вариант.
+- Оставил UnifiedPush/WebPush основным способом получать уведомления без постоянного соединения Telegram в фоне.
+- Сохранил новый встроенный FCM-дистрибьютор Mercurygram: его можно выбрать на экране UnifiedPush на устройствах с Google Play Services. Он работает через UnifiedPush/WebPush и не добавляет Firebase SDK в приложение.
+- Если ни один UnifiedPush-дистрибьютор не доступен, пользователь может вручную включить штатное фоновое соединение Telegram как резервный вариант.
 - Убрал лишние периодические пробуждения `NotificationRepeat`, когда keep-alive и фоновое соединение не используются.
-- Добавил диагностику текущего push-провайдера, регистрации, fallback-режима и состояния соединения.
+- Добавил диагностику регистрации push, резервного режима и состояния соединения.
 
 Клиент не запускает отдельный бесконечный foreground service только ради ожидания сообщений. Надёжность push всё равно зависит от Android-прошивки, установленного UnifiedPush-дистрибьютора и ограничений Telegram для неофициальной подписи APK.
 
@@ -87,7 +86,7 @@ sing-box/libbox внутри процесса Mercurygram
 VLESS-сервер
 ```
 
-App-only VLESS обслуживает только сетевые подключения Telegram. Уведомления приходят независимо через UnifiedPush или FCM, поэтому ради них не нужно держать VLESS и Telegram-процесс активными постоянно.
+App-only VLESS обслуживает только сетевые подключения Telegram. Уведомления приходят независимо через выбранный UnifiedPush-дистрибьютор, включая встроенный FCM-вариант, поэтому ради них не нужно держать VLESS и Telegram-процесс активными постоянно.
 
 ## Сборка
 
@@ -111,7 +110,7 @@ APP_HASH = 0123456789abcdef0123456789abcdef
 
 ```bash
 ./gradlew \
-  -PMG_BUILD_TAG=12.9.0.1 \
+  -PMG_BUILD_TAG=12.10.0.1 \
   :TMessagesProj_App:assembleAfatFdArm64Hardened
 ```
 
@@ -134,7 +133,7 @@ scripts/check-sensitive-logs.sh
 | Путь | Назначение |
 |---|---|
 | `TMessagesProj/src/main/java/it/belloworld/mercurygram/vpn/` | VLESS, libbox, хранение профилей и lifecycle |
-| `TMessagesProj/src/main/java/org/telegram/messenger/FcmPushProvider.java` | FCM и fallback-логика |
+| `TMessagesProj/src/main/java/it/belloworld/mercurygram/push/` | UnifiedPush/WebPush и встроенный FCM-дистрибьютор |
 | `TMessagesProj/src/main/java/it/belloworld/mercurygram/ui/` | настройки, диагностика и MP4 metadata |
 | `TMessagesProj/config/hardened/` | ограниченный AndroidManifest hardened-сборки |
 | `config/sample-vless-*.json` | проверяемые примеры конфигурации sing-box |
@@ -143,7 +142,7 @@ scripts/check-sensitive-logs.sh
 
 ## Ограничения
 
-- FCM для неофициального package/signature может получить токен, но не получать уведомления от серверов Telegram. Поэтому UnifiedPush остаётся предпочтительным вариантом.
+- Встроенный FCM-дистрибьютор требует Google Play Services и Mercurygram WebPush gateway; на устройствах без них следует выбрать отдельный UnifiedPush-дистрибьютор.
 - App-only VLESS работает только для Telegram и только пока приложение активно. Это намеренное поведение, а не замена системному VPN.
 - Поддержан импорт `vless://`; это не универсальный GUI для всех протоколов sing-box.
 - Лимит 32 аккаунта остаётся фиксированным из-за массива singleton-объектов в Telegram Android.
@@ -161,7 +160,7 @@ scripts/check-sensitive-logs.sh
 
 ## База и лицензия
 
-- База ветки: Mercurygram `12.9.0.1`.
+- База ветки: стабильный Mercurygram `12.10.0.1`, commit `6cdc1b2f3eada34c0c30d6922327c4d13f3ff3c3`.
 - Исходный проект: [Mercurygram](https://github.com/Mercurygram/Mercurygram).
 - Telegram Android: [DrKLO/Telegram](https://github.com/DrKLO/Telegram).
 - VLESS-движок: [sing-box](https://github.com/SagerNet/sing-box) / libbox.

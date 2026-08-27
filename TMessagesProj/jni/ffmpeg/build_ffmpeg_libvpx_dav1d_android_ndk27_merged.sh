@@ -251,14 +251,16 @@ require_toggle() {
 }
 
 append_configure_toggle() {
-    local -n destination="$1"
+    local destination="$1"
     local feature="$2"
     local value="$3"
+    local toggle
     case "$value" in
-        auto) ;;
-        on) destination+=("--enable-$feature") ;;
-        off) destination+=("--disable-$feature") ;;
+        auto) return 0 ;;
+        on) toggle="--enable-$feature" ;;
+        off) toggle="--disable-$feature" ;;
     esac
+    eval "$destination+=(\"\$toggle\")"
 }
 
 require_bool ENABLE_SMALL "$ENABLE_SMALL"
@@ -462,15 +464,17 @@ libvpx_has_option() {
 
 # usage: libvpx_toggle <array-name> <underscored_option> <0|1>
 libvpx_toggle() {
-    local -n destination="$1"
+    local destination="$1"
     local option="$2"
     local enable="$3"
+    local toggle
     libvpx_has_option "$option" || return 0
     if [[ "$enable" == "1" ]]; then
-        destination+=("--enable-${option//_/-}")
+        toggle="--enable-${option//_/-}"
     else
-        destination+=("--disable-${option//_/-}")
+        toggle="--disable-${option//_/-}"
     fi
+    eval "$destination+=(\"\$toggle\")"
 }
 
 build_libvpx_for_abi() {
@@ -1010,8 +1014,12 @@ PC
         append_configure_toggle configure_args bmi2 "$FFMPEG_BMI2"
     fi
 
-    configure_args+=("${size_flags[@]}")
-    configure_args+=("${abi_flags[@]}")
+    if [[ ${#size_flags[@]} -gt 0 ]]; then
+        configure_args+=("${size_flags[@]}")
+    fi
+    if [[ ${#abi_flags[@]} -gt 0 ]]; then
+        configure_args+=("${abi_flags[@]}")
+    fi
 
     echo
     echo "========== FFmpeg: $abi, API $API =========="
