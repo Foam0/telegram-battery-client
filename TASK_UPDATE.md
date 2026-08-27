@@ -16,3 +16,10 @@
 - APK signature verification passed with v2 and v3 schemes; signer certificate SHA-256 is `a08d7dc323ddf71ef3201944397e0d3cce7d40847263e11f328b68bbe19229ab`.
 - `scripts/check-sensitive-logs.sh` and `git diff --check` passed.
 - Completed: documentation and portability fixes were committed and the branch was pushed to `origin/codex/mercurygram-12.10-update`.
+
+## Auto-updater follow-up
+
+- Restored the Battery Client release channel from the previous public build: `Foam0/telegram-battery-client`.
+- Restored the Battery Client signing certificate SHA-256 (`A08D7D…29AB`) and `BatteryTelegramClient-beta-<tag>-<abi>.apk` asset convention.
+- Stable releases containing a matching hardened `.beta` asset are eligible even though the installed package name ends in `.beta`.
+- The public source branch must omit commit `73e8fb9ea`, which contains the encrypted private configuration backup and its packaging scripts.

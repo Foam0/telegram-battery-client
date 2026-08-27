@@ -39,10 +39,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MgUpdateChecker {
 
-    private static final String GITHUB_LATEST_URL = "https://api.github.com/repos/Mercurygram/Mercurygram/releases/latest";
-    private static final String GITHUB_LIST_URL = "https://api.github.com/repos/Mercurygram/Mercurygram/releases";
-    private static final String GITHUB_TAG_URL_PREFIX = "https://api.github.com/repos/Mercurygram/Mercurygram/releases/tags/";
-    private static final String MG_CERT_SHA256 = "1E73DE100E2646BE671AFAD2CB4BB471538E062A745AE5ADBE6C7D1666FD1EE9";
+    private static final String GITHUB_LATEST_URL = "https://api.github.com/repos/Foam0/telegram-battery-client/releases/latest";
+    private static final String GITHUB_LIST_URL = "https://api.github.com/repos/Foam0/telegram-battery-client/releases";
+    private static final String GITHUB_TAG_URL_PREFIX = "https://api.github.com/repos/Foam0/telegram-battery-client/releases/tags/";
+    private static final String RELEASE_ASSET_PREFIX = "BatteryTelegramClient";
+    private static final String MG_CERT_SHA256 = "A08D7DC323DDF71EF3201944397E0D3CCE7D40847263E11F328B68BBE19229AB";
     private static final long CHECK_INTERVAL = 3600 * 1000; // 1 hour
     // Tighter throttle while a pending update is staged: a newer tag
     // landing 5+ minutes after the previous check should not stay hidden
@@ -248,14 +249,33 @@ public class MgUpdateChecker {
                     // GitHub orders /releases by created_at desc, not by version
                     // or published_at — scan the whole list and keep the
                     // highest-version eligible release instead of the first.
+                    // Battery Client publishes stable and hardened .beta APKs
+                    // together. A .beta install therefore accepts either
+                    // release type, but only when its exact ABI asset exists.
                     JSONArray releases = new JSONArray(body);
                     JSONObject best = null;
                     long[] bestVec = null;
                     for (int i = 0; i < releases.length(); i++) {
                         JSONObject r = releases.getJSONObject(i);
                         if (r.optBoolean("draft", false)) continue;
-                        if (beta && !r.optBoolean("prerelease", false)) continue;
-                        long[] vec = toVersionVector(r.optString("tag_name", ""));
+                        String candidateTag = r.optString("tag_name", "");
+                        if (beta) {
+                            if (Build.SUPPORTED_ABIS.length == 0) continue;
+                            String expectedAsset = RELEASE_ASSET_PREFIX + "-beta-" + candidateTag
+                                    + "-" + Build.SUPPORTED_ABIS[0] + ".apk";
+                            JSONArray candidateAssets = r.optJSONArray("assets");
+                            boolean hasExpectedAsset = false;
+                            if (candidateAssets != null) {
+                                for (int j = 0; j < candidateAssets.length(); j++) {
+                                    if (expectedAsset.equals(candidateAssets.getJSONObject(j).optString("name"))) {
+                                        hasExpectedAsset = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!hasExpectedAsset) continue;
+                        }
+                        long[] vec = toVersionVector(candidateTag);
                         if (vec == null) continue;
                         if (bestVec == null || compareVectors(vec, bestVec) > 0) {
                             bestVec = vec;
@@ -289,15 +309,11 @@ public class MgUpdateChecker {
                 String downloadUrl = null;
                 long fileSize = 0;
 
-                // Beta channel publishes both Release (no infix, stable package)
-                // and Debug (-debug infix, .beta package) APKs per push. A
-                // .beta-installed runtime fetches the debug variant; stable
-                // installs use /releases/latest (set above), which excludes
-                // prereleases, so the empty-infix lookup never matches a beta
-                // tag accidentally.
+                // Each Battery Client release contains the stable package and
+                // a non-debuggable hardened APK for the .beta package.
                 String infix = ApplicationLoader.applicationContext.getPackageName()
-                        .endsWith(".beta") ? "-debug" : "";
-                String abiApkName = "Mercurygram" + infix + "-" + tagName + "-" + targetAbi + ".apk";
+                        .endsWith(".beta") ? "-beta" : "";
+                String abiApkName = RELEASE_ASSET_PREFIX + infix + "-" + tagName + "-" + targetAbi + ".apk";
                 for (int i = 0; i < assets.length(); i++) {
                     JSONObject asset = assets.getJSONObject(i);
                     String name = asset.getString("name");
