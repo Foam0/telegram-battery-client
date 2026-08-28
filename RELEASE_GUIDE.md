@@ -30,7 +30,9 @@
 - зависимость `com.google.firebase:firebase-messaging:22.0.0`;
 - `BatteryPushProvider`, `FcmPushProvider` и `FcmPushListenerService`;
 - Firebase service с action `com.google.firebase.MESSAGING_EVENT` в manifest;
-- `TMessagesProj/src/main/res/values/battery_firebase.xml` с Telegram sender id;
+- `TMessagesProj_App/src/hardened/res/values/battery_firebase.xml` с Firebase
+  app проекта Mercurygram (`telegram-514ca`) для package
+  `it.belloworld.mercurygram.beta`;
 - возврат `BatteryPushProvider.INSTANCE` из `ApplicationLoaderImpl`;
 - автоматический Firebase fallback, когда внешний UnifiedPush-дистрибьютор
   недоступен;
@@ -55,6 +57,16 @@ scripts/check-push-contract.sh
    данных.
 3. После первого запуска новой версии проверить в диагностике provider и наличие
    push token.
+   Через ADB обязательно убедиться, что Firebase вернул токен, а не только
+   успешно инициализировался:
+
+   ```bash
+   adb logcat -c
+   # В Mercurygram выключить и снова включить «Предпочитать Firebase push».
+   adb logcat -d | rg 'FCM token received|FIS_AUTH_ERROR|FCM token request failed'
+   ```
+
+   Наличие `FIS_AUTH_ERROR` или `FCM token request failed` блокирует релиз.
 4. Смахнуть приложение из recent apps — не использовать Android **Force stop**,
    потому что он штатно блокирует push до следующего ручного запуска.
 5. Заблокировать экран и отправить сообщение с другого аккаунта.
@@ -70,8 +82,11 @@ fallback. Молчаливое состояние «дистрибьютор н�
 1. Работать в отдельной чистой ветке и отдельном worktree.
 2. Подтянуть нужный стабильный тег Mercurygram и перенести только наши
    изменения Battery Client.
-3. Не добавлять в публичную историю приватные конфиги, API keys, keystore,
-   пароли или их зашифрованные архивы.
+3. Не добавлять в публичную историю серверные credentials, keystore, пароли
+   или их зашифрованные архивы. Firebase Android client config проекта
+   Mercurygram публикуется намеренно: он входит в APK и не является серверным
+   секретом. При этом service-account JSON и FCM server credentials публиковать
+   нельзя.
 4. Проверить базовую версию в `gradle.properties`:
    `APP_VERSION_NAME` и `APP_VERSION_CODE` должны соответствовать новой базе.
 5. Проверить настройки автообновления:
@@ -264,6 +279,10 @@ curl -fIL \
 - [ ] Updater смотрит на `Foam0/telegram-battery-client`.
 - [ ] `scripts/check-push-contract.sh` проходит.
 - [ ] Firebase provider, config resources и manifest service присутствуют в APK.
+- [ ] Hardened APK содержит Firebase project `telegram-514ca`, а не
+      официальный Telegram project `tmessages2`.
+- [ ] На устройстве получен `FCM token received`; в logcat нет
+      `FIS_AUTH_ERROR`.
 - [ ] Тег новый и численно больше предыдущего.
 - [ ] Собран `afatFdArm64Hardened` с release key.
 - [ ] Package, versionName, versionCode, debuggable и подпись проверены.

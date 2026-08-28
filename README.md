@@ -157,6 +157,8 @@ scripts/check-sensitive-logs.sh
 - keystore и пароли подписи;
 - Telegram-сессии, базы данных и auth keys;
 - push-токены, OAuth-токены и логи с личными данными;
+- Firebase service-account JSON и серверные FCM credentials. Android client
+  config намеренно открыт: те же значения неизбежно находятся внутри APK;
 - реальные VLESS-ссылки и пользовательские профили.
 
 ## База и лицензия
