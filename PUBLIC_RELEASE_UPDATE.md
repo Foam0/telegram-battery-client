@@ -10,3 +10,6 @@
 - The release workflow builds only the non-debuggable hardened arm64 package and verifies its metadata and signature before publication.
 - Notification hotfix `12.10.0.2` restores the native Telegram Firebase provider and Firebase resources from the working 12.9 release while retaining UnifiedPush as fallback.
 - `scripts/check-push-contract.sh` and the release workflow now fail if the Firebase provider, sender config, manifest service, or automatic fallback disappears during a future upstream update.
+- Public hotfix release: `https://github.com/Foam0/telegram-battery-client/releases/tag/12.10.0.2`.
+- APK SHA-256: `02c6ac7c90731cf649a425b8836ab420d1dc2e57df18570a8077ef093a10f002`; size: 66,062,286 bytes.
+- Anonymous GitHub API verification selects `12.10.0.2` for installed `12.10.0.1` and reports it as the latest stable release.
