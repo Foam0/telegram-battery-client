@@ -18,3 +18,6 @@ jobs:
 
       - name: Check sensitive logs
         run: scripts/check-sensitive-logs.sh
+
+      - name: Check notification delivery contract
+        run: scripts/check-push-contract.sh

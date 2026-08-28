@@ -156,6 +156,14 @@ public class SharedConfig {
                 .commit();
     }
 
+    public static void setEnableFirebasePush(boolean enabled) {
+        enableFirebasePush = enabled;
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_enableFirebasePush", enableFirebasePush)
+                .commit();
+    }
+
     public static void toggleDisableSecureFlags() {
         disableSecureFlags = true;
         ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
@@ -658,6 +666,7 @@ public class SharedConfig {
 
     // Mercurygram: UnifiedPush
     public static boolean disableUnifiedPush = false;
+    public static boolean enableFirebasePush = false;
     public static String unifiedPushGateway = "https://p2p.belloworld.it/";
     public static String unifiedPushEndpointUrl = "";   // raw UP endpoint URL from last onNewEndpoint
     public static volatile byte[] webPushPrivateKey;    // PKCS#8-encoded P-256 private key
@@ -1013,6 +1022,7 @@ public class SharedConfig {
         editor.putString("mg_pushStringSimple", pushStringSimple);
         // Mercurygram settings
         editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
+        editor.putBoolean("mg_enableFirebasePush", enableFirebasePush);
         editor.putString("mg_unifiedPushGateway2", unifiedPushGateway);
         editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
         editor.putBoolean("mg_removeAdsAndProxySponsor", removeAdsAndProxySponsor);
@@ -1068,6 +1078,7 @@ public class SharedConfig {
         pushStringSimple = preferences.getString("mg_pushStringSimple", "");
         // Mercurygram settings
         disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
+        enableFirebasePush = preferences.getBoolean("mg_enableFirebasePush", false);
         unifiedPushGateway = preferences.getString("mg_unifiedPushGateway2", unifiedPushGateway);
         disableSecureFlags = true;
         removeAdsAndProxySponsor = preferences.getBoolean("mg_removeAdsAndProxySponsor", true);

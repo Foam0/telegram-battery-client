@@ -22,6 +22,49 @@
 имени APK без одновременной миграции автообновлятора. Иначе приложение не
 сможет обновиться поверх установленной версии или не найдёт новый файл.
 
+## Обязательный контракт доставки уведомлений
+
+Обновление Mercurygram нельзя выпускать, если при переносе исчез хотя бы один
+элемент рабочего push-пути Battery Client:
+
+- зависимость `com.google.firebase:firebase-messaging:22.0.0`;
+- `BatteryPushProvider`, `FcmPushProvider` и `FcmPushListenerService`;
+- Firebase service с action `com.google.firebase.MESSAGING_EVENT` в manifest;
+- `TMessagesProj/src/main/res/values/battery_firebase.xml` с Telegram sender id;
+- возврат `BatteryPushProvider.INSTANCE` из `ApplicationLoaderImpl`;
+- автоматический Firebase fallback, когда внешний UnifiedPush-дистрибьютор
+  недоступен;
+- сохранение `mg_enableFirebasePush` при обновлении;
+- UnifiedPush как fallback при ошибке Firebase.
+
+Перед каждой сборкой обязательно выполнить:
+
+```bash
+scripts/check-push-contract.sh
+```
+
+При обновлении upstream отдельно сравнить notification/push-файлы с последним
+рабочим релизом. Нельзя считать перенос успешным только потому, что проект
+компилируется: удалённый provider или manifest service не мешают сборке, но
+ломают фоновые уведомления.
+
+Минимальный тест миграции выполняется именно обновлением поверх предыдущего APK:
+
+1. На предыдущей версии оставить UnifiedPush-дистрибьютор невыбранным.
+2. Убедиться, что Firebase push работает, затем обновить приложение без очистки
+   данных.
+3. После первого запуска новой версии проверить в диагностике provider и наличие
+   push token.
+4. Смахнуть приложение из recent apps — не использовать Android **Force stop**,
+   потому что он штатно блокирует push до следующего ручного запуска.
+5. Заблокировать экран и отправить сообщение с другого аккаунта.
+6. Повторить тест с выбранным внешним UnifiedPush-дистрибьютором.
+
+Если Firebase намеренно удаляется или заменяется, до релиза должна быть готова
+и проверена миграция существующего токена/настройки плюс автоматический рабочий
+fallback. Молчаливое состояние «дистрибьютор не задан» после обновления является
+блокирующей релиз ошибкой.
+
 ## 1. Подготовить исходники
 
 1. Работать в отдельной чистой ветке и отдельном worktree.
@@ -47,6 +90,7 @@ rg -n \
 git status --short
 git diff --check
 scripts/check-sensitive-logs.sh
+scripts/check-push-contract.sh
 ```
 
 ## 2. Выбрать номер релиза
@@ -218,6 +262,8 @@ curl -fIL \
 - [ ] Ветка основана на нужном стабильном Mercurygram.
 - [ ] Публичная история не содержит приватных файлов и секретов.
 - [ ] Updater смотрит на `Foam0/telegram-battery-client`.
+- [ ] `scripts/check-push-contract.sh` проходит.
+- [ ] Firebase provider, config resources и manifest service присутствуют в APK.
 - [ ] Тег новый и численно больше предыдущего.
 - [ ] Собран `afatFdArm64Hardened` с release key.
 - [ ] Package, versionName, versionCode, debuggable и подпись проверены.
@@ -225,4 +271,6 @@ curl -fIL \
 - [ ] GitHub Release не draft и содержит ожидаемый asset.
 - [ ] `/releases/latest` возвращает новый релиз.
 - [ ] Обновление проверено на предыдущей установленной версии.
+- [ ] После обновления получено уведомление при смахнутом приложении и
+      заблокированном экране.
 - [ ] SHA-256 и результаты smoke-теста записаны.

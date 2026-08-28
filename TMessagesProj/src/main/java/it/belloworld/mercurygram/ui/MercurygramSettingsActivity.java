@@ -10,6 +10,7 @@ import android.widget.Toast;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.FcmPushProvider;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
@@ -56,6 +57,7 @@ public class MercurygramSettingsActivity extends UniversalFragment {
     private static final int ID_ACCEPT_PRERELEASES = 21;
     private static final int ID_CHECK_FOR_UPDATES_NOW = 22;
     private static final int ID_UNIFIED_PUSH = 30;
+    private static final int ID_ENABLE_FIREBASE_PUSH = 31;
     private static final int ID_REDUCE_TRACKING_FINGERPRINT = 40;
     private static final int ID_TOR_SETTINGS = 41;
     private static final int ID_DISABLE_GLOBAL_SEARCH = 44;
@@ -277,6 +279,11 @@ public class MercurygramSettingsActivity extends UniversalFragment {
         }
         items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientAccountNotificationsAbout)));
 
+        items.add(MgSettingsScope.globalCheck(ID_ENABLE_FIREBASE_PUSH,
+                        LocaleController.getString(R.string.BatteryClientFirebasePush))
+                .setChecked(SharedConfig.enableFirebasePush));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.BatteryClientFirebasePushAbout)));
+
         CharSequence pushValue;
         if (SharedConfig.disableUnifiedPush) {
             pushValue = LocaleController.getString(R.string.NotificationsOff);
@@ -385,6 +392,9 @@ public class MercurygramSettingsActivity extends UniversalFragment {
                 break;
             case ID_UNIFIED_PUSH:
                 presentFragment(new MgUnifiedPushSettingsActivity());
+                break;
+            case ID_ENABLE_FIREBASE_PUSH:
+                handleFirebasePushToggle();
                 break;
             case ID_ACCOUNT_NOTIFICATIONS_ENABLED:
                 getUserConfig().batteryAccountNotificationsEnabled = !getUserConfig().batteryAccountNotificationsEnabled;
@@ -548,6 +558,31 @@ public class MercurygramSettingsActivity extends UniversalFragment {
         Toast.makeText(context,
                 LocaleController.getString(R.string.MercurygramCheckForUpdatesToast),
                 Toast.LENGTH_SHORT).show();
+    }
+
+    private void handleFirebasePushToggle() {
+        if (SharedConfig.enableFirebasePush) {
+            SharedConfig.setEnableFirebasePush(false);
+            FcmPushProvider.onPreferenceChanged(false);
+            ApplicationLoader.getPushProvider().onRequestPushToken();
+            refreshList();
+            return;
+        }
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        new AlertDialog.Builder(context)
+                .setTitle(LocaleController.getString(R.string.BatteryClientFirebasePushEnableTitle))
+                .setMessage(LocaleController.getString(R.string.BatteryClientFirebasePushEnableMessage))
+                .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                .setPositiveButton(LocaleController.getString(R.string.Enable), (dialog, which) -> {
+                    SharedConfig.setEnableFirebasePush(true);
+                    FcmPushProvider.onPreferenceChanged(true);
+                    ApplicationLoader.getPushProvider().onRequestPushToken();
+                    refreshList();
+                })
+                .show();
     }
 
     private void handleAcceptPreReleasesClick() {

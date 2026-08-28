@@ -8,3 +8,5 @@
 - Expected signing certificate SHA-256: `A08D7DC323DDF71EF3201944397E0D3CCE7D40847263E11F328B68BBE19229AB`.
 - The private configuration backup commit and all of its files are excluded from this branch's history.
 - The release workflow builds only the non-debuggable hardened arm64 package and verifies its metadata and signature before publication.
+- Notification hotfix `12.10.0.2` restores the native Telegram Firebase provider and Firebase resources from the working 12.9 release while retaining UnifiedPush as fallback.
+- `scripts/check-push-contract.sh` and the release workflow now fail if the Firebase provider, sender config, manifest service, or automatic fallback disappears during a future upstream update.

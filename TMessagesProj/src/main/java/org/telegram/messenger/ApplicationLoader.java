@@ -252,6 +252,10 @@ public class ApplicationLoader extends Application {
         }
 
         SharedConfig.loadConfig();
+        // Preserve the 12.9 delivery contract on upgrade: use native Telegram
+        // FCM when no viable UnifiedPush distributor is present, and migrate
+        // the user's explicit Firebase preference from the same config key.
+        FcmPushProvider.onPreferenceChanged(SharedConfig.enableFirebasePush);
         SharedPrefsHelper.init(applicationContext);
         // Clear stale Orbot proxy entries from the pre-embedded-Tor era so
         // upgrades don't silently keep routing MTProto through 127.0.0.1:9050.
@@ -267,7 +271,10 @@ public class ApplicationLoader extends Application {
             UserConfig.getInstance(a).loadConfig();
             MessagesController.getInstance(a);
             if (a == 0) {
-                SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
+                SharedConfig.pushStringStatus = (FcmPushProvider.shouldUseFirebaseAsPrimary()
+                        ? "__FIREBASE_GENERATING_SINCE_"
+                        : "__UNIFIEDPUSH_GENERATING_SINCE_")
+                        + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
             } else {
                 ConnectionsManager.getInstance(a);
             }
@@ -283,8 +290,10 @@ public class ApplicationLoader extends Application {
         SharedConfig.maybeClearReducedTrackingExhaustedOnUpgrade();
 
         ApplicationLoader app = (ApplicationLoader) ApplicationLoader.applicationContext;
-        if (!SharedConfig.disableUnifiedPush
-                && TextUtils.isEmpty(SharedConfig.pushString)
+        if (!FcmPushProvider.shouldUseFirebaseAsPrimary()
+                && !SharedConfig.disableUnifiedPush
+                && (TextUtils.isEmpty(SharedConfig.pushString)
+                || SharedConfig.pushType != PushListenerController.PUSH_TYPE_WEB)
                 && !TextUtils.isEmpty(SharedConfig.unifiedPushEndpointUrl)) {
             SharedConfig.pushStringGetTimeStart = SystemClock.elapsedRealtime();
             SharedConfig.pushStringGetTimeEnd = SharedConfig.pushStringGetTimeStart;

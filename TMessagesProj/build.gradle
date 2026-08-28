@@ -60,6 +60,10 @@ dependencies {
     implementation 'com.stripe:stripe-android:2.0.2'
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'com.google.guava:guava:31.1-android'
+    // Battery Client: restore the native Telegram FCM path used by 12.9.
+    // Without it an upgrade with no external UnifiedPush distributor silently
+    // loses background notification delivery.
+    implementation 'com.google.firebase:firebase-messaging:22.0.0'
 
     implementation "androidx.credentials:credentials:1.6.0-alpha04"
 

@@ -21,6 +21,10 @@
     <string name="BatteryClientLastUpdate">Last update</string>
     <string name="BatteryClientPushMode">Push mode</string>
     <string name="BatteryClientPushProvider">Push provider</string>
+    <string name="BatteryClientFirebasePush">Prefer Firebase push</string>
+    <string name="BatteryClientFirebasePushAbout">Firebase is used automatically when no UnifiedPush distributor is available. Enable this to prefer Firebase even when a distributor is installed.</string>
+    <string name="BatteryClientFirebasePushEnableTitle">Prefer Firebase push?</string>
+    <string name="BatteryClientFirebasePushEnableMessage">Firebase Cloud Messaging will become the primary notification provider. If it fails, Battery Client falls back to UnifiedPush or the background connection.</string>
     <string name="BatteryClientUnifiedPushDistributor">UnifiedPush distributor</string>
     <string name="BatteryClientUnifiedPushEndpoint">UnifiedPush endpoint</string>
     <string name="BatteryClientPushToken">Telegram push token</string>

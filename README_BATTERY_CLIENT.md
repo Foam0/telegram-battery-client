@@ -6,7 +6,7 @@ This fork keeps the Telegram client core from Mercurygram/Telegram Android and a
 
 - Telegram base: [Mercurygram](https://github.com/Mercurygram/Mercurygram), stable version tag `12.10.0.1`, commit `6cdc1b2f3eada34c0c30d6922327c4d13f3ff3c3`.
 - Upstream core: [Telegram Android](https://github.com/DrKLO/Telegram), GPL-2.0 family according to Telegram's app source page.
-- Push model: Mercurygram's FOSS-compatible UnifiedPush/WebPush path is retained, including its optional embedded FCM distributor that does not link the Firebase SDK. The app does not add aggressive polling.
+- Push model: native Telegram Firebase Cloud Messaging is restored as the automatic path when no external UnifiedPush distributor is available. UnifiedPush/WebPush and Mercurygram's embedded FCM distributor remain available as fallbacks or explicit alternatives.
 - VPN/proxy engine: [sing-box](https://github.com/SagerNet/sing-box) / `libbox.aar`, GPL-3.0-or-later.
 
 The implementation does not reimplement MTProto. It leaves authentication, storage, updates, media, and UI flows in the existing Telegram Android codebase.
@@ -81,7 +81,7 @@ accounts, sessions, settings, and app-private VLESS profiles.
 
 ## Battery Changes
 
-- Uses the existing Mercurygram UnifiedPush/WebPush path for push-first delivery.
+- Uses native Telegram Firebase push automatically when no external UnifiedPush distributor is available, with UnifiedPush/WebPush as a fallback and explicit alternative.
 - Does not add a permanent foreground service for idle operation.
 - Starts embedded VPN or local SOCKS proxy mode only after explicit user action and fully stops the selected service on disconnect.
 - Keeps reconnect/backoff behavior in the existing Telegram networking layer.
@@ -106,7 +106,7 @@ The main expected battery win is from push-first behavior, avoiding extra backgr
 
 ## Ads, Promos, and Tracking
 
-- Mercurygram's de-Googled build removes the proprietary Google/Firebase SDK integrations from the default app. Its optional embedded FCM distributor talks to Google Play Services through Android IPC and remains part of the UnifiedPush/WebPush flow.
+- Battery Client intentionally restores Firebase Messaging for reliable native Telegram push delivery. Analytics collection and automatic Firebase initialization remain disabled; token generation is controlled by the active push provider. Mercurygram's embedded FCM distributor remains available through UnifiedPush.
 - The existing Mercurygram `removeAdsAndProxySponsor` path is enabled by default in this fork, preventing local sponsored-message/proxy-sponsor fetch and display paths from running.
 - Premium/business/gift upsell UI is hidden by default for new accounts.
 - This fork does not bypass Telegram server-enforced limits, paid features, or account policy. If a limit or ad decision is enforced by Telegram servers, it is documented as out of scope rather than bypassed.
