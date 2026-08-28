@@ -51,8 +51,9 @@ public class PushListenerController {
             if (token == null) {
                 return;
             }
+            boolean tokenChanged = pushType != SharedConfig.pushType || !TextUtils.equals(SharedConfig.pushString, token);
             boolean sendStat = false;
-            if (SharedConfig.pushStringGetTimeStart != 0 && SharedConfig.pushStringGetTimeEnd != 0 && (!SharedConfig.pushStatSent || !TextUtils.equals(SharedConfig.pushString, token))) {
+            if (SharedConfig.pushStringGetTimeStart != 0 && SharedConfig.pushStringGetTimeEnd != 0 && (!SharedConfig.pushStatSent || tokenChanged)) {
                 sendStat = true;
                 SharedConfig.pushStatSent = false;
             }
@@ -61,9 +62,17 @@ public class PushListenerController {
             SharedConfig.saveConfig();
             for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
                 UserConfig userConfig = UserConfig.getInstance(a);
-                userConfig.registeredForPush = false;
-                userConfig.saveConfig(false);
-                if (userConfig.getClientUserId() != 0) {
+                if (tokenChanged) {
+                    userConfig.registeredForPush = false;
+                    userConfig.saveConfig(false);
+                }
+                // Mercurygram supports 32 accounts. Firebase returns the same
+                // cached token on ordinary startups, so invalidating every
+                // account here would fan out up to 32 redundant
+                // account.registerDevice calls and eventually hit FLOOD_WAIT.
+                // A new token still re-registers everybody; an unchanged one
+                // only repairs accounts that are actually missing registration.
+                if (userConfig.getClientUserId() != 0 && (tokenChanged || !userConfig.registeredForPush)) {
                     final int currentAccount = a;
                     if (sendStat) {
                         String tag = pushType == PUSH_TYPE_FIREBASE ? "fcm" : (pushType == PUSH_TYPE_HUAWEI ? "hcm" : "wp");

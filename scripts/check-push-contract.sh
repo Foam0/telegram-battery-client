@@ -27,7 +27,7 @@ require_file TMessagesProj/src/main/res/values/battery_firebase.xml
 require_file TMessagesProj_App/src/hardened/res/values/battery_firebase.xml
 
 require_text TMessagesProj/build.gradle \
-    "com.google.firebase:firebase-messaging:22.0.0"
+    "com.google.firebase:firebase-messaging:25.1.2"
 require_text TMessagesProj/src/main/AndroidManifest.xml \
     "org.telegram.messenger.FcmPushListenerService"
 require_text TMessagesProj/src/main/AndroidManifest.xml \
@@ -59,8 +59,22 @@ require_text TMessagesProj/src/main/java/org/telegram/messenger/BatteryPushProvi
 require_text TMessagesProj/src/main/java/org/telegram/messenger/FcmPushProvider.java \
     "return !hasUnifiedPushServices();"
 require_text TMessagesProj/src/main/java/org/telegram/messenger/FcmPushProvider.java \
-    "enableBackgroundNotificationFallback();"
+    'editor.putBoolean("pushService", false);'
+require_text TMessagesProj/src/main/java/org/telegram/messenger/FcmPushProvider.java \
+    'editor.putBoolean("pushConnection", false);'
+require_text TMessagesProj/src/main/java/org/telegram/messenger/FcmPushProvider.java \
+    'messaging.deleteToken().addOnCompleteListener'
+reject_text TMessagesProj/src/main/java/org/telegram/messenger/FcmPushProvider.java \
+    'editor.putBoolean("pushService", true);'
+reject_text TMessagesProj/src/main/java/org/telegram/messenger/FcmPushProvider.java \
+    'editor.putBoolean("pushConnection", true);'
 require_text TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java \
     "FcmPushProvider.onPreferenceChanged(SharedConfig.enableFirebasePush);"
+require_text TMessagesProj/src/main/java/org/telegram/messenger/PushListenerController.java \
+    'boolean tokenChanged = pushType != SharedConfig.pushType'
+require_text TMessagesProj/src/main/java/org/telegram/messenger/PushListenerController.java \
+    '(tokenChanged || !userConfig.registeredForPush)'
+require_text TMessagesProj/src/main/java/org/telegram/messenger/MessagesController.java \
+    'getConnectionsManager().sendRequest(req, (response, error) -> {'
 
 printf '%s\n' "push_contract=ok"

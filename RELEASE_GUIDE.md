@@ -27,7 +27,8 @@
 Обновление Mercurygram нельзя выпускать, если при переносе исчез хотя бы один
 элемент рабочего push-пути Battery Client:
 
-- зависимость `com.google.firebase:firebase-messaging:22.0.0`;
+- актуальная проверенная зависимость Firebase Messaging (для хотфикса
+  `com.google.firebase:firebase-messaging:25.1.2`);
 - `BatteryPushProvider`, `FcmPushProvider` и `FcmPushListenerService`;
 - Firebase service с action `com.google.firebase.MESSAGING_EVENT` в manifest;
 - `TMessagesProj_App/src/hardened/res/values/battery_firebase.xml` с Firebase
@@ -38,6 +39,27 @@
   недоступен;
 - сохранение `mg_enableFirebasePush` при обновлении;
 - UnifiedPush как fallback при ошибке Firebase.
+
+Foreground keep-alive и постоянное MTProto-соединение не являются push-
+fallback. Ошибка Firebase/UnifiedPush не должна записывать `pushService=true`
+или `pushConnection=true`: эти настройки разрешено включать только явно из
+интерфейса. При обновлении с 12.10.0.2/12.10.0.3 один раз сбросить сохранённый
+автоматический fallback, иначе после установки останется постоянное системное
+уведомление и процесс продолжит висеть в фоне.
+
+Для сборок с `MAX_ACCOUNT_COUNT=32` нельзя безусловно сбрасывать
+`registeredForPush` у всех аккаунтов при каждом возврате кэшированного FCM-
+токена. Если токен и его тип не изменились, повторно регистрируются только
+аккаунты с `registeredForPush=false`; при новом токене — все активные аккаунты.
+Каждый `account.registerDevice` должен отправляться через
+`MessagesController.currentAccount`/его `getConnectionsManager()`, иначе один
+из аккаунтов обращается через чужую MTProto-сессию. Массовая повторная
+регистрация на каждом запуске приводит к `FLOOD_WAIT` и блокирует push.
+
+При смене Firebase app config или крупном обновлении Messaging SDK нужен
+одноразовый перевыпуск токена через `FirebaseMessaging.deleteToken()` →
+`getToken()`. Миграцию помечать завершённой только после успешного получения
+нового токена; само значение токена запрещено писать в release-логи.
 
 Перед каждой сборкой обязательно выполнить:
 
@@ -67,10 +89,16 @@ scripts/check-push-contract.sh
    ```
 
    Наличие `FIS_AUTH_ERROR` или `FCM token request failed` блокирует релиз.
+   Одновременно проверить, что `Keep-alive service` и `Background connection`
+   выключены и не включаются сами после ошибки получения токена.
 4. Смахнуть приложение из recent apps — не использовать Android **Force stop**,
    потому что он штатно блокирует push до следующего ручного запуска.
 5. Заблокировать экран и отправить сообщение с другого аккаунта.
 6. Повторить тест с выбранным внешним UnifiedPush-дистрибьютором.
+7. При нескольких аккаунтах проверить лог: новый токен должен дать отдельный
+   успешный `account N registered for push` для каждого активного аккаунта, а
+   повторный запуск с тем же токеном не должен веером отправлять те же запросы
+   и получать `FLOOD_WAIT`.
 
 Если Firebase намеренно удаляется или заменяется, до релиза должна быть готова
 и проверена миграция существующего токена/настройки плюс автоматический рабочий

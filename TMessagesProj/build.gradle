@@ -63,7 +63,7 @@ dependencies {
     // Battery Client: restore the native Telegram FCM path used by 12.9.
     // Without it an upgrade with no external UnifiedPush distributor silently
     // loses background notification delivery.
-    implementation 'com.google.firebase:firebase-messaging:22.0.0'
+    implementation 'com.google.firebase:firebase-messaging:25.1.2'
 
     implementation "androidx.credentials:credentials:1.6.0-alpha04"
 
