@@ -36,7 +36,10 @@ jobs:
           submodules: recursive
 
       - name: Check notification delivery contract
-        run: scripts/check-push-contract.sh
+        run: |
+          scripts/check-push-contract.sh
+          scripts/check-sensitive-logs.sh
+          scripts/check-public-source.sh
 
       - name: Set up JDK 17
         uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0

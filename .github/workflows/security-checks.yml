@@ -21,3 +21,6 @@ jobs:
 
       - name: Check notification delivery contract
         run: scripts/check-push-contract.sh
+
+      - name: Check public source credentials and sample configs
+        run: scripts/check-public-source.sh
