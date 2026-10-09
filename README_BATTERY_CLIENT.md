@@ -4,12 +4,9 @@ This fork keeps the Telegram client core from Mercurygram/Telegram Android and a
 
 ## Base
 
-- Telegram base: [Mercurygram](https://github.com/Mercurygram/Mercurygram), branch `Mercurygram`, version tag `12.8.1.2.5`, commit `a00d0392d5d14fa89f3aeff13c039045b2612357`.
+- Telegram base: [Mercurygram](https://github.com/Mercurygram/Mercurygram), stable version tag `12.10.6.1`, commit `786811f8e907c6e1b4f8309813588670ee7c1ec6`.
 - Upstream core: [Telegram Android](https://github.com/DrKLO/Telegram), GPL-2.0 family according to Telegram's app source page.
-- Push model: Firebase Messaging is selected automatically when Google Play
-  Services are available and no UnifiedPush distributor is installed. A working
-  UnifiedPush/WebPush distributor takes priority unless Firebase is explicitly
-  selected. The app does not add aggressive polling.
+- Push model: native Telegram Firebase Cloud Messaging is restored as the automatic path when no external UnifiedPush distributor is available. UnifiedPush/WebPush and Mercurygram's embedded FCM distributor remain available as fallbacks or explicit alternatives.
 - VPN/proxy engine: [sing-box](https://github.com/SagerNet/sing-box) / `libbox.aar`, GPL-3.0-or-later.
 
 The implementation does not reimplement MTProto. It leaves authentication, storage, updates, media, and UI flows in the existing Telegram Android codebase.
@@ -18,25 +15,31 @@ The implementation does not reimplement MTProto. It leaves authentication, stora
 
 - JDK: 17.
 - Gradle wrapper: 8.13.
-- Android Gradle Plugin: 8.13.0.
-- Kotlin Gradle plugin: 2.1.20.
-- Android SDK: API 35, build tools 35.0.0.
-- Android min/target SDK: 24/35.
+- Android Gradle Plugin: 8.13.2.
+- Kotlin Gradle plugin: 2.1.0.
+- Android SDK: API 36, build tools 36.0.0.
+- Android min/target SDK: 24/36.
 - Android NDK: `27.2.12479018`.
 - CMake: `3.22.1`.
-- Firebase Messaging: `22.0.0`.
 - Native ABI shipped by this build: `arm64-v8a`.
 - TDLib/native submodules:
   - `TMessagesProj/jni/td`: `0ae923c493bceb75433de2682ba8ae29cc7bf88d`
   - `TMessagesProj/jni/boringssl`: `56383dabf472100181226cd14249f04c69a0c10b`
-  - `TMessagesProj/jni/dav1d`: `32cf02af50f32af108a3b281c452788dccdac648`
-  - `TMessagesProj/jni/ffmpeg`: `71fb6132637a2a430375c24afc381fff8b854fe7`
-  - `TMessagesProj/jni/libvpx`: `1024874c5919305883187e2953de8fcb4c3d7fa6`
+  - `TMessagesProj/jni/third_party/dav1d`: `54706fc6bc0cdecab7e9593974a4039cc038fca7`
+  - `TMessagesProj/jni/third_party/ffmpeg`: `45f1910444f34b02621f9f0426ea1a538a613c41`
+  - `TMessagesProj/jni/third_party/libvpx`: `1024874c5919305883187e2953de8fcb4c3d7fa6`
+  - `TMessagesProj/jni/third_party/xiph/ogg`: `be05b13e98b048f0b5a0f5fa8ce514d56db5f822`
+  - `TMessagesProj/jni/third_party/xiph/opus`: `22244de5a79bd1d6d623c32e72bf1954b56235be`
+  - `TMessagesProj/jni/third_party/xiph/opusfile`: `a55c164e9891a9326188b7d4d216ec9a88373739`
+  - `TMessagesProj/jni/tlottie`: `685f17e348c613d4d62896f49fc01f6ec4e8f028`
   - `TMessagesProj/jni/whisper`: `f24588a272ae8e23280d9c220536437164e6ed28`
 - sing-box config checker: `v1.13.14`.
 - Bundled `libbox.aar`: Java surface was inspected with `javap` before the Android glue was written.
 
 ## Build
+
+The complete signed release procedure, including updater verification and the
+post-release phone smoke-test, is documented in [RELEASE_GUIDE.md](RELEASE_GUIDE.md).
 
 Create an ignored `API_KEYS` file before building. Real Telegram login requires a real Telegram API id and hash. The placeholder values are enough to compile, but not enough to log in.
 
@@ -51,52 +54,35 @@ Use JDK 17 and the Android SDK/NDK versions above:
 export JAVA_HOME=/path/to/jdk17
 export ANDROID_HOME=/path/to/android-sdk
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-./gradlew -PMG_BUILD_TAG=12.9.0.1 :TMessagesProj_App:assembleAfatFdArm64Hardened
+./gradlew -PMG_BUILD_TAG=12.10.6.1 :TMessagesProj_App:assembleAfatFdArm64Debug
 ```
 
-The optimized, non-debuggable `.beta` APK is written to:
+The debug APK is written to:
 
 ```text
-TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/afatFdArm64.apk
+TMessagesProj_App/build/outputs/apk/afatFdArm64/debug/afatFdArm64.apk
 ```
 
 The Gradle `preBuild` task runs `scripts/check_sample_config.sh`, which builds `sing-box v1.13.14` and validates both `config/sample-vless-config.json` and `config/sample-vless-socks-config.json` with `sing-box check`.
 
-## Firebase / Native Push
+## Releases and auto-updates
 
-Native Telegram push delivery is server-side: the client obtains an FCM token
-and registers it with Telegram, then Telegram's backend sends notifications
-through the matching Firebase sender. The known-good Android client
-configuration used by this fork is intentionally checked in at
-`TMessagesProj_App/src/hardened/res/values/battery_firebase.xml`.
+The `Build signed beta APK` GitHub Actions workflow builds only the optimized,
+non-debuggable arm64 hardened package. Before publication it verifies the
+application id, version name, APK signature, and expected release certificate.
+The resulting GitHub Release asset is named
+`BatteryTelegramClient-beta-<version>-arm64-v8a.apk`.
 
-Firebase Android API keys, application IDs, sender IDs, and project IDs are
-client identifiers rather than server authorization credentials, so this client
-configuration may be public. API restrictions, Firebase Security Rules, and App
-Check must protect the project. Service-account JSON, Admin SDK private keys,
-server keys, signing keystores, Telegram API hashes, and user tokens remain
-secret and must never be committed.
-
-For this fork, Firebase Cloud Messaging is selected automatically when no
-UnifiedPush distributor is installed, or when the Firebase push option is
-enabled. UnifiedPush remains a fallback if FCM token generation fails and a
-distributor is available. If Firebase is hard-blocked and no UnifiedPush
-distributor is installed, the app enables the built-in keep-alive/background
-connection fallback so message notifications can still arrive without a separate
-push app. When a later build changes to a working Firebase configuration and
-obtains a token, the app removes only the fallback that it enabled
-automatically; a fallback setting changed manually by the user is preserved.
+The in-app updater reads compatible releases from
+`Foam0/telegram-battery-client`, selects the asset matching the installed ABI,
+downloads it, verifies the Battery Client release certificate, and then opens
+Android's system package installer. A normal signed APK replacement preserves
+accounts, sessions, settings, and app-private VLESS profiles.
 
 ## Battery Changes
 
-- Uses push-first delivery. Firebase Cloud Messaging is the native path when no
-  UnifiedPush distributor is installed or the Firebase option is enabled. If
-  Firebase fails, the app backs off for 24 hours and uses UnifiedPush/WebPush
-  when available; without UnifiedPush it enables the built-in keep-alive and
-  background connection fallback.
-- Does not add a permanent foreground service during normal FCM/UnifiedPush
-  operation. The built-in foreground keep-alive is used only as the last-resort
-  fallback described above.
+- Uses native Telegram Firebase push automatically when no external UnifiedPush distributor is available, with UnifiedPush/WebPush as a fallback and explicit alternative.
+- Does not add a permanent foreground service for idle operation.
 - Starts embedded VPN or local SOCKS proxy mode only after explicit user action and fully stops the selected service on disconnect.
 - Keeps reconnect/backoff behavior in the existing Telegram networking layer.
 - Avoids wake locks beyond existing Telegram flows.
@@ -118,25 +104,9 @@ automatically; a fallback setting changed manually by the user is preserved.
 
 The main expected battery win is from push-first behavior, avoiding extra background loops, and closing VPN resources cleanly. `gc_percent`, `GOMAXPROCS`, and narrow DNS sniffing are smaller tuning effects.
 
-### Push Limitations
-
-If token generation fails, the app logs the FCM exception and falls back to
-UnifiedPush when possible. If a token is generated but Telegram messages do not
-arrive while the process is stopped, Telegram's backend may be refusing or
-ignoring this fork's native FCM registration; the diagnostics screen exposes the
-active provider and token state without printing the token itself.
-
-The Firebase code does not log push tokens or payload contents. Analytics
-collection and Firebase Messaging auto-init are disabled in the manifest; token
-requests happen when FCM is selected as the active push provider, and hard
-failures switch to the UnifiedPush fallback.
-
 ## Ads, Promos, and Tracking
 
-- Mercurygram's de-Googled base removes/stubs most Google Play Services, Google
-  Maps, SafetyNet/Play Integrity, and similar proprietary integrations. This
-  battery-client build intentionally adds Firebase Messaging only as an
-  explicit opt-in push experiment and disables Firebase Analytics collection.
+- Battery Client intentionally restores Firebase Messaging for reliable native Telegram push delivery. Analytics collection and automatic Firebase initialization remain disabled; token generation is controlled by the active push provider. Mercurygram's embedded FCM distributor remains available through UnifiedPush.
 - The existing Mercurygram `removeAdsAndProxySponsor` path is enabled by default in this fork, preventing local sponsored-message/proxy-sponsor fetch and display paths from running.
 - Premium/business/gift upsell UI is hidden by default for new accounts.
 - This fork does not bypass Telegram server-enforced limits, paid features, or account policy. If a limit or ad decision is enforced by Telegram servers, it is documented as out of scope rather than bypassed.
@@ -184,47 +154,8 @@ or embedded in release APKs.
 ## Security Rules
 
 - Telegram session, database, and auth files stay in app-private storage.
-- Do not commit `API_KEYS`, `local.properties`, keystores, service-account/Admin
-  SDK keys, tokens, session files, database dumps, logs, or user VPN profiles.
-
-## Public repository security
-
-- VLESS profiles are supplied by the user at runtime. No working profile, UUID,
-  server address, Reality key, or short ID is bundled in the source or APK.
-- The JSON files under `config/sample-vless-*.json` use the non-routable
-  `192.0.2.0/24` documentation range and deliberately unusable credentials.
-- Do not commit `API_KEYS`, `local.properties`, keystores, encrypted secret
-  backups, tokens, session files, database dumps, logs, or user VPN profiles.
-- `scripts/check-public-source.sh` enforces these rules locally and in GitHub
-  Actions.
-- Do not log auth keys, phone numbers, SMS codes, session file paths, database
-  dumps, or message contents.
-
-## GitHub Actions build
-
-The `Build signed beta APK` workflow permanently builds only one optimized,
-non-debuggable arm64 APK on pushes to `main` and on manual runs: the hardened
-`it.belloworld.mercurygram.beta` package. It never publishes the stable package.
-The signing job uses
-the protected `release` environment and cannot start until a required reviewer
-approves it. Pull requests run the separate security checks only and never
-receive signing credentials.
-
-`APP_ID`, `APP_HASH`, `RELEASE_KEYSTORE`, `RELEASE_KEYSTORE_PASSWORD`,
-`RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD` are stored as environment
-secrets. They are exposed only to the single shell step that builds the APK;
-temporary `API_KEYS` and keystore files are deleted before artifact upload.
-External Actions are pinned to immutable commit SHAs. The resulting artifact is
-named `battery-client-arm64-beta-<version>` and is retained for 30 days. On
-`main`, the verified APK is also published as the permanent GitHub Release asset
-`BatteryTelegramClient-beta-<version>-arm64-v8a.apk`.
-
-The existing **Check for updates now** button under Mercurygram settings reads
-the latest compatible release from `Foam0/telegram-battery-client`, downloads
-the `.beta` APK matching the installed package, verifies that it is
-signed by the same release certificate as the installed app, and only then
-opens Android's system package installer. VLESS profiles are never embedded as
-defaults.
+- Do not commit `API_KEYS`, `local.properties`, keystores, tokens, session files, database dumps, logs, or user VPN profiles.
+- Do not log auth keys, phone numbers, SMS codes, session file paths, database dumps, or message contents.
 
 ## License
 

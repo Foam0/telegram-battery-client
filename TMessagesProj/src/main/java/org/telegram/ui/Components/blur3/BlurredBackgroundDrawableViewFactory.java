@@ -11,12 +11,14 @@ import org.telegram.ui.Components.blur3.drawable.BlurredBackgroundDrawableRender
 import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorProvider;
 import org.telegram.ui.Components.blur3.source.BlurredBackgroundSource;
 import org.telegram.ui.Components.chat.ViewPositionWatcher;
+import org.telegram.utils.glass.GlassEngine;
 
 import me.vkryl.core.reference.ReferenceList;
 
 public class BlurredBackgroundDrawableViewFactory {
 
     private final BlurredBackgroundSource source;
+    private int outsetX, outsetY;
 
     public BlurredBackgroundDrawableViewFactory(BlurredBackgroundSource source) {
         this.source = source;
@@ -32,13 +34,34 @@ public class BlurredBackgroundDrawableViewFactory {
         this.parent = parent;
     }
 
+    public void setGlassEngine(GlassEngine engine) {
+        this.engine = engine;
+    }
+
+    public void setOutset(int outset) {
+        setOutset(outset, outset);
+    }
+
+    public void setOutset(int dx, int dy) {
+        outsetX = dx;
+        outsetY = dy;
+    }
+
+
     private @Nullable ReferenceList<BlurredBackgroundDrawable> linkedDrawables;
     private @Nullable ReferenceList<View> linkedViews;
     private @Nullable ViewPositionWatcher viewPositionWatcher;
     private @Nullable ViewGroup parent;
+    private @Nullable GlassEngine engine;
 
     public void setLinkedViewsRef(@Nullable ReferenceList<View> linkedViews) {
         this.linkedViews = linkedViews;
+    }
+
+    public void unsubscribe(@Nullable View view) {
+        if (viewPositionWatcher != null && view != null) {
+            viewPositionWatcher.unsubscribe(view);
+        }
     }
 
     public void setLinkedDrawablesRef(@Nullable ReferenceList<BlurredBackgroundDrawable> linkedDrawables) {
@@ -85,9 +108,14 @@ public class BlurredBackgroundDrawableViewFactory {
         }
 
         drawable.setColorProvider(provider);
+        drawable.setOutset(outsetX, outsetY);
 
         if (linkedViews != null && view != null) {
             linkedViews.add(view);
+        }
+
+        if (engine != null && view != null) {
+            engine.registerDrawable(view, drawable);
         }
 
         if (viewPositionWatcher != null && parent != null && view != null) {

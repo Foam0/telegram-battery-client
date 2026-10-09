@@ -1114,12 +1114,10 @@ public class TranslateController extends BaseController {
         for (int i = 0; i < messageCount; ++i) {
             final int mgId = pendingTranslation1.messageIds.get(i);
             final Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String> mgCallback = pendingTranslation1.callbacks.get(i);
-            final String mgText = pendingTranslation1.messageTexts.get(i).text;
-            final it.belloworld.mercurygram.translate.MgTranslateDispatcher.Result mgResult = (out, rateLimit, failure) -> AndroidUtilities.runOnUIThread(() -> {
+            final TLRPC.TL_textWithEntities mgSource = pendingTranslation1.messageTexts.get(i);
+            final it.belloworld.mercurygram.translate.MgTranslateDispatcher.ResultWithEntities mgResult = (out, rateLimit, failure) -> AndroidUtilities.runOnUIThread(() -> {
                 if (out != null) {
-                    final TLRPC.TL_textWithEntities res = new TLRPC.TL_textWithEntities();
-                    res.text = out;
-                    mgCallback.run(isTranscription, mgId, res, mgToLanguage);
+                    mgCallback.run(isTranscription, mgId, out, mgToLanguage);
                 } else if (failure != null && failure.reason == it.belloworld.mercurygram.translate.MgAidlTranslate.Reason.PROVIDER_UNAVAILABLE) {
                     // System failure — the engine itself is offline. Abort the
                     // batch: revert the chat-translate bar + show the bulletin.
@@ -1141,12 +1139,96 @@ public class TranslateController extends BaseController {
                 }
             });
             if (mgSecret) {
-                it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchSecret(mgText, null, mgToLanguage, mgResult);
+                it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchSecret(mgSource, null, mgToLanguage, mgResult);
             } else {
-                it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(mgText, null, mgToLanguage, mgResult);
+                it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(mgSource, null, mgToLanguage, mgResult);
             }
         }
         return it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome.HANDLED;
+    }
+
+    /**
+     * Mercurygram: poll counterpart of {@link #dispatchMgPerMessage}. Upstream
+     * sends question + answers + solution of every batched poll as one
+     * messages.translateText; without this the "alternative"/"offline" engines
+     * were bypassed and poll text still went to Telegram cloud.
+     *
+     * The source-string order below MUST stay identical to the one the RPC
+     * builds (including the alreadyTranslated skip rules) — the result list is
+     * consumed positionally, exactly like the RPC response.
+     */
+    private it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome
+    dispatchMgPerPoll(PendingPollTranslation pendingTranslation1) {
+        final ArrayList<String> mgTexts = new ArrayList<>();
+        for (Pair<PollText, PollText> pair : pendingTranslation1.messageTexts) {
+            final PollText src = pair.first;
+            final PollText alreadyTranslated = pair.second;
+            if (src.question != null && (alreadyTranslated == null || alreadyTranslated.question == null)) {
+                mgTexts.add(src.question.text);
+            }
+            if (src.answers.size() != (alreadyTranslated == null ? 0 : alreadyTranslated.answers.size())) {
+                for (TLRPC.PollAnswer answer : src.answers) {
+                    mgTexts.add(answer.text.text);
+                }
+            }
+            if (src.solution != null && (alreadyTranslated == null || alreadyTranslated.solution == null)) {
+                mgTexts.add(src.solution.text);
+            }
+        }
+        return it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchTexts(mgTexts, pendingTranslation1.language, mgResults -> AndroidUtilities.runOnUIThread(() -> {
+            final ArrayList<Integer> ids = pendingTranslation1.messageIds;
+            final ArrayList<Utilities.Callback3<Integer, PollText, String>> callbacks = pendingTranslation1.callbacks;
+            if (mgResults == null) {
+                for (int i = 0; i < callbacks.size(); ++i) {
+                    callbacks.get(i).run(ids.get(i), null, pendingTranslation1.language);
+                }
+            } else {
+                final ArrayList<PollText> result = new ArrayList<>();
+                int i = 0;
+                for (Pair<PollText, PollText> pair : pendingTranslation1.messageTexts) {
+                    final PollText src = pair.first;
+                    final PollText alreadyTranslated = pair.second;
+                    final PollText dst = new PollText();
+                    if (alreadyTranslated != null && alreadyTranslated.question != null) {
+                        dst.question = alreadyTranslated.question;
+                    } else if (src.question != null) {
+                        dst.question = mgTextWithEntities(mgResults, i++);
+                    }
+                    if (src.answers.size() != (alreadyTranslated == null ? 0 : alreadyTranslated.answers.size())) {
+                        for (TLRPC.PollAnswer answer : src.answers) {
+                            final TLRPC.PollAnswer dstAnswer = new TLRPC.TL_pollAnswer();
+                            dstAnswer.text = mgTextWithEntities(mgResults, i++);
+                            dstAnswer.option = answer.option;
+                            dst.answers.add(dstAnswer);
+                        }
+                    } else if (alreadyTranslated != null) {
+                        dst.answers = alreadyTranslated.answers;
+                    }
+                    if (alreadyTranslated != null && alreadyTranslated.solution != null) {
+                        dst.solution = alreadyTranslated.solution;
+                    } else if (src.solution != null) {
+                        dst.solution = mgTextWithEntities(mgResults, i++);
+                    }
+                    result.add(dst);
+                }
+                final int count = Math.min(callbacks.size(), result.size());
+                for (int j = 0; j < count; ++j) {
+                    callbacks.get(j).run(ids.get(j), result.get(j), pendingTranslation1.language);
+                }
+            }
+            synchronized (TranslateController.this) {
+                for (int i = 0; i < ids.size(); ++i) {
+                    loadingTranslations.remove(ids.get(i));
+                }
+            }
+        }));
+    }
+
+    /** Both MG engines return plain text — no entities survive the round trip. */
+    private static TLRPC.TL_textWithEntities mgTextWithEntities(java.util.List<String> texts, int index) {
+        final TLRPC.TL_textWithEntities text = new TLRPC.TL_textWithEntities();
+        text.text = index >= 0 && index < texts.size() ? texts.get(index) : "";
+        return text;
     }
 
     private void pushToTranslate(
@@ -1552,6 +1634,12 @@ public class TranslateController extends BaseController {
                             pendingTranslations.remove(dialogId);
                         }
                     }
+                }
+
+                // Mercurygram: honor mg_translateMode for polls too — without
+                // this the alternative/offline engines were bypassed here.
+                if (dispatchMgPerPoll(pendingTranslation1) == it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome.HANDLED) {
+                    return;
                 }
 
                 final TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
@@ -2112,17 +2200,16 @@ public class TranslateController extends BaseController {
         // Mercurygram: route through MgTranslateDispatcher when the user picked a
         // non-default mg_translateMode. Caption translations stay silent on failure
         // (translatedText = null + done.run()) to match upstream UX.
+        final TLRPC.TL_textWithEntities mgSource = new TLRPC.TL_textWithEntities();
+        mgSource.text = storyItem.caption;
+        if (storyItem.entities != null) {
+            mgSource.entities = storyItem.entities;
+        }
         final it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome mgOutcome =
                 it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(
-                        storyItem.caption, null, toLang, (out, rateLimit, failure) -> AndroidUtilities.runOnUIThread(() -> {
+                        mgSource, null, toLang, (out, rateLimit, failure) -> AndroidUtilities.runOnUIThread(() -> {
                     storyItem.translatedLng = toLang;
-                    if (out != null) {
-                        final TLRPC.TL_textWithEntities res = new TLRPC.TL_textWithEntities();
-                        res.text = out;
-                        storyItem.translatedText = res;
-                    } else {
-                        storyItem.translatedText = null;
-                    }
+                    storyItem.translatedText = out;
                     getMessagesController().getStoriesController().getStoriesStorage().putStoryInternal(storyItem.dialogId, storyItem);
                     translatingStories.remove(key);
                     if (done != null) {
@@ -2284,16 +2371,15 @@ public class TranslateController extends BaseController {
         // affordance on the offline engine being usable.
         final boolean mgSecret = DialogObject.isEncryptedDialog(key.dialogId);
         final long mgStart = System.currentTimeMillis();
-        final it.belloworld.mercurygram.translate.MgTranslateDispatcher.Result mgResult =
+        final TLRPC.TL_textWithEntities mgSource = new TLRPC.TL_textWithEntities();
+        mgSource.text = messageObject.messageOwner.message;
+        if (messageObject.messageOwner.entities != null) {
+            mgSource.entities = messageObject.messageOwner.entities;
+        }
+        final it.belloworld.mercurygram.translate.MgTranslateDispatcher.ResultWithEntities mgResult =
                 (out, rateLimit, failure) -> AndroidUtilities.runOnUIThread(() -> {
                     messageObject.messageOwner.translatedToLanguage = toLang;
-                    if (out != null) {
-                        final TLRPC.TL_textWithEntities res = new TLRPC.TL_textWithEntities();
-                        res.text = out;
-                        messageObject.messageOwner.translatedText = res;
-                    } else {
-                        messageObject.messageOwner.translatedText = null;
-                    }
+                    messageObject.messageOwner.translatedText = out;
                     getMessagesStorage().updateMessageCustomParams(key.dialogId, messageObject.messageOwner);
                     translatingPhotos.remove(key);
                     if (done != null) {
@@ -2302,9 +2388,9 @@ public class TranslateController extends BaseController {
                 });
         final it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome mgOutcome = mgSecret
                 ? it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchSecret(
-                        messageObject.messageOwner.message, null, toLang, mgResult)
+                        mgSource, null, toLang, mgResult)
                 : it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(
-                        messageObject.messageOwner.message, null, toLang, mgResult);
+                        mgSource, null, toLang, mgResult);
         if (mgOutcome == it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome.HANDLED) {
             return;
         }

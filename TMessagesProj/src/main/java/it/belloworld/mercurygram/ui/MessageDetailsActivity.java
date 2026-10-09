@@ -34,6 +34,8 @@ import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 
+import it.belloworld.mercurygram.MgLocalMedia;
+
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ContactsController;
@@ -84,6 +86,7 @@ public class MessageDetailsActivity extends BaseFragment {
     private TLRPC.User fromUser;
     private String filePath;
     private String fileName;
+    private String resolution;
 
     private int rowCount;
 
@@ -108,6 +111,7 @@ public class MessageDetailsActivity extends BaseFragment {
     private int fileNameRow;
     private int filePathRow;
     private int fileSizeRow;
+    private int resolutionRow;
     private int dcRow;
     private int buttonsRow;
     private int emptyRow;
@@ -210,27 +214,8 @@ public class MessageDetailsActivity extends BaseFragment {
         if (messageObject.messageOwner.from_id != null && messageObject.messageOwner.from_id.user_id != 0) {
             fromUser = getMessagesController().getUser(messageObject.messageOwner.from_id.user_id);
         }
-        filePath = messageObject.messageOwner.attachPath;
-        if (!TextUtils.isEmpty(filePath)) {
-            File temp = new File(filePath);
-            if (!temp.exists()) {
-                filePath = null;
-            }
-        }
-        if (TextUtils.isEmpty(filePath)) {
-            filePath = FileLoader.getInstance(currentAccount).getPathToMessage(messageObject.messageOwner).toString();
-            File temp = new File(filePath);
-            if (!temp.exists()) {
-                filePath = null;
-            }
-        }
-        if (TextUtils.isEmpty(filePath)) {
-            filePath = FileLoader.getInstance(currentAccount).getPathToAttach(messageObject.getDocument(), true).toString();
-            File temp = new File(filePath);
-            if (!temp.isFile()) {
-                filePath = null;
-            }
-        }
+        File localFile = MgLocalMedia.cachedFile(messageObject);
+        filePath = localFile == null ? null : localFile.getPath();
         if (messageObject.messageOwner.media != null && messageObject.messageOwner.media.document != null) {
             TLRPC.Document document = messageObject.messageOwner.media.document;
             mimeType = document.mime_type;
@@ -265,6 +250,31 @@ public class MessageDetailsActivity extends BaseFragment {
             mediaCreationDate = result.creationDate;
             metadataReport = result.report;
         }
+        resolution = pixelSizeOf(messageObject);
+    }
+
+    /** Pixel size of the media as it was sent, empty when the media has no size of its own. */
+    private static String pixelSizeOf(MessageObject messageObject) {
+        TLRPC.MessageMedia media = messageObject.messageOwner.media;
+        if (media == null) {
+            return null;
+        }
+        if (media.photo != null) {
+            TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(media.photo.sizes, Integer.MAX_VALUE);
+            if (size != null && size.w > 0 && size.h > 0) {
+                return size.w + "x" + size.h;
+            }
+        }
+        if (media.document != null) {
+            for (int a = 0; a < media.document.attributes.size(); a++) {
+                TLRPC.DocumentAttribute attribute = media.document.attributes.get(a);
+                boolean sized = attribute instanceof TLRPC.TL_documentAttributeVideo || attribute instanceof TLRPC.TL_documentAttributeImageSize;
+                if (sized && attribute.w > 0 && attribute.h > 0) {
+                    return attribute.w + "x" + attribute.h;
+                }
+            }
+        }
+        return null;
     }
 
     @Override
@@ -396,6 +406,7 @@ public class MessageDetailsActivity extends BaseFragment {
         fileNameRow = TextUtils.isEmpty(fileName) ? -1 : rowCount++;
         filePathRow = TextUtils.isEmpty(filePath) ? -1 : rowCount++;
         fileSizeRow = messageObject.getSize() != 0 ? rowCount++ : -1;
+        resolutionRow = TextUtils.isEmpty(resolution) ? -1 : rowCount++;
         if (messageObject.messageOwner.media != null && (
                 (messageObject.messageOwner.media.photo != null && messageObject.messageOwner.media.photo.dc_id > 0) ||
                         (messageObject.messageOwner.media.document != null && messageObject.messageOwner.media.document.dc_id > 0)
@@ -605,6 +616,8 @@ public class MessageDetailsActivity extends BaseFragment {
                         textCell.setTextAndValue(LocaleController.getString(R.string.StoragePath), filePath, divider);
                     } else if (position == fileSizeRow) {
                         textCell.setTextAndValue(LocaleController.getString(R.string.Filesize), AndroidUtilities.formatFileSize(messageObject.getSize()), divider);
+                    } else if (position == resolutionRow) {
+                        textCell.setTextAndValue(LocaleController.getString(R.string.MessageDetailsResolution), resolution, divider);
                     } else if (position == dcRow) {
                         if (messageObject.messageOwner.media.photo != null && messageObject.messageOwner.media.photo.dc_id > 0) {
                             textCell.setTextAndValue("DC", String.valueOf(messageObject.messageOwner.media.photo.dc_id), divider);

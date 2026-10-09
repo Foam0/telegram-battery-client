@@ -16,8 +16,9 @@
 # directly in jni/<abi>/ (the module's jniLibs.srcDirs root, build.gradle:92),
 # NOT through CMake: it is a standalone binary, not a linked shared library.
 #
-# REPRODUCIBILITY (F-Droid ships bit-for-bit reproducible builds, see
-# .claude/rules/jni-native.md). Same neutralisation as build_snowflake.sh:
+# REPRODUCIBILITY (F-Droid ships bit-for-bit reproducible builds, so every
+# native artifact must be byte-identical across hosts). Same neutralisation as
+# build_snowflake.sh:
 #   -trimpath            strip absolute module/GOPATH/GOROOT paths from the binary
 #   -ldflags "-buildid=" clear the non-deterministic build id
 #   -ldflags "-s -w"     drop symbol + DWARF tables (smaller, path-free)

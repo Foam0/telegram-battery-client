@@ -87,6 +87,10 @@ public final class MgWhisperModel {
     // lazy) and must not contend with the user-initiated speech-model download.
     private static final AtomicBoolean isVadDownloading = new AtomicBoolean(false);
     private static volatile HttpURLConnection currentConn;
+    // Bumped on every cancel: a worker whose generation is stale stops writing
+    // even if a new download has meanwhile flipped the busy flag back on, so two
+    // workers can never stream into the same ".part" file.
+    private static volatile int downloadGeneration;
 
     // Cache for isSelectedInstalled(): the selected model file only changes via
     // download / import / delete (which bump installEpoch), and selecting a
@@ -175,6 +179,7 @@ public final class MgWhisperModel {
     }
 
     public static void cancelDownload() {
+        downloadGeneration++;
         isDownloading.set(false);
         HttpURLConnection c = currentConn;
         if (c != null) {
@@ -226,6 +231,7 @@ public final class MgWhisperModel {
             AndroidUtilities.runOnUIThread(() -> callback.onError("Already downloading"));
             return;
         }
+        final int generation = downloadGeneration;
         Utilities.globalQueue.postRunnable(() -> {
             HttpURLConnection conn = null;
             File tmp = null;
@@ -261,7 +267,7 @@ public final class MgWhisperModel {
                     int len;
                     int lastPct = -1;
                     while ((len = is.read(buf)) != -1) {
-                        if (!busy.get()) {
+                        if (!busy.get() || generation != downloadGeneration) {
                             throw new IOException("cancelled");
                         }
                         fos.write(buf, 0, len);
@@ -303,7 +309,7 @@ public final class MgWhisperModel {
                     ensureVadDownloaded();
                 }
             } catch (Exception e) {
-                boolean cancelled = !busy.get();
+                boolean cancelled = !busy.get() || generation != downloadGeneration;
                 if (tmp != null && tmp.exists()) {
                     tmp.delete();
                 }

@@ -2,6 +2,7 @@ package org.telegram.ui.Components.Paint;
 
 import android.graphics.Bitmap;
 import android.graphics.PointF;
+
 import org.telegram.ui.Components.Size;
 
 /** Stub — GMS Vision face detection removed in FOSS builds. */
@@ -11,8 +12,10 @@ public class PhotoFace {
     private float angle;
 
     private PointF foreheadPoint;
+
     private PointF eyesCenterPoint;
     private float eyesDistance;
+
     private PointF mouthPoint;
     private PointF chinPoint;
 
@@ -57,4 +60,4 @@ public class PhotoFace {
     public float getAngle() {
         return angle;
     }
-}
+ }

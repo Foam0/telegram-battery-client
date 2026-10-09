@@ -31,7 +31,7 @@ class MgUseTorToggleTest {
         assertTrue(SharedConfig.mg_useTor)
 
         val prefs = InstrumentationRegistry.getInstrumentation().targetContext
-            .getSharedPreferences("mainconfig", Context.MODE_PRIVATE)
+            .getSharedPreferences("userconfing", Context.MODE_PRIVATE)
         assertTrue(prefs.getBoolean("mg_useTor", false))
 
         SharedConfig.toggleMgUseTor()
@@ -69,7 +69,7 @@ class MgUseTorToggleTest {
             SharedConfig.setMgTorIdleStopMinutes(15)
             assertEquals(15, SharedConfig.mg_torIdleStopMinutes)
             val prefs = InstrumentationRegistry.getInstrumentation().targetContext
-                .getSharedPreferences("mainconfig", Context.MODE_PRIVATE)
+                .getSharedPreferences("userconfing", Context.MODE_PRIVATE)
             assertEquals(15, prefs.getInt("mg_torIdleStopMinutes", -1))
 
             // Negative input clamps to 0 (matches "always on" semantics in UI).

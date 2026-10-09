@@ -15,16 +15,23 @@
   "dns": {
     "servers": [
       {
-        "type": "https",
-        "tag": "remote-dns",
+        "type": "udp",
+        "tag": "bootstrap-dns",
         "server": "1.1.1.1",
-        "server_port": 443,
-        "path": "/dns-query",
-        "tls": {
-          "enabled": true,
-          "server_name": "cloudflare-dns.com"
-        }
+        "server_port": 53
+    },
+    {
+      "type": "https",
+      "tag": "remote-dns",
+      "server": "cloudflare-dns.com",
+      "server_port": 443,
+      "path": "/dns-query",
+      "detour": "proxy",
+      "domain_resolver": {
+        "server": "bootstrap-dns",
+        "strategy": "prefer_ipv4"
       }
+    }
     ],
     "final": "remote-dns",
     "strategy": "prefer_ipv4"
@@ -47,13 +54,13 @@
     {
       "type": "vless",
       "tag": "proxy",
-      "server": "192.0.2.1",
+      "server": "203.0.113.10",
       "server_port": 443,
-      "uuid": "00000000-0000-4000-8000-000000000000",
+      "uuid": "bf000d23-0752-40b4-affe-68f7707a9661",
       "flow": "xtls-rprx-vision",
       "packet_encoding": "xudp",
       "domain_resolver": {
-        "server": "remote-dns",
+        "server": "bootstrap-dns",
         "strategy": "prefer_ipv4"
       },
       "tls": {
@@ -65,7 +72,7 @@
         },
         "reality": {
           "enabled": true,
-          "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "public_key": "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
           "short_id": "0123456789abcdef"
         }
       }
@@ -96,7 +103,7 @@
     "final": "proxy",
     "auto_detect_interface": true,
     "default_domain_resolver": {
-      "server": "remote-dns",
+      "server": "bootstrap-dns",
       "strategy": "prefer_ipv4"
     }
   }

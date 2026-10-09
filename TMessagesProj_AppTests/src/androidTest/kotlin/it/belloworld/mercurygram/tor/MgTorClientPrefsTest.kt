@@ -12,6 +12,7 @@ import org.junit.Before
 import org.junit.Test
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.SharedConfig
+import org.telegram.utils.proxy.ProxySettings
 
 /**
  * Covers the SharedPreferences-driven helpers on MgTorClient that don't
@@ -63,6 +64,7 @@ class MgTorClientPrefsTest {
     @After
     fun tearDown() {
         if (SharedConfig.mg_useTor) SharedConfig.toggleMgUseTor()
+        dropProxyFromList("5.6.7.8", 9050)
         // Leave a tidy mainconfig so the next test starts clean.
         prefs.edit()
             .remove("proxy_ip")
@@ -80,6 +82,17 @@ class MgTorClientPrefsTest {
             .remove("mg_tor_savedProxy_secret")
             .remove("mg_tor_savedProxy_enabled")
             .commit()
+    }
+
+    /** Remove a seeded entry from both the in-memory list and proxy_list. */
+    private fun dropProxyFromList(ip: String, port: Int) {
+        SharedConfig.loadProxyList()
+        if (SharedConfig.proxyList.removeAll { it.settings.address == ip && it.settings.port == port }) {
+            // The restore binds the entry as currentProxy; a dangling
+            // pointer there would make isProxyEnabled() true for siblings.
+            SharedConfig.currentProxy = null
+            SharedConfig.saveProxyList()
+        }
     }
 
     // -------- migrateLegacyOrbotEntry --------
@@ -322,6 +335,26 @@ class MgTorClientPrefsTest {
         // mg_useTor off — the Settings UI hides the toggle, so silent
         // recovery is the only way out of a pre-upgrade mg_useTor=true.
         Assume.assumeTrue(MgTorClient.isFdroidPreS())
+        // The snapshot is enabled, so the restore only writes it back when
+        // the proxy is still in the user's list. proxyList is process-wide
+        // and loaded once, so seed it through SharedConfig rather than
+        // through the proxy_list pref, which a sibling test may already
+        // have caused to be read.
+        SharedConfig.addProxy(
+            SharedConfig.ProxyInfo(
+                ProxySettings.builder()
+                    // SOCKS5, matching what MgTorClient derives from a snapshot
+                    // with an empty secret: the restore compares whole
+                    // ProxySettings, and the type takes part in equals().
+                    .setType(ProxySettings.Type.SOCKS5)
+                    .setAddress("5.6.7.8")
+                    .setPort(9050)
+                    .setUser("u")
+                    .setPassword("p")
+                    .setSecret("")
+                    .build()
+            )
+        )
         prefs.edit()
             .putBoolean("mg_tor_savedProxy_present", true)
             .putString("mg_tor_savedProxy_ip", "5.6.7.8")
@@ -369,5 +402,76 @@ class MgTorClientPrefsTest {
         assertEquals("1.2.3.4", prefs.getString("proxy_ip", ""))
         assertEquals(1080, prefs.getInt("proxy_port", -1))
         assertTrue(prefs.getBoolean("proxy_enabled", false))
+    }
+
+    // -------- blocksProxyWrite (native proxy-slot ownership) --------
+
+    @Test
+    fun blocksForeignProxyWriteWhileTorOwnsTheSlot() {
+        Assume.assumeFalse(MgTorClient.isFdroidPreS())
+        SharedConfig.toggleMgUseTor()
+        try {
+            // preInit pins the blocking stub, which is what takes ownership
+            // of the single native proxy slot.
+            MgTorClient.preInit()
+
+            // A proxy the user added / a tg://proxy link / deleteProxy: every
+            // one of those would otherwise reroute MTProto while the Tor
+            // switch still reads ON.
+            assertTrue(MgTorClient.blocksProxyWrite(true, "1.2.3.4", 443))
+            assertTrue(MgTorClient.blocksProxyWrite(false, "", 0))
+            // Same loopback address, wrong port: not Tor's endpoint.
+            assertTrue(MgTorClient.blocksProxyWrite(true, "127.0.0.1", 9050))
+            // Tor's own write passes.
+            assertFalse(MgTorClient.blocksProxyWrite(true, "127.0.0.1", 1))
+        } finally {
+            SharedConfig.toggleMgUseTor()
+            // preInit published the synthetic Tor entry into the process-wide
+            // proxyList and made it currentProxy; drop it so sibling tests
+            // don't inherit it.
+            SharedConfig.clearMgInternalTorProxy()
+        }
+    }
+
+    @Test
+    fun allowsEveryProxyWriteWhenTorOff() {
+        assertFalse(MgTorClient.blocksProxyWrite(true, "1.2.3.4", 443))
+        assertFalse(MgTorClient.blocksProxyWrite(false, "", 0))
+        assertFalse(MgTorClient.blocksProxyWrite(true, "127.0.0.1", 1))
+    }
+
+    // -------- restoreSnapshottedProxy --------
+
+    @Test
+    fun restoreDropsSnapshotOfADeletedProxy() {
+        // User enabled Tor with a proxy configured, then deleted that proxy
+        // from the list. Restoring it on toggle-off would point native at a
+        // server no screen in the app still lists. Drop it from the in-memory
+        // list too: clearing the proxy_list pref alone is not enough once
+        // another test has made SharedConfig load the list.
+        dropProxyFromList("5.6.7.8", 9050)
+        prefs.edit()
+            .putString("proxy_list", "")
+            .putString("proxy_ip", "127.0.0.1")
+            .putInt("proxy_port", 1)
+            .putBoolean("proxy_enabled", true)
+            .putBoolean("mg_tor_savedProxy_present", true)
+            .putString("mg_tor_savedProxy_ip", "5.6.7.8")
+            .putInt("mg_tor_savedProxy_port", 9050)
+            .putString("mg_tor_savedProxy_user", "")
+            .putString("mg_tor_savedProxy_pass", "")
+            .putString("mg_tor_savedProxy_secret", "")
+            .putBoolean("mg_tor_savedProxy_enabled", true)
+            .commit()
+
+        val m = MgTorClient::class.java.getDeclaredMethod("restoreSnapshottedProxy")
+        m.isAccessible = true
+        val restored = m.invoke(null) as Boolean
+
+        // Reported as "no snapshot" so the caller clears the proxy entry.
+        assertFalse(restored)
+        assertFalse(prefs.contains("mg_tor_savedProxy_present"))
+        // The deleted proxy was NOT written back over the stub.
+        assertEquals("127.0.0.1", prefs.getString("proxy_ip", ""))
     }
 }

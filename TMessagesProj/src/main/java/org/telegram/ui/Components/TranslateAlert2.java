@@ -49,7 +49,6 @@ import com.google.common.base.Charsets;
 //import com.google.mlkit.nl.translate.Translator;
 //import com.google.mlkit.nl.translate.TranslatorOptions;
 
-import org.json.JSONObject;
 import org.json.JSONTokener;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Emoji;
@@ -82,8 +81,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class TranslateAlert2 extends BottomSheet implements NotificationCenter.NotificationCenterDelegate {
 
@@ -321,15 +318,26 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
 
         // Mercurygram: route through MgTranslateDispatcher when the user picked a
         // non-default mg_translateMode. Summarize (reqSum) stays on cloud RPC —
-        // Bergamot doesn't summarize; alternative HTTP doesn't either.
-        final String mgText = reqText == null ? "" : reqText.toString();
+        // Bergamot doesn't summarize; alternative HTTP doesn't either. A rich
+        // (instant-view article) message stays on cloud RPC too: the result has
+        // to come back as a PageBlock tree for RichMessageLayout.PreviewView,
+        // and both MG engines return a flat string. It also carries no privacy
+        // cost — messages.translateRichMessage sends peer + message id only,
+        // never the text.
+        final TLRPC.TL_textWithEntities mgSource = new TLRPC.TL_textWithEntities();
+        mgSource.text = reqText == null ? "" : reqText.toString();
+        if (reqMessageEntities != null) {
+            mgSource.entities = reqMessageEntities;
+        }
         final String mgFromLng = simplifyLanguage(fromLanguage);
         final String mgToLng = simplifyLanguage(toLanguage);
-        final it.belloworld.mercurygram.translate.MgTranslateDispatcher.Result mgResult =
+        final it.belloworld.mercurygram.translate.MgTranslateDispatcher.ResultWithEntities mgResult =
                 (out, rateLimit, failure) -> AndroidUtilities.runOnUIThread(() -> {
                     if (out != null) {
                         firstTranslation = false;
-                        textView.setText(preprocessText(out));
+                        final CharSequence mgTranslated = SpannableStringBuilder.valueOf(out.text);
+                        MessageObject.addEntitiesToText(mgTranslated, out.entities, false, true, false, false);
+                        textView.setText(preprocessText(mgTranslated));
                         adapter.updateMainView(textViewContainer);
                         return;
                     }
@@ -352,13 +360,13 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
         // never fall through to a network path regardless of mg_translateMode / the
         // caller-side menu gate.
         if (encrypted) {
-            it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchSecret(mgText, mgFromLng, mgToLng, mgResult);
+            it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchSecret(mgSource, mgFromLng, mgToLng, mgResult);
             return;
         }
 
-        if (!(reqSum && reqPeer != null)) {
+        if (!(reqSum && reqPeer != null) && reqRichMessage == null) {
             final it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome mgOutcome =
-                    it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(mgText, mgFromLng, mgToLng, mgResult);
+                    it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(mgSource, mgFromLng, mgToLng, mgResult);
             if (mgOutcome == it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome.HANDLED) {
                 return;
             }
@@ -461,10 +469,10 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
             req.flags |= 2;
             req.text.add(textWithEntities);
         }
-    //        if (fromLanguage != null && !"und".equals(fromLanguage)) {
-    //            req.flags |= 4;
-    //            req.from_lang = fromLanguage;
-    //        }
+//        if (fromLanguage != null && !"und".equals(fromLanguage)) {
+//            req.flags |= 4;
+//            req.from_lang = fromLanguage;
+//        }
         req.to_lang = normalizeLanguage(lang);
         reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> {
             AndroidUtilities.runOnUIThread(() -> {
@@ -542,92 +550,15 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
         return simplified;
     }
 
-    private static int lastIndexOfSafe(String text, String target, int start, int end) {
-        int idx = text.lastIndexOf(target, end - 1);
-        return (idx >= start) ? idx : -1;
-    }
-
-    public static ArrayList<String> cut(String encodedText, int maxLength) {
-        ArrayList<String> result = new ArrayList<>();
-        int start = 0;
-        while (start < encodedText.length()) {
-            int end = Math.min(start + maxLength, encodedText.length());
-            int splitPos = -1;
-
-            splitPos = lastIndexOfSafe(encodedText, "%0A", start, end);
-            if (splitPos == -1) {
-                splitPos = lastIndexOfSafe(encodedText, "%20", start, end);
-            }
-            if (splitPos == -1) {
-                splitPos = end;
-            } else {
-                splitPos += 3;
-            }
-
-            result.add(encodedText.substring(start, splitPos));
-            start = splitPos;
-        }
-        return result;
-    }
-
-    // Mercurygram: per-instance ban window for Mozhi backends that 429 /
-    // 5xx / time out. Skipped for INSTANCE_BAN_WINDOW_MS, then retried.
-    // Cleared from SharedConfig setters so a settings change doesn't carry
-    // stale failure state.
-
     public static void alternativeTranslate(String text, String fromLng, String toLng, Utilities.Callback2<String, Boolean> done) {
-        if (done == null) return;
         // Mozhi accepts from=auto for source-language autodetect. The
         // LanguageDetector path was a relic of the MLKit code that no longer
         // ships in this build (returns hasSupport()==false), so always-recursing
-        // through it would have defaulted to "en" — worse than letting the
+        // through it would have defaulted to "en", worse than letting the
         // backend autodetect. The worker substitutes "auto" when fromLng is
-        // null/empty.
-        final String etext = Uri.encode(text);
-        if (etext.length() > 5000) {
-            ArrayList<String> parts = cut(etext, 5000);
-            ArrayList<String> results = new ArrayList<>();
-            for (int i = 0; i < parts.size(); ++i) {
-                results.add(null);
-            }
-
-            final boolean[] fullyDone = new boolean[1];
-            for (int i = 0; i < parts.size(); ++i) {
-                final int index = i;
-                it.belloworld.mercurygram.translate.MgMozhiClient.translate(parts.get(i), fromLng, toLng, (res, rateLimit) -> {
-                    if (fullyDone[0]) return;
-                    if (res != null) {
-                        results.set(index, res);
-                        boolean allDone = true;
-                        for (int j = 0; j < results.size(); ++j) {
-                            if (results.get(j) == null) {
-                                allDone = false;
-                                break;
-                            }
-                        }
-                        if (allDone) {
-                            fullyDone[0] = true;
-                            done.run(TextUtils.join("", results), false);
-                        }
-                    } else {
-                        fullyDone[0] = true;
-                        done.run(null, rateLimit);
-                    }
-                });
-            }
-        } else {
-            it.belloworld.mercurygram.translate.MgMozhiClient.translate(etext, fromLng, toLng, done);
-        }
+        // null/empty, and splits long text into per-request chunks itself.
+        it.belloworld.mercurygram.translate.MgMozhiClient.translate(text, fromLng, toLng, done);
     }
-    /**
-     * Mercurygram: route the request through a Mozhi instance
-     * (https://codeberg.org/aryak/mozhi) — multi-engine privacy proxy —
-     * instead of contacting translate.googleapis.com directly. Walks the
-     * configured instance list on 429 / 5xx / timeout / parse failure with
-     * a 60s in-memory ban per instance, and propagates {@code rateLimit=true}
-     * only when EVERY tried instance returned 429.
-     */
-
 
 //    private ArrayList<Runnable> cancelTrackingDownloads = new ArrayList<>();
 //    private ArrayList<String> downloadingModels;

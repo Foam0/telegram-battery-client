@@ -12,12 +12,13 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.Log;
 import android.util.SparseArray;
 
 import androidx.annotation.IntDef;
 import androidx.collection.LongSparseArray;
 
-import com.google.android.exoplayer2.util.Log;
+
 
 import org.telegram.messenger.utils.tlutils.TlUtils;
 import org.telegram.messenger.voip.Instance;
@@ -78,9 +79,11 @@ public class ChatObject {
 
     public static final int ACTION_MANAGE_DIRECT = 24;
     public static final int ACTION_MANAGE_TAGS = 25;
-
     public static final int ACTION_SEND_REACTIONS = 26;
     public static final int ACTION_MANAGE_LINKED_CHATS = 27;
+    public static final int ACTION_MANAGE_WELCOME = 28;
+    public static final int ACTION_SEND_GAMES = 29;
+    public static final int ACTION_SEND_INLINE = 30;
 
     public final static int VIDEO_FRAME_NO_FRAME = 0;
     public final static int VIDEO_FRAME_REQUESTING = 1;
@@ -1631,6 +1634,9 @@ public class ChatObject {
             case ACTION_SEND_ROUND:
             case ACTION_SEND_REACTIONS:
             case ACTION_SEND_PLAIN:
+            case ACTION_SEND_GIFS:
+            case ACTION_SEND_GAMES:
+            case ACTION_SEND_INLINE:
             case ACTION_MANAGE_LINKED_CHATS:
                 return true;
         }
@@ -1671,6 +1677,12 @@ public class ChatObject {
                 return rights.send_media;
             case ACTION_SEND_STICKERS:
                 return rights.send_stickers;
+            case ACTION_SEND_GIFS:
+                return rights.send_gifs;
+            case ACTION_SEND_GAMES:
+                return rights.send_games;
+            case ACTION_SEND_INLINE:
+                return rights.send_inline;
             case ACTION_EMBED_LINKS:
                 return rights.embed_links;
             case ACTION_SEND_POLLS:
@@ -1824,6 +1836,9 @@ public class ChatObject {
         if (chat.admin_rights != null) {
             boolean value;
             switch (action) {
+                case ACTION_MANAGE_WELCOME:
+                    value = chat.admin_rights.manage_welcome_messages;
+                    break;
                 case ACTION_MANAGE_DIRECT:
                     value = chat.admin_rights.manage_direct_messages;
                     break;
@@ -1996,7 +2011,7 @@ public class ChatObject {
             return false;
         }
 
-        final TLRPC.ChatFull communityFull = MessagesController.getInstance(currentAccount).getChatFull(-dialogId);
+        final TLRPC.ChatFull communityFull = MessagesController.getInstance(currentAccount).getChatFull(communityId);
         if (communityFull == null || communityFull.linked_peers == null) {
             return false;
         }
@@ -2159,6 +2174,27 @@ public class ChatObject {
             return true;
         }
         return canUserDoAction(chat, ACTION_SEND_STICKERS);
+    }
+
+    public static boolean canSendGifs(TLRPC.Chat chat) {
+        if (isIgnoredChatRestrictionsForBoosters(chat)) {
+            return true;
+        }
+        return canUserDoAction(chat, ACTION_SEND_GIFS);
+    }
+
+    public static boolean canSendGames(TLRPC.Chat chat) {
+        if (isIgnoredChatRestrictionsForBoosters(chat)) {
+            return true;
+        }
+        return canUserDoAction(chat, ACTION_SEND_GAMES);
+    }
+
+    public static boolean canSendInline(TLRPC.Chat chat) {
+        if (isIgnoredChatRestrictionsForBoosters(chat)) {
+            return true;
+        }
+        return canUserDoAction(chat, ACTION_SEND_INLINE);
     }
 
     public static boolean canSendEmbed(TLRPC.Chat chat) {

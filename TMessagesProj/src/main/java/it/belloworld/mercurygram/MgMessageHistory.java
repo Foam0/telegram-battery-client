@@ -3,6 +3,7 @@ package it.belloworld.mercurygram;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.LongSparseArray;
 
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.messenger.ApplicationLoader;
@@ -10,10 +11,13 @@ import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.NativeByteBuffer;
 import org.telegram.tgnet.TLRPC;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -145,7 +149,44 @@ public class MgMessageHistory {
      * before the upstream delete runs.
      */
     public void archiveDeleted(int account, long dialogId, ArrayList<Integer> mids) {
+        if (!UserConfig.getInstance(account).mg.savedMessagesHistory || mids == null || mids.isEmpty()) {
+            return;
+        }
+        markRemote(dialogId, mids);
         archive(account, dialogId, mids, true);
+    }
+
+    // Mids the server reported deleted that the storage read has not been consumed for
+    // by an open chat yet, keyed like processUpdateArray keys them (0 = any non-channel
+    // dialog, -channel_id for a channel). Only these become ghosts in an open chat:
+    // a delete the user made locally is not persisted, so it must not ghost either.
+    private final LongSparseArray<HashSet<Integer>> remotePending = new LongSparseArray<>();
+
+    public void markRemote(long dialogId, Collection<Integer> mids) {
+        synchronized (remotePending) {
+            // Unbounded for chats that are never opened, so reset once it grows past 256 dialogs.
+            if (remotePending.size() > 256) {
+                remotePending.clear();
+            }
+            HashSet<Integer> set = remotePending.get(dialogId);
+            if (set == null) {
+                set = new HashSet<>();
+                remotePending.put(dialogId, set);
+            }
+            set.addAll(mids);
+        }
+    }
+
+    /** Removes and returns the server-deleted mids pending for this key (see {@link #markRemote}). */
+    public Set<Integer> takeRemote(long dialogId) {
+        synchronized (remotePending) {
+            HashSet<Integer> set = remotePending.get(dialogId);
+            if (set == null) {
+                return Collections.emptySet();
+            }
+            remotePending.remove(dialogId);
+            return set;
+        }
     }
 
     /**
@@ -188,7 +229,7 @@ public class MgMessageHistory {
                     long uid = cursor.longValue(0);
                     byte[] bytes = cursor.byteArrayValue(1);
                     TLRPC.Message message = deserialize(bytes);
-                    if (message == null || isExcluded(uid, message) || (deleted && message.out)) {
+                    if (message == null || isExcluded(uid, message)) {
                         continue;
                     }
                     ContentValues cv = new ContentValues();
@@ -341,6 +382,25 @@ public class MgMessageHistory {
                 }
             }
         }
+    }
+
+    /** Drop saved deleted messages the user removed from a chat themselves. */
+    public void forgetDeleted(int account, long dialogId, Collection<Integer> mids) {
+        if (mids == null || mids.isEmpty()) {
+            return;
+        }
+        final String ids = android.text.TextUtils.join(",", mids);
+        Utilities.globalQueue.postRunnable(() -> {
+            synchronized (writeLock) {
+                try {
+                    dbHelper.getWritableDatabase().execSQL("DELETE FROM " + TBL_DELETED
+                                    + " WHERE account=? AND dialog_id=? AND mid IN (" + ids + ")",
+                            new Object[]{account, dialogId});
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+            }
+        });
     }
 
     public void clearAll() {

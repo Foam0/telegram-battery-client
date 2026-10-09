@@ -13,9 +13,10 @@ import android.media.browse.MediaBrowser;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
-import android.os.SystemClock;
 import android.service.media.MediaBrowserService;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
 
 import java.util.List;
 
@@ -45,6 +46,10 @@ public class MusicBrowserService extends MediaBrowserService {
         if (clientPackageName == null) {
             return null;
         }
+        // answering the recents query leaves a media session hanging around after playback
+        if (rootHints != null && rootHints.getBoolean(BrowserRoot.EXTRA_RECENT, false)) {
+            return null;
+        }
         boolean isSelf = Process.SYSTEM_UID == clientUid || Process.myUid() == clientUid;
         if (!isSelf && !PackageValidator.isKnownCaller(this, clientPackageName, clientUid)) {
             return null;
@@ -56,7 +61,7 @@ public class MusicBrowserService extends MediaBrowserService {
     }
 
     @Override
-    public void onLoadChildren(String parentMediaId, Result<List<MediaBrowser.MediaItem>> result) {
+    public void onLoadChildren(@NonNull String parentMediaId, @NonNull Result<List<MediaBrowser.MediaItem>> result) {
         TelegramMediaSession holder = TelegramMediaSession.getInstance(this);
         if (holder.isPasscodeLocked()) {
             Toast.makeText(getApplicationContext(), LocaleController.getString(R.string.EnterYourTelegramPasscode), Toast.LENGTH_LONG).show();

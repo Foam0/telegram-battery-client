@@ -612,7 +612,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                     if (getMessagesController().isTranslationsManualEnabled()) {
                         count++;
                     }
-                    if (getMessagesController().isTranslationsAutoEnabled() && !getMessagesController().premiumFeaturesBlocked()) {
+                    if (getMessagesController().isTranslationsAutoEnabled()) {
                         count++;
                     }
                     if (getChatValue() || getContextValue()) {
@@ -824,7 +824,10 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                     } else {
                         manualTranslationPosition = -1;
                     }
-                    if (getMessagesController().isTranslationsAutoEnabled() && !getMessagesController().premiumFeaturesBlocked()) {
+                    // Mercurygram: the chat translate bar is unlocked for every user, so
+                    // its off switch must be listed without Premium. Otherwise an account
+                    // with Premium locked server-side gets the bar with no way to hide it.
+                    if (getMessagesController().isTranslationsAutoEnabled()) {
                         if (i-- == 0) {
                             autoTranslationPosition = position;
                             return VIEW_TYPE_SWITCH;

@@ -5,7 +5,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.telegram.messenger.ApplicationLoader
@@ -21,7 +23,6 @@ import org.telegram.messenger.UserConfig
 class MgWhisperConfigTest {
 
     private lateinit var prefs: android.content.SharedPreferences
-    private lateinit var accPrefs: android.content.SharedPreferences
 
     private var savedEnabled: Boolean = false
     private var savedModel: String = "tiny-q8_0"
@@ -31,10 +32,9 @@ class MgWhisperConfigTest {
     @Before
     fun setUp() {
         ensureAppContext()
+        // The global mg_transcribe* flags and account 0's per-account
+        // transcribeLang share the same "userconfing" file.
         prefs = InstrumentationRegistry.getInstrumentation().targetContext
-            .getSharedPreferences("mainconfig", Context.MODE_PRIVATE)
-        // transcribeLang is per-account → account 0's userconfig file ("userconfing").
-        accPrefs = InstrumentationRegistry.getInstrumentation().targetContext
             .getSharedPreferences("userconfing", Context.MODE_PRIVATE)
         savedEnabled = SharedConfig.mg_transcribeOffline
         savedModel = SharedConfig.mg_transcribeModel
@@ -91,11 +91,11 @@ class MgWhisperConfigTest {
         uc.mg.transcribeLang = "it"
         uc.saveConfig(false)
         assertEquals("it", uc.mg.transcribeLang)
-        assertEquals("it", accPrefs.getString("transcribeLang", null))
+        assertEquals("it", prefs.getString("transcribeLang", null))
         uc.mg.transcribeLang = "auto"
         uc.saveConfig(false)
         assertEquals("auto", uc.mg.transcribeLang)
-        assertEquals("auto", accPrefs.getString("transcribeLang", null))
+        assertEquals("auto", prefs.getString("transcribeLang", null))
     }
 
     @Test
@@ -121,6 +121,51 @@ class MgWhisperConfigTest {
             SharedConfig.toggleMgTranscribeOffline()
         }
         assertFalse(MgWhisperTranscriber.isUsable())
+    }
+
+    @Test
+    fun stampTracksModelAndLanguage() {
+        val uc = UserConfig.getInstance(0)
+        SharedConfig.setMgTranscribeModel("tiny-q8_0")
+        uc.mg.transcribeLang = "it"
+        uc.saveConfig(false)
+        val tinyIt = MgWhisperTranscriber.currentStamp(0)
+
+        SharedConfig.setMgTranscribeModel("base-q8_0")
+        val baseIt = MgWhisperTranscriber.currentStamp(0)
+        assertNotEquals(tinyIt, baseIt)
+
+        uc.mg.transcribeLang = "de"
+        uc.saveConfig(false)
+        val baseDe = MgWhisperTranscriber.currentStamp(0)
+        assertNotEquals(baseIt, baseDe)
+
+        // Negative and never 0: the field is shared with Telegram's own
+        // (positive) transcription ids, and 0 means "no transcription id".
+        for (stamp in listOf(tinyIt, baseIt, baseDe)) {
+            assertTrue(stamp < 0L)
+        }
+
+        // Same settings → same stamp, so an unchanged transcription is not re-run.
+        SharedConfig.setMgTranscribeModel("tiny-q8_0")
+        uc.mg.transcribeLang = "it"
+        uc.saveConfig(false)
+        assertEquals(tinyIt, MgWhisperTranscriber.currentStamp(0))
+    }
+
+    @Test
+    fun nothingIsStaleWhileTranscriptionIsUnusable() {
+        if (SharedConfig.mg_transcribeOffline) {
+            SharedConfig.toggleMgTranscribeOffline()
+        }
+        val msg = org.telegram.tgnet.TLRPC.TL_message().apply {
+            id = 1
+            peer_id = org.telegram.tgnet.TLRPC.TL_peerUser().apply { user_id = 5 }
+            voiceTranscription = "old text"
+            voiceTranscriptionFinal = true
+        }
+        val mo = org.telegram.messenger.MessageObject(0, msg, false, false)
+        assertFalse(MgWhisperTranscriber.isStale(mo))
     }
 
     private fun ensureAppContext() {

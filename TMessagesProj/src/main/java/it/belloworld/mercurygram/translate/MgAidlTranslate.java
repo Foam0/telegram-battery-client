@@ -205,6 +205,27 @@ public final class MgAidlTranslate {
         }
     }
 
+    /**
+     * Human-readable name of the installed provider app, for the "powered by"
+     * credit in the chat translate bar. Null when the app is not installed or
+     * the package manager refuses to name it.
+     */
+    @Nullable
+    public static String providerLabel(Context ctx) {
+        if (ctx == null) ctx = ApplicationLoader.applicationContext;
+        if (ctx == null) return null;
+        try {
+            PackageManager pm = ctx.getPackageManager();
+            CharSequence label = pm.getApplicationLabel(pm.getApplicationInfo(PROVIDER_PACKAGE, 0));
+            return TextUtils.isEmpty(label) ? null : label.toString();
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        } catch (Throwable t) {
+            FileLog.e(t);
+            return null;
+        }
+    }
+
     public static String getFdroidInstallUrl() {
         return "https://f-droid.org/packages/" + PROVIDER_PACKAGE + "/";
     }

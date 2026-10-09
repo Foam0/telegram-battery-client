@@ -3,8 +3,8 @@
 # Required by jni/build_tor.sh — tor links against libevent_pthreads + libevent.
 # Output: libevent/build/${ANDROID_ABI}/lib/libevent.a (+ libevent_pthreads.a, libevent_core.a)
 #
-# SCAFFOLD STATUS: written in the same shape as build_dav1d.sh /
-# build_boringssl.sh. The configure flags are the standard
+# SCAFFOLD STATUS: written in the same shape as build_boringssl.sh.
+# The configure flags are the standard
 # libevent-on-android recipe but have NOT been verified on Mercurygram's NDK
 # pin (r27.2.12479018) in this session. Expect to iterate on:
 #   - `--disable-openssl` (we link tor against the in-tree boringssl, libevent
@@ -13,7 +13,7 @@
 #   - cross-compile cache file vs. plain CC/AR/RANLIB env (some libevent
 #     versions need CONFIG_SITE for the cross sysroot)
 #
-# Requires: NDK env var pointing to the NDK install (same as build_dav1d.sh).
+# Requires: NDK env var pointing to the NDK install (same as build_boringssl.sh).
 set -e
 _quiet_redir() { if [ "${QUIET_BUILD:-0}" = "1" ]; then "$@" > /dev/null; else "$@"; fi; }
 

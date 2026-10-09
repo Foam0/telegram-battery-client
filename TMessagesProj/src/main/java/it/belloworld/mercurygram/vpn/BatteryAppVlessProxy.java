@@ -296,11 +296,11 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
             if (info.mgInternal) {
                 continue;
             }
-            if (info.port == port
-                    && safeEquals(info.address, address)
-                    && safeEquals(info.username, username)
-                    && safeEquals(info.password, password)
-                    && safeEquals(info.secret, secret)) {
+            if (info.settings.getPort() == port
+                    && safeEquals(info.settings.getAddress(), address)
+                    && safeEquals(info.settings.getUser(), username)
+                    && safeEquals(info.settings.getPassword(), password)
+                    && safeEquals(info.settings.getSecret(), secret)) {
                 return info;
             }
         }

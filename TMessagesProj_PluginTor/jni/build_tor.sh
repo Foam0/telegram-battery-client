@@ -27,7 +27,7 @@
 #   - The output is `src/libtor.a` (current 0.4.8) but past releases put it
 #     under `src/feature/api/libtor.a`. Adjust the install rule accordingly.
 #
-# Requires: NDK env var (same as build_dav1d.sh). Run after build_boringssl.sh
+# Requires: NDK env var (same as build_boringssl.sh). Run after build_boringssl.sh
 # and build_libevent.sh have populated their respective build/${ABI}/ trees.
 set -e
 _quiet_redir() { if [ "${QUIET_BUILD:-0}" = "1" ]; then "$@" > /dev/null; else "$@"; fi; }

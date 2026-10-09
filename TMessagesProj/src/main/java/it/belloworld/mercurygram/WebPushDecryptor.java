@@ -30,6 +30,15 @@ import javax.crypto.spec.SecretKeySpec;
 public class WebPushDecryptor {
 
     /**
+     * True when the body carries the folded aesgcm framing above (the gateway always emits
+     * the literal "aesgcm" first line). A Simple Push (token type 4) wake-up is a bare nudge
+     * with no framing at all, so it must not be treated as a failed decryption.
+     */
+    public static boolean looksLikeWebPush(byte[] body) {
+        return body != null && body.length > 6 && new String(body, 0, 6, StandardCharsets.US_ASCII).equals("aesgcm");
+    }
+
+    /**
      * Decrypt an aesgcm WebPush message in common-proxies body format.
      *
      * @param body           raw message bytes from UnifiedPush onMessage()

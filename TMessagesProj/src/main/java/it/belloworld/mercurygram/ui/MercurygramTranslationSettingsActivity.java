@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import it.belloworld.mercurygram.translate.MgAidlTranslate;
+import it.belloworld.mercurygram.translate.MgMozhiClient;
 
 public class MercurygramTranslationSettingsActivity extends UniversalFragment {
 
@@ -45,7 +46,8 @@ public class MercurygramTranslationSettingsActivity extends UniversalFragment {
         items.add(UItem.asButton(ID_MODE,
                 LocaleController.getString(R.string.MercurygramTranslationMode),
                 modeLabel(SharedConfig.mg_translateMode)));
-        items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramTranslationAbout)));
+        items.add(UItem.asShadow(MgSettingsScope.withAllAccountsNote(
+                LocaleController.getString(R.string.MercurygramTranslationAbout))));
 
         if (SharedConfig.MG_TRANSLATE_MODE_OFFLINE.equals(SharedConfig.mg_translateMode)) {
             items.add(UItem.asHeader(LocaleController.getString(R.string.MercurygramTranslationOfflineSection)));
@@ -58,7 +60,7 @@ public class MercurygramTranslationSettingsActivity extends UniversalFragment {
                 items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramTranslationOfflineProviderReady)));
             }
 
-            items.add(UItem.asCheck(ID_AUTO_FALLBACK,
+            items.add(MgSettingsScope.globalCheck(ID_AUTO_FALLBACK,
                             LocaleController.getString(R.string.MercurygramTranslationAutoFallback))
                     .setChecked(SharedConfig.mg_translateAutoFallback));
             items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramTranslationAutoFallbackAbout)));
@@ -77,7 +79,8 @@ public class MercurygramTranslationSettingsActivity extends UniversalFragment {
             items.add(UItem.asButton(ID_ALT_INSTANCE,
                     LocaleController.getString(R.string.MercurygramTranslationAlternativeInstance),
                     instanceLabel()));
-            items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramTranslationAlternativeOperatorDisclosure)));
+            items.add(UItem.asShadow(MgSettingsScope.withAllAccountsNote(
+                    LocaleController.getString(R.string.MercurygramTranslationAlternativeOperatorDisclosure))));
         }
     }
 
@@ -162,10 +165,8 @@ public class MercurygramTranslationSettingsActivity extends UniversalFragment {
         if (context == null) return;
         final String[] values = {
                 SharedConfig.MG_TRANSLATE_ALT_ENGINE_DUCKDUCKGO,
-                SharedConfig.MG_TRANSLATE_ALT_ENGINE_LIBRE,
                 SharedConfig.MG_TRANSLATE_ALT_ENGINE_GOOGLE,
-                SharedConfig.MG_TRANSLATE_ALT_ENGINE_MYMEMORY,
-                SharedConfig.MG_TRANSLATE_ALT_ENGINE_REVERSO,
+                SharedConfig.MG_TRANSLATE_ALT_ENGINE_YANDEX,
         };
         AtomicReference<Dialog> dialogRef = new AtomicReference<>();
         LinearLayout linearLayout = new LinearLayout(context);
@@ -334,20 +335,7 @@ public class MercurygramTranslationSettingsActivity extends UniversalFragment {
     }
 
     private static String engineLabel(String engine) {
-        if (engine == null) engine = SharedConfig.MG_TRANSLATE_ALT_ENGINE_DUCKDUCKGO;
-        switch (engine) {
-            case SharedConfig.MG_TRANSLATE_ALT_ENGINE_LIBRE:
-                return LocaleController.getString(R.string.MercurygramTranslationAlternativeEngineLibre);
-            case SharedConfig.MG_TRANSLATE_ALT_ENGINE_GOOGLE:
-                return LocaleController.getString(R.string.MercurygramTranslationAlternativeEngineGoogle);
-            case SharedConfig.MG_TRANSLATE_ALT_ENGINE_MYMEMORY:
-                return LocaleController.getString(R.string.MercurygramTranslationAlternativeEngineMyMemory);
-            case SharedConfig.MG_TRANSLATE_ALT_ENGINE_REVERSO:
-                return LocaleController.getString(R.string.MercurygramTranslationAlternativeEngineReverso);
-            case SharedConfig.MG_TRANSLATE_ALT_ENGINE_DUCKDUCKGO:
-            default:
-                return LocaleController.getString(R.string.MercurygramTranslationAlternativeEngineDuckDuckGo);
-        }
+        return MgMozhiClient.engineLabel(engine);
     }
 
     private static String instanceLabel() {

@@ -70,20 +70,25 @@ Corrections via PR are very welcome — don't assume anything is locked in.
 
 ## F-Droid metadata translations
 
-The store listings under [`metadata/`](metadata) follow the standard fastlane
-F-Droid layout:
+The store listings under
+[`TMessagesProj_App/fastlane/metadata/android/`](TMessagesProj_App/fastlane/metadata/android)
+follow the standard fastlane F-Droid layout:
 
 ```
-metadata/<locale>/
+TMessagesProj_App/fastlane/metadata/android/<locale>/
     name.txt          # short app name
     summary.txt       # one-line summary
     description.txt   # long description
-    changelogs/<vercode>.txt   # English-only, do not translate
 ```
 
-Source of truth: `metadata/en-US/`. Translators may add or update
-`name.txt`, `summary.txt`, `description.txt` for any locale. **Changelogs stay
-English** — they describe code commits and are written by the maintainer.
+They live under the app module rather than the repo root so that F-Droid
+scopes them to `it.belloworld.mercurygram` alone; the Tor plugin has its own
+listing in `TMessagesProj_PluginTor/src/main/play/listings/`.
+
+Source of truth: `TMessagesProj_App/fastlane/metadata/android/en-US/`.
+Translators may add or update `name.txt`, `summary.txt`, `description.txt` for
+any locale. F-Droid renders these with a small HTML subset (`<b>`, `<i>`,
+`<br>`, `<a>`) — Markdown is shown literally, so don't use it.
 
 ## Code contributions
 

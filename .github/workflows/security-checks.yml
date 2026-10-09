@@ -3,21 +3,21 @@ name: Security checks
 on:
   push:
     branches:
-      - "**"
+      - '**'
   pull_request:
 
-permissions:
-  contents: read
-
 jobs:
-  public-source:
+  sensitive-logs:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Check public source tree
-        run: scripts/check-public-source.sh
-
       - name: Check sensitive logs
         run: scripts/check-sensitive-logs.sh
+
+      - name: Check notification delivery contract
+        run: scripts/check-push-contract.sh

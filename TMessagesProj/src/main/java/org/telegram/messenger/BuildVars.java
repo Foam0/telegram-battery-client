@@ -32,12 +32,10 @@ public class BuildVars {
     public static String GOOGLE_AUTH_CLIENT_ID = "";
 
     // You can use this flag to disable Google Play Billing (If you're making fork and want it to be in Google Play)
-    public static boolean IS_BILLING_UNAVAILABLE = true;
+    public static boolean IS_BILLING_UNAVAILABLE = false;
 
     // works only on official app ids, disable on your forks
     public static boolean SUPPORTS_PASSKEYS = false;
-
-    public static boolean USE_LEGACY_SYSTEM_INSETS = false;
 
     static {
         if (ApplicationLoader.applicationContext != null) {

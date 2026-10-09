@@ -20,7 +20,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -116,8 +115,8 @@ public final class MgEmojiPack {
 
     /**
      * Routed from {@link Emoji#loadEmoji}. When the custom pack is enabled and
-     * this glyph exists in it, decode that file; otherwise fall back per-glyph
-     * to the bundled asset.
+     * this glyph exists in it, decode that file; otherwise return null and let
+     * the caller read the bundled glyph out of assets/emoji.pack.
      */
     public static Bitmap loadEmojiBitmap(int page, int page2) {
         if (SharedConfig.mg_useCustomEmojiPack) {
@@ -139,7 +138,7 @@ public final class MgEmojiPack {
                 FileLog.e(e);
             }
         }
-        return Emoji.loadBitmap("emoji/" + String.format(Locale.US, "%d_%d.png", page, page2));
+        return null;
     }
 
     /**

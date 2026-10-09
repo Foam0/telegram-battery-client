@@ -3,9 +3,10 @@ package org.telegram.messenger.utils;
 import android.content.Context;
 import android.util.Base64;
 
+import androidx.annotation.OptIn;
 import androidx.core.util.Pair;
-
-import com.google.android.exoplayer2.util.Util;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.common.util.Util;
 import com.google.common.base.Charsets;
 
 import org.json.JSONObject;
@@ -21,6 +22,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 /** Billing utilities — real billing code removed for FOSS builds. */
+@OptIn(markerClass = UnstableApi.class)
 public class BillingUtilities {
     private static final String CURRENCY_FILE = "currencies.json";
     private static final String CURRENCY_EXP = "exp";

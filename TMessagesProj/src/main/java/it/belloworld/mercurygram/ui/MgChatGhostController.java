@@ -1,6 +1,7 @@
 package it.belloworld.mercurygram.ui;
 
 import android.util.LongSparseArray;
+import android.util.SparseArray;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DialogObject;
@@ -12,6 +13,7 @@ import org.telegram.ui.ChatActivity;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -222,7 +224,13 @@ public final class MgChatGhostController {
 
         if (touchedGroups != null) {
             for (int i = 0, n = touchedGroups.size(); i < n; i++) {
-                touchedGroups.valueAt(i).calculate();
+                MessageObject.GroupedMessages g = touchedGroups.valueAt(i);
+                // calculate() hands out tile geometry by list index, so the appended ghost
+                // has to go back where its id belongs. Always oldest first, the order
+                // messagesDidLoad builds groups in: calculate() walks the list backwards on
+                // its own when the group is reversed, so this must not depend on `reversed`.
+                Collections.sort(g.messages, (a, b) -> Integer.compare(a.getId(), b.getId()));
+                g.calculate();
             }
         }
         if (injected > 0) {
@@ -235,16 +243,20 @@ public final class MgChatGhostController {
      * Live-delete diversion: flags messages that must survive as ghosts,
      * records their ids in the primed cache, and returns the delete list
      * with those ids filtered out. Call updateDivertedRows() after the
-     * host has processed the remaining deletes.
+     * host has processed the remaining deletes. Only deletes the server
+     * reported (the ones the archive is persisting) become ghosts; a delete
+     * the user made is a real delete. {@code channelId} is the notification's
+     * second argument, the negated key the archive was marked under.
      */
-    public ArrayList<Integer> divertDeletes(ArrayList<Integer> markAsDeletedMessages, ArrayList<MessageObject> resolved, boolean movedToScheduled) {
+    public ArrayList<Integer> divertDeletes(ArrayList<Integer> markAsDeletedMessages, ArrayList<MessageObject> resolved, long channelId, boolean movedToScheduled) {
         divertedGhosts = null;
         ArrayList<MessageObject> mgGhosts = null;
         ArrayList<Integer> mgDeleteList = markAsDeletedMessages;
         if (host.getUserConfig().mg.savedMessagesHistory && host.getChatMode() == ChatActivity.MODE_DEFAULT && !movedToScheduled) {
+            Set<Integer> remote = MgMessageHistory.getInstance().takeRemote(-channelId);
             for (int i = 0; i < resolved.size(); i++) {
                 MessageObject mo = resolved.get(i);
-                if (!mo.scheduled && !MgMessageHistory.isExcluded(host.getDialogId(), mo.messageOwner)) {
+                if (!mo.scheduled && remote.contains(mo.getId()) && !MgMessageHistory.isExcluded(host.getDialogId(), mo.messageOwner)) {
                     mo.mgDeletedGhost = true;
                     if (mgGhosts == null) {
                         mgGhosts = new ArrayList<>();
@@ -271,6 +283,48 @@ public final class MgChatGhostController {
         }
         divertedGhosts = mgGhosts;
         return mgDeleteList;
+    }
+
+    /**
+     * Delete pressed on ghosts: drop them from the archive and the chat without
+     * the upstream confirmation (a ghost is a local copy of an already deleted
+     * message, there is nothing to delete on the server). Real messages in the
+     * same selection are left for the upstream alert.
+     *
+     * @return true when nothing but ghosts was selected, so the caller is done.
+     */
+    public boolean deleteGhosts(MessageObject single, MessageObject.GroupedMessages group, SparseArray<MessageObject>[] selected) {
+        ArrayList<MessageObject> candidates = new ArrayList<>();
+        if (single != null) {
+            if (group != null) {
+                candidates.addAll(group.messages);
+            } else {
+                candidates.add(single);
+            }
+        } else {
+            for (int i = 0; i < selected[0].size(); i++) {
+                candidates.add(selected[0].valueAt(i));
+            }
+        }
+        ArrayList<Integer> ghostIds = new ArrayList<>();
+        for (int i = 0; i < candidates.size(); i++) {
+            MessageObject mo = candidates.get(i);
+            if (mo != null && mo.mgDeletedGhost) {
+                ghostIds.add(mo.getId());
+            }
+        }
+        if (ghostIds.isEmpty()) {
+            return false;
+        }
+        if (deletedMids != null) {
+            deletedMids.removeAll(ghostIds);
+        }
+        if (ghostEntries != null) {
+            ghostEntries.removeIf(en -> ghostIds.contains(en.mid));
+        }
+        MgMessageHistory.getInstance().forgetDeleted(host.getCurrentAccount(), host.getDialogId(), ghostIds);
+        host.mgProcessDeletedMessages(ghostIds);
+        return ghostIds.size() == candidates.size() && (single != null || selected[1].size() == 0);
     }
 
     public void updateDivertedRows() {

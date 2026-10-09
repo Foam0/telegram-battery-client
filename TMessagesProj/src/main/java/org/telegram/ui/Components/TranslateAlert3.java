@@ -387,17 +387,16 @@ public class TranslateAlert3 extends BottomSheetWithRecyclerListView {
         // TranslateAlert2.translate(). Secret chats are forced on-device, fail-closed.
         // The message-id and summarize paths below keep cloud RPC unchanged.
         if (!summarized && dialogId == 0 && messageId == 0) {
-            final String mgText = fromText.text;
             final String mgFromLng = TranslateAlert2.simplifyLanguage(from_lang);
             final String mgToLng = TranslateAlert2.simplifyLanguage(to_lang);
-            final it.belloworld.mercurygram.translate.MgTranslateDispatcher.Result mgResult =
+            final it.belloworld.mercurygram.translate.MgTranslateDispatcher.ResultWithEntities mgResult =
                 (out, rateLimit, failure) -> AndroidUtilities.runOnUIThread(() -> {
                     if (isDismissed()) {
                         return;
                     }
                     button.setLoading(false);
-                    if (out != null && !out.isEmpty()) {
-                        translated = out;
+                    if (out != null && !TextUtils.isEmpty(out.text)) {
+                        translated = MessageObject.formatTextWithEntities(out);
                         translatedLoading = false;
                         adapter.update(true);
                         return;
@@ -416,10 +415,10 @@ public class TranslateAlert3 extends BottomSheetWithRecyclerListView {
             final boolean mgHandled;
             if (secret) {
                 // dispatchSecret always handles it on-device (fail-closed).
-                it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchSecret(mgText, mgFromLng, mgToLng, mgResult);
+                it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatchSecret(fromText, mgFromLng, mgToLng, mgResult);
                 mgHandled = true;
             } else {
-                mgHandled = it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(mgText, mgFromLng, mgToLng, mgResult)
+                mgHandled = it.belloworld.mercurygram.translate.MgTranslateDispatcher.dispatch(fromText, mgFromLng, mgToLng, mgResult)
                         == it.belloworld.mercurygram.translate.MgTranslateDispatcher.Outcome.HANDLED;
             }
             if (mgHandled) {

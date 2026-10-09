@@ -1,9 +1,9 @@
 name: Compute JNI cache fingerprint
 description: >-
   Writes .jni-cache-fingerprint at the repo root. The fingerprint folds in
-  submodule HEAD SHAs (boringssl, dav1d, ffmpeg, libvpx, td), a
-  sha256sum of TMessagesProj/jni/build_*.sh / patch_*.sh, the host toolchain
-  versions, and the gradle-pinned NDK + build-tools versions. Both the
+  submodule HEAD SHAs (boringssl, dav1d, ffmpeg, libvpx, td, wamr), a
+  sha256sum of the jni/prebuild build scripts and jni/patch_*.sh, the host
+  toolchain versions, and the gradle-pinned NDK + build-tools versions. Both the
   _prewarm-native reusable workflow and the build-mg composite invoke
   this so the hashFiles() input is byte-identical and the cache keys
   match. The verify-decide jobs in beta.yml / release.yml hash this same
@@ -26,15 +26,21 @@ runs:
         # otherwise-identical checkouts and silently invalidate the cache.
         # rev-parse is pure SHA, deterministic.
         submodules=(
-          TMessagesProj/jni/boringssl
-          TMessagesProj/jni/dav1d
-          TMessagesProj/jni/ffmpeg
-          TMessagesProj/jni/libvpx
+          TMessagesProj/jni/third_party/boringssl
           TMessagesProj/jni/td
+          TMessagesProj/jni/third_party/dav1d
+          TMessagesProj/jni/third_party/ffmpeg
+          TMessagesProj/jni/third_party/libvpx
+          TMessagesProj/jni/third_party/wamr
         )
 
-        scripts=( TMessagesProj/jni/build_*.sh TMessagesProj/jni/patch_*.sh )
-        [ "${#scripts[@]}" -gt 0 ] || { echo "no build_*.sh / patch_*.sh found under TMessagesProj/jni/" >&2; exit 1; }
+        # Every archive is produced by upstream's jni/prebuild/*.sh, driven
+        # by build.gradle; jni/patch_*.sh and setup_rust.sh shape their inputs.
+        scripts=(
+          TMessagesProj/jni/prebuild/*.sh
+          TMessagesProj/jni/patch_*.sh
+          TMessagesProj/jni/setup_rust.sh
+        )
 
         # Host toolchain versions. nasm + gperf emit bytes that end up
         # embedded in our .a outputs (libvpx/dav1d SIMD assembly, boringssl
@@ -71,6 +77,10 @@ runs:
           [ -n "$ver" ] || { echo "fingerprint: host pkg '$pkg' has empty version (renamed? virtual? not installed?)" >&2; exit 1; }
         done <<< "$host_pkg_lines"
 
+        # Build into a temp file and rename only on success. Redirecting
+        # straight at .jni-cache-fingerprint truncates it first, so a failing
+        # rev-parse/sha256sum would leave a partial file that hashFiles()
+        # happily keys a cache on.
         {
           for sm in "${submodules[@]}"; do
             printf '%s %s\n' "$(git -C "$sm" rev-parse HEAD)" "$sm"
@@ -78,7 +88,8 @@ runs:
           sha256sum "${scripts[@]}"
           printf '%s\n' "$host_pkg_lines"
           printf 'ndkVersion %s\nbuildToolsVersion %s\n' "$ndk" "$bt"
-        } > .jni-cache-fingerprint
+        } > .jni-cache-fingerprint.tmp
+        mv .jni-cache-fingerprint.tmp .jni-cache-fingerprint
 
         echo "── .jni-cache-fingerprint ──"
         cat .jni-cache-fingerprint

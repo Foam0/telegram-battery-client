@@ -24,11 +24,15 @@ import android.util.Base64;
 import android.webkit.WebView;
 
 import androidx.annotation.IntDef;
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.core.content.pm.ShortcutManagerCompat;
 
 import org.json.JSONObject;
+import org.telegram.utils.proxy.ProxySettings;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.InputSerializedData;
+import org.telegram.tgnet.OutputSerializedData;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -38,10 +42,8 @@ import org.telegram.ui.LaunchActivity;
 
 import java.io.File;
 import java.io.RandomAccessFile;
-import java.io.UnsupportedEncodingException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,6 +51,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SharedConfig {
@@ -56,7 +59,8 @@ public class SharedConfig {
      * V2: Ping and check time serialized
      */
     private final static int PROXY_SCHEMA_V2 = 2;
-    private final static int PROXY_CURRENT_SCHEMA_VERSION = PROXY_SCHEMA_V2;
+    private final static int PROXY_SCHEMA_V3 = 3;
+    private final static int PROXY_CURRENT_SCHEMA_VERSION = PROXY_SCHEMA_V3;
 
     public final static int PASSCODE_TYPE_PIN = 0,
             PASSCODE_TYPE_PASSWORD = 1;
@@ -145,9 +149,12 @@ public class SharedConfig {
                 .apply();
     }
 
+    // Every mg_* setter below writes to "userconfing": that is the file
+    // mgSaveConfig()/mgLoadConfig() use, and writing anywhere else silently
+    // loses the flag on the next launch.
     public static void toggleDisableUnifiedPush() {
         disableUnifiedPush = !disableUnifiedPush;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_disableUnifiedPush", disableUnifiedPush)
                 .commit();
@@ -155,7 +162,7 @@ public class SharedConfig {
 
     public static void setEnableFirebasePush(boolean enabled) {
         enableFirebasePush = enabled;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_enableFirebasePush", enableFirebasePush)
                 .commit();
@@ -163,7 +170,7 @@ public class SharedConfig {
 
     public static void toggleDisableSecureFlags() {
         disableSecureFlags = true;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_disableSecureFlags", disableSecureFlags)
                 .commit();
@@ -171,7 +178,7 @@ public class SharedConfig {
 
     public static void toggleRemoveAdsAndProxySponsor() {
         removeAdsAndProxySponsor = !removeAdsAndProxySponsor;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_removeAdsAndProxySponsor", removeAdsAndProxySponsor)
                 .commit();
@@ -179,36 +186,16 @@ public class SharedConfig {
 
     public static void toggleDisableAutoUpdate() {
         disableAutoUpdate = !disableAutoUpdate;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_disableAutoUpdate", disableAutoUpdate)
                 .apply();
     }
 
-    public static void toggleAcceptPreReleaseUpdates() {
-        acceptPreReleaseUpdates = !acceptPreReleaseUpdates;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
-                .edit()
-                .putBoolean("mg_acceptPreReleaseUpdates", acceptPreReleaseUpdates)
-                .apply();
-        if (!acceptPreReleaseUpdates) {
-            // A manual toggle-off is itself a deliberate regress decision:
-            // drop the tracked prerelease tag so a later manual re-opt-in
-            // (still on the same stable, before ever running a new
-            // prerelease) does not get immediately self-cleared by
-            // MgUpdateChecker.shouldClearOptInOnRegress() against a stale
-            // tag from the stint the user just left.
-            setMgLastPreReleaseTag("");
-        }
-    }
-
-    // Force-set variant of toggleAcceptPreReleaseUpdates(), used by
-    // MgUpdateChecker to auto-clear the opt-in when it detects a deliberate
-    // regress from a prerelease back to an older stable (see
-    // shouldClearOptInOnRegress()).
+    // Prerelease update channel flag; the policy lives in MgUpdateChecker.
     public static void setAcceptPreReleaseUpdates(boolean value) {
         acceptPreReleaseUpdates = value;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_acceptPreReleaseUpdates", acceptPreReleaseUpdates)
                 .apply();
@@ -216,7 +203,7 @@ public class SharedConfig {
 
     public static void setMgLastPreReleaseTag(String tag) {
         mgLastPreReleaseTag = tag == null ? "" : tag;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_lastPreReleaseTag", mgLastPreReleaseTag)
                 .apply();
@@ -224,7 +211,7 @@ public class SharedConfig {
 
     public static void toggleUseSystemFont() {
         useSystemFont = !useSystemFont;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_useSystemFont", useSystemFont)
                 .apply();
@@ -237,7 +224,7 @@ public class SharedConfig {
     // mitigation the user just enabled.
     public static void toggleReduceTrackingFingerprint() {
         reduceTrackingFingerprint = !reduceTrackingFingerprint;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_reduceTrackingFingerprint", reduceTrackingFingerprint)
                 .commit();
@@ -249,7 +236,7 @@ public class SharedConfig {
     // toggle and letting MTProto connect direct.
     public static void toggleMgUseTor() {
         mg_useTor = !mg_useTor;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_useTor", mg_useTor)
                 .commit();
@@ -258,7 +245,7 @@ public class SharedConfig {
     public static void setMgTranslateMode(String mode) {
         mode = sanitizeMgTranslateMode(mode);
         mg_translateMode = mode;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_translateMode", mode)
                 .apply();
@@ -276,7 +263,7 @@ public class SharedConfig {
 
     public static void toggleMgTranslateAutoFallback() {
         mg_translateAutoFallback = !mg_translateAutoFallback;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_translateAutoFallback", mg_translateAutoFallback)
                 .apply();
@@ -284,7 +271,7 @@ public class SharedConfig {
 
     public static void setMgTranslateOfflineFormatToastShown() {
         mg_translateOfflineFormatToastShown = true;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_translateOfflineFormatToastShown", true)
                 .apply();
@@ -292,7 +279,7 @@ public class SharedConfig {
 
     public static void toggleMgTranscribeOffline() {
         mg_transcribeOffline = !mg_transcribeOffline;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_transcribeOffline", mg_transcribeOffline)
                 .apply();
@@ -300,7 +287,7 @@ public class SharedConfig {
 
     public static void setMgTranscribeModel(String model) {
         mg_transcribeModel = model;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_transcribeModel", model)
                 .apply();
@@ -308,15 +295,23 @@ public class SharedConfig {
 
     public static void toggleMgTranscribeVad() {
         mg_transcribeVad = !mg_transcribeVad;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_transcribeVad", mg_transcribeVad)
                 .apply();
     }
 
+    public static void toggleMgDisableProximitySensor() {
+        mg_disableProximitySensor = !mg_disableProximitySensor;
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_disableProximitySensor", mg_disableProximitySensor)
+                .apply();
+    }
+
     public static void toggleMgUseCustomEmojiPack() {
         mg_useCustomEmojiPack = !mg_useCustomEmojiPack;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("mg_useCustomEmojiPack", mg_useCustomEmojiPack)
                 .apply();
@@ -328,7 +323,7 @@ public class SharedConfig {
     public static void setMgTranslateAltEngine(String engine) {
         engine = sanitizeMgTranslateAltEngine(engine);
         mg_translateAltEngine = engine;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_translateAltEngine", engine)
                 .apply();
@@ -338,7 +333,7 @@ public class SharedConfig {
     public static void setMgTranslateAltInstanceMode(String mode) {
         mode = sanitizeMgTranslateAltInstanceMode(mode);
         mg_translateAltInstanceMode = mode;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_translateAltInstanceMode", mode)
                 .apply();
@@ -347,7 +342,7 @@ public class SharedConfig {
 
     public static void setMgTranslateAltPinnedInstance(String url) {
         mg_translateAltPinnedInstance = url == null ? "" : url;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_translateAltPinnedInstance", mg_translateAltPinnedInstance)
                 .apply();
@@ -356,7 +351,7 @@ public class SharedConfig {
 
     public static void setMgTranslateAltCustomInstance(String url) {
         mg_translateAltCustomInstance = url == null ? "" : url;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_translateAltCustomInstance", mg_translateAltCustomInstance)
                 .apply();
@@ -365,10 +360,8 @@ public class SharedConfig {
 
     private static String sanitizeMgTranslateAltEngine(String engine) {
         if (MG_TRANSLATE_ALT_ENGINE_DUCKDUCKGO.equals(engine)
-                || MG_TRANSLATE_ALT_ENGINE_LIBRE.equals(engine)
                 || MG_TRANSLATE_ALT_ENGINE_GOOGLE.equals(engine)
-                || MG_TRANSLATE_ALT_ENGINE_MYMEMORY.equals(engine)
-                || MG_TRANSLATE_ALT_ENGINE_REVERSO.equals(engine)) {
+                || MG_TRANSLATE_ALT_ENGINE_YANDEX.equals(engine)) {
             return engine;
         }
         return MG_TRANSLATE_ALT_ENGINE_DUCKDUCKGO;
@@ -408,7 +401,7 @@ public class SharedConfig {
         if (minutes < 0) minutes = 0;
         int previous = mg_torIdleStopMinutes;
         mg_torIdleStopMinutes = minutes;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putInt("mg_torIdleStopMinutes", minutes)
                 .apply();
@@ -445,7 +438,7 @@ public class SharedConfig {
         mode = sanitizeMgTorTransportMode(mode);
         if (mode == mg_torTransportMode) return;
         mg_torTransportMode = mode;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putInt("mg_torTransportMode", mode)
                 .apply();
@@ -471,7 +464,7 @@ public class SharedConfig {
         if (lines == null) lines = "";
         if (lines.equals(mg_torBridgeLines)) return;
         mg_torBridgeLines = lines;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_torBridgeLines", lines)
                 .apply();
@@ -540,15 +533,31 @@ public class SharedConfig {
 
     public static void setUnifiedPushGateway(String gateway) {
         unifiedPushGateway = gateway;
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_unifiedPushGateway2", unifiedPushGateway)
                 .apply();
     }
 
+    public static void setMgFcmVapidKey(String key) {
+        mgFcmVapidKey = key;
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
+                .edit()
+                .putString("mg_fcmVapidKey", mgFcmVapidKey)
+                .apply();
+    }
+
+    public static void setMgEmbeddedFcmChosen(boolean chosen) {
+        mgEmbeddedFcmChosen = chosen;
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("mg_embeddedFcmChosen", mgEmbeddedFcmChosen)
+                .apply();
+    }
+
     public static void setUnifiedPushEndpointUrl(String url) {
         unifiedPushEndpointUrl = url != null ? url : "";
-        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+        ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                 .edit()
                 .putString("mg_unifiedPushEndpointUrl", unifiedPushEndpointUrl)
                 .apply();
@@ -594,7 +603,7 @@ public class SharedConfig {
             new java.security.SecureRandom().nextBytes(secret);
             webPushAuthSecret = secret;
 
-            ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+            ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
                     .edit()
                     .putString("mg_webPushPrivateKey", Base64.encodeToString(webPushPrivateKey, Base64.DEFAULT))
                     .putString("mg_webPushPublicKey", Base64.encodeToString(webPushPublicKey, Base64.DEFAULT))
@@ -677,6 +686,13 @@ public class SharedConfig {
     public static boolean disableUnifiedPush = false;
     public static boolean enableFirebasePush = false;
     public static String unifiedPushGateway = "https://p2p.belloworld.it/";
+    // VAPID public key of the gateway above, used by the built-in FCM distributor only.
+    public static String mgFcmVapidKey = it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor.DEFAULT_VAPID_PUBLIC_KEY;
+    // The user explicitly picked the built-in FCM distributor. The connector's own saved
+    // distributor cannot answer this: it drops it on every UNREGISTERED and REGISTRATION_FAILED,
+    // and our package is never auto-picked, so without remembering the choice ourselves a lost
+    // registration can only be repaired by hand from the settings.
+    public static boolean mgEmbeddedFcmChosen = false;
     public static String unifiedPushEndpointUrl = "";   // raw UP endpoint URL from last onNewEndpoint
     public static volatile byte[] webPushPrivateKey;    // PKCS#8-encoded P-256 private key
     public static volatile byte[] webPushPublicKey;     // Raw 65-byte uncompressed P-256 point (04||X||Y)
@@ -698,6 +714,9 @@ public class SharedConfig {
     // the pack is missing. Global because the emoji bitmap cache (Emoji.emojiBmp)
     // is a process-wide static, same as useSystemFont/useSystemEmoji.
     public static boolean mg_useCustomEmojiPack = false;
+    // Mercurygram: never register the proximity sensor (calls, voice playback,
+    // raise-to-listen). Global: device hardware, not an account property.
+    public static boolean mg_disableProximitySensor = false;
 
     // Mercurygram: Privacy
     public static boolean reduceTrackingFingerprint = false;
@@ -738,13 +757,15 @@ public class SharedConfig {
     // privacy proxy — instead of contacting translate.googleapis.com directly.
     // The picker keeps the privacy framing of "alternative" honest: text never
     // reaches Google directly from the device, and the user can swap the
-    // backend engine (DuckDuckGo / LibreTranslate / Google-via-Mozhi /
-    // MyMemory / Reverso) or pin a self-hosted instance.
+    // backend engine (DuckDuckGo / Google-via-Mozhi / Yandex) or pin a
+    // self-hosted instance.
+    // Only engines that Mozhi still answers for: libre is gone from
+    // /api/engines entirely, deepl and reverso answer 500 on every default
+    // mirror, and mymemory truncates long text silently. A stored id outside
+    // this set falls back to duckduckgo in sanitizeMgTranslateAltEngine.
     public static final String MG_TRANSLATE_ALT_ENGINE_DUCKDUCKGO = "duckduckgo";
-    public static final String MG_TRANSLATE_ALT_ENGINE_LIBRE      = "libre";
     public static final String MG_TRANSLATE_ALT_ENGINE_GOOGLE     = "google";
-    public static final String MG_TRANSLATE_ALT_ENGINE_MYMEMORY   = "mymemory";
-    public static final String MG_TRANSLATE_ALT_ENGINE_REVERSO    = "reverso";
+    public static final String MG_TRANSLATE_ALT_ENGINE_YANDEX     = "yandex";
 
     public static final String MG_TRANSLATE_ALT_INSTANCE_MODE_AUTO   = "auto";
     public static final String MG_TRANSLATE_ALT_INSTANCE_MODE_PINNED = "pinned";
@@ -956,14 +977,7 @@ public class SharedConfig {
     }
 
     public static class ProxyInfo {
-
-        public String address;
-        public int port;
-        public String username;
-        public String password;
-        public String secret;
-
-        public long proxyCheckPingId;
+        public @NonNull ProxySettings settings;
         public long ping;
         public boolean checking;
         public boolean available;
@@ -974,41 +988,51 @@ public class SharedConfig {
         // proxy-active indicator shows while Tor routes MTProto.
         public boolean mgInternal;
 
-        public ProxyInfo(String address, int port, String username, String password, String secret) {
-            this.address = address;
-            this.port = port;
-            this.username = username;
-            this.password = password;
-            this.secret = secret;
-            if (this.address == null) {
-                this.address = "";
-            }
-            if (this.password == null) {
-                this.password = "";
-            }
-            if (this.username == null) {
-                this.username = "";
-            }
-            if (this.secret == null) {
-                this.secret = "";
-            }
+        public ProxyInfo(@NonNull ProxySettings proxySettings) {
+            settings = proxySettings;
         }
 
-        public String getLink() {
-            StringBuilder url = new StringBuilder(!TextUtils.isEmpty(secret) ? "https://t.me/proxy?" : "https://t.me/socks?");
-            try {
-                url.append("server=").append(URLEncoder.encode(address, "UTF-8")).append("&").append("port=").append(port);
-                if (!TextUtils.isEmpty(username)) {
-                    url.append("&user=").append(URLEncoder.encode(username, "UTF-8"));
-                }
-                if (!TextUtils.isEmpty(password)) {
-                    url.append("&pass=").append(URLEncoder.encode(password, "UTF-8"));
-                }
-                if (!TextUtils.isEmpty(secret)) {
-                    url.append("&secret=").append(URLEncoder.encode(secret, "UTF-8"));
-                }
-            } catch (UnsupportedEncodingException ignored) {}
-            return url.toString();
+        private static ProxyInfo fromSerializedData(int version, InputSerializedData data) {
+            ProxySettings.Builder builder = ProxySettings.builder()
+                    .setAddress(data.readString(false))
+                    .setPort(data.readInt32(false))
+                    .setUser(data.readString(false))
+                    .setPassword(data.readString(false));
+
+            final String secret = data.readString(false);
+            builder.setSecret(secret);
+
+            final long ping, availableCheckTime;
+            if (version >= PROXY_SCHEMA_V2) {
+                ping = data.readInt64(false);
+                availableCheckTime = data.readInt64(false);
+            } else {
+                ping = availableCheckTime = 0;
+            }
+
+            if (version >= PROXY_SCHEMA_V3) {
+                builder.setType(ProxySettings.intToType(data.readInt32(false)));
+            } else {
+                builder.setType(TextUtils.isEmpty(secret) ? ProxySettings.Type.SOCKS5 : ProxySettings.Type.MTPROTO);
+            }
+
+            final ProxyInfo info = new ProxyInfo(builder.build());
+            info.availableCheckTime = availableCheckTime;
+            info.ping = ping;
+            info.available = ping > 0;
+
+            return info;
+        }
+
+        private void toSerializedData(OutputSerializedData data) {
+            data.writeString(settings.getAddress());
+            data.writeInt32(settings.getPort());
+            data.writeString(settings.getUser());
+            data.writeString(settings.getPassword());
+            data.writeString(settings.getSecret());
+            data.writeInt64(ping);
+            data.writeInt64(availableCheckTime);
+            data.writeInt32(ProxySettings.typeToInt(settings.getType()));
         }
     }
 
@@ -1030,11 +1054,17 @@ public class SharedConfig {
         editor.putBoolean("mg_disableUnifiedPush", disableUnifiedPush);
         editor.putBoolean("mg_enableFirebasePush", enableFirebasePush);
         editor.putString("mg_unifiedPushGateway2", unifiedPushGateway);
+        editor.putString("mg_fcmVapidKey", mgFcmVapidKey);
+        // mg_embeddedFcmChosen is deliberately not written here: setMgEmbeddedFcmChosen
+        // is the only writer, so the key's absence keeps meaning "no explicit choice yet"
+        // and mgLoadConfig can keep deriving the default. Writing the derived value back
+        // would freeze it on the first saveConfig of the first session.
         editor.putBoolean("mg_disableSecureFlags", disableSecureFlags);
         editor.putBoolean("mg_removeAdsAndProxySponsor", removeAdsAndProxySponsor);
         editor.putBoolean("mg_disableAutoUpdate", disableAutoUpdate);
         editor.putBoolean("mg_acceptPreReleaseUpdates", acceptPreReleaseUpdates);
         editor.putString("mg_lastPreReleaseTag", mgLastPreReleaseTag);
+        editor.putBoolean("mg_useSystemFont", useSystemFont);
         editor.putBoolean("mg_reduceTrackingFingerprint", reduceTrackingFingerprint);
         editor.putBoolean("mg_useTor", mg_useTor);
         editor.putInt("mg_torIdleStopMinutes", mg_torIdleStopMinutes);
@@ -1050,6 +1080,8 @@ public class SharedConfig {
         editor.putBoolean("mg_transcribeOffline", mg_transcribeOffline);
         editor.putString("mg_transcribeModel", mg_transcribeModel);
         editor.putBoolean("mg_transcribeVad", mg_transcribeVad);
+        editor.putBoolean("mg_useCustomEmojiPack", mg_useCustomEmojiPack);
+        editor.putBoolean("mg_disableProximitySensor", mg_disableProximitySensor);
         editor.putString("mg_webPushPrivateKey", webPushPrivateKey != null ? Base64.encodeToString(webPushPrivateKey, Base64.DEFAULT) : "");
         editor.putString("mg_webPushPublicKey", webPushPublicKey != null ? Base64.encodeToString(webPushPublicKey, Base64.DEFAULT) : "");
         editor.putString("mg_webPushAuthSecret", webPushAuthSecret != null ? Base64.encodeToString(webPushAuthSecret, Base64.DEFAULT) : "");
@@ -1083,6 +1115,27 @@ public class SharedConfig {
         disableUnifiedPush = preferences.getBoolean("mg_disableUnifiedPush", false);
         enableFirebasePush = preferences.getBoolean("mg_enableFirebasePush", false);
         unifiedPushGateway = preferences.getString("mg_unifiedPushGateway2", unifiedPushGateway);
+        mgFcmVapidKey = preferences.getString("mg_fcmVapidKey", mgFcmVapidKey);
+        // Default derived, not false: an install that already used the built-in distributor before
+        // this flag existed may have lost the connector's saved distributor before updating, and
+        // would otherwise never recover on its own. The last endpoint we were given survives that
+        // loss (only an explicit distributor switch clears it), so its shape stands in for the
+        // choice until a setter writes the flag for real. Google Play installs default to it
+        // when no distributor app is present, and only there: the endpoint heuristic would
+        // otherwise answer for them from the second cold start on (the first registration
+        // persists an /fcm/ endpoint), and installing a distributor app later would never flip
+        // the default back. Re-derived on every load while the key is absent
+        // (setMgEmbeddedFcmChosen is its only writer). contains() rather than a getBoolean
+        // default because Java evaluates that default eagerly and the probes are
+        // PackageManager round trips on a startup path.
+        if (preferences.contains("mg_embeddedFcmChosen")) {
+            mgEmbeddedFcmChosen = preferences.getBoolean("mg_embeddedFcmChosen", false);
+        } else if (it.belloworld.mercurygram.MgInstallSource.isPlayStore()) {
+            mgEmbeddedFcmChosen = it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor.isPlayDefault(ApplicationLoader.applicationContext);
+        } else {
+            mgEmbeddedFcmChosen = it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor.looksLikeFcmEndpoint(
+                    preferences.getString("mg_unifiedPushEndpointUrl", ""));
+        }
         disableSecureFlags = true;
         removeAdsAndProxySponsor = preferences.getBoolean("mg_removeAdsAndProxySponsor", true);
         disableAutoUpdate = preferences.getBoolean("mg_disableAutoUpdate", false);
@@ -1106,6 +1159,7 @@ public class SharedConfig {
         mg_transcribeModel = preferences.getString("mg_transcribeModel", "tiny-q8_0");
         mg_transcribeVad = preferences.getBoolean("mg_transcribeVad", true);
         mg_useCustomEmojiPack = preferences.getBoolean("mg_useCustomEmojiPack", false);
+        mg_disableProximitySensor = preferences.getBoolean("mg_disableProximitySensor", false);
         migratePerAccountSettingsV1(preferences);
         migrateTranscribeLangToPerAccount(preferences);
         migrateHideStoriesToPerAccount(preferences);
@@ -1638,7 +1692,7 @@ public class SharedConfig {
     }
 
     public static boolean isMgUpdateAvailable() {
-        return mgPendingUpdate != null && !it.belloworld.mercurygram.MgUpdateChecker.isFdroidBuild();
+        return mgPendingUpdate != null && it.belloworld.mercurygram.MgUpdateChecker.canSelfInstall();
     }
 
     public static it.belloworld.mercurygram.MgUpdateInfo getMgPendingUpdate() {
@@ -2290,12 +2344,8 @@ public class SharedConfig {
         if (proxyListLoaded) {
             return;
         }
-        SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-        String proxyAddress = preferences.getString("proxy_ip", "");
-        String proxyUsername = preferences.getString("proxy_user", "");
-        String proxyPassword = preferences.getString("proxy_pass", "");
-        String proxySecret = preferences.getString("proxy_secret", "");
-        int proxyPort = preferences.getInt("proxy_port", 1080);
+        final SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
+        final ProxySettings proxySettings = ProxySettings.fromSharedPreferences(preferences);
 
         proxyListLoaded = true;
         proxyList.clear();
@@ -2308,23 +2358,14 @@ public class SharedConfig {
             if (count == -1) { // V2 or newer
                 int version = data.readByte(false);
 
-                if (version == PROXY_SCHEMA_V2) {
+                if (version == PROXY_SCHEMA_V2 || version == PROXY_SCHEMA_V3) {
                     count = data.readInt32(false);
 
                     for (int i = 0; i < count; i++) {
-                        ProxyInfo info = new ProxyInfo(
-                                data.readString(false),
-                                data.readInt32(false),
-                                data.readString(false),
-                                data.readString(false),
-                                data.readString(false));
-
-                        info.ping = data.readInt64(false);
-                        info.availableCheckTime = data.readInt64(false);
-
+                        final ProxyInfo info = ProxyInfo.fromSerializedData(version, data);
                         proxyList.add(0, info);
-                        if (currentProxy == null && !TextUtils.isEmpty(proxyAddress)) {
-                            if (proxyAddress.equals(info.address) && proxyPort == info.port && proxyUsername.equals(info.username) && proxyPassword.equals(info.password)) {
+                        if (currentProxy == null && proxySettings.isValid()) {
+                            if (Objects.equals(proxySettings, info.settings)) {
                                 currentProxy = info;
                             }
                         }
@@ -2334,15 +2375,10 @@ public class SharedConfig {
                 }
             } else {
                 for (int a = 0; a < count; a++) {
-                    ProxyInfo info = new ProxyInfo(
-                            data.readString(false),
-                            data.readInt32(false),
-                            data.readString(false),
-                            data.readString(false),
-                            data.readString(false));
+                    final ProxyInfo info = ProxyInfo.fromSerializedData(0, data);
                     proxyList.add(0, info);
-                    if (currentProxy == null && !TextUtils.isEmpty(proxyAddress)) {
-                        if (proxyAddress.equals(info.address) && proxyPort == info.port && proxyUsername.equals(info.username) && proxyPassword.equals(info.password)) {
+                    if (currentProxy == null && proxySettings.isValid()) {
+                        if (Objects.equals(proxySettings, info.settings)) {
                             currentProxy = info;
                         }
                     }
@@ -2350,7 +2386,7 @@ public class SharedConfig {
             }
             data.cleanup();
         }
-        if (currentProxy == null && !TextUtils.isEmpty(proxyAddress)) {
+        if (currentProxy == null && proxySettings.isValid()) {
             // MG: never let a 127.0.0.1 proxy_ip materialize via the ad-hoc
             // fallback. The only writers of 127.0.0.1 here are
             // MgTorController (blocking stub port=1 before bootstrap, live
@@ -2362,10 +2398,10 @@ public class SharedConfig {
             // proxy_enabled=false, wedging next launch on the dead stub with
             // no UI affordance to clear it. Any legit user-added 127.0.0.1
             // proxy lives in proxy_list (processed above) and is unaffected.
-            if ("127.0.0.1".equals(proxyAddress)) {
+            if ("127.0.0.1".equals(proxySettings.getAddress())) {
                 return;
             }
-            ProxyInfo info = currentProxy = new ProxyInfo(proxyAddress, proxyPort, proxyUsername, proxyPassword, proxySecret);
+            ProxyInfo info = currentProxy = new ProxyInfo(proxySettings);
             proxyList.add(0, info);
         }
     }
@@ -2386,7 +2422,13 @@ public class SharedConfig {
     private static ProxyInfo publishMgInternalProxy(int port, String username, String password) {
         loadProxyList();
         clearMgInternalTorProxy();
-        ProxyInfo info = new ProxyInfo("127.0.0.1", port, username, password, "");
+        ProxyInfo info = new ProxyInfo(ProxySettings.builder()
+                .setType(ProxySettings.Type.SOCKS5)
+                .setAddress("127.0.0.1")
+                .setPort(port)
+                .setUser(username)
+                .setPassword(password)
+                .build());
         info.mgInternal = true;
         info.available = true;
         proxyList.add(0, info);
@@ -2435,14 +2477,7 @@ public class SharedConfig {
         serializedData.writeInt32(count);
         for (int a = count - 1; a >= 0; a--) {
             ProxyInfo info = infoToSerialize.get(a);
-            serializedData.writeString(info.address != null ? info.address : "");
-            serializedData.writeInt32(info.port);
-            serializedData.writeString(info.username != null ? info.username : "");
-            serializedData.writeString(info.password != null ? info.password : "");
-            serializedData.writeString(info.secret != null ? info.secret : "");
-
-            serializedData.writeInt64(info.ping);
-            serializedData.writeInt64(info.availableCheckTime);
+            info.toSerializedData(serializedData);
         }
         SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
         preferences.edit().putString("proxy_list", Base64.encodeToString(serializedData.toByteArray(), Base64.NO_WRAP)).apply();
@@ -2454,7 +2489,7 @@ public class SharedConfig {
         int count = proxyList.size();
         for (int a = 0; a < count; a++) {
             ProxyInfo info = proxyList.get(a);
-            if (proxyInfo.address.equals(info.address) && proxyInfo.port == info.port && proxyInfo.username.equals(info.username) && proxyInfo.password.equals(info.password) && proxyInfo.secret.equals(info.secret)) {
+            if (Objects.equals(proxyInfo.settings, info.settings)) {
                 return info;
             }
         }
@@ -2477,12 +2512,12 @@ public class SharedConfig {
             editor.putString("proxy_pass", "");
             editor.putString("proxy_user", "");
             editor.putString("proxy_secret", "");
+            editor.putInt("proxy_type", 0);
             editor.putInt("proxy_port", 1080);
             editor.putBoolean("proxy_enabled", false);
-            editor.putBoolean("proxy_enabled_calls", false);
             editor.apply();
             if (enabled) {
-                ConnectionsManager.setProxySettings(false, "", 0, "", "", "");
+                ConnectionsManager.setProxySettings(false, null);
             }
         }
         proxyList.remove(proxyInfo);

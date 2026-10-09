@@ -71,6 +71,7 @@ def sync_app(
     tag: str,
     apks_dir: str,
     fdroiddata_root: str,
+    mg_repo: str,
     vn: str,
     vc_base: int,
     ndk_ver: str,
@@ -101,6 +102,15 @@ def sync_app(
             f'[{app_key}] WARNING: no APKs in {apks_dir} matched appid={appid}',
             file=sys.stderr,
         )
+
+    # Build-entry keys this tree owns (see .github/fdroid/recipe-overlay.yml).
+    # Loaded non-round-trip on purpose: plain lists carry no comments into the
+    # recipe we dump. Missing file or missing AppID key means no overlay.
+    overlay_path = os.path.join(mg_repo, '.github', 'fdroid', 'recipe-overlay.yml')
+    overlay = {}
+    if os.path.exists(overlay_path):
+        with open(overlay_path) as fh:
+            overlay = YAML(typ='safe').load(fh).get(appid, {})
 
     yaml = YAML(typ='rt')
     yaml.width = 80  # match fdroiddata's default folding so diffs stay minimal
@@ -145,14 +155,8 @@ def sync_app(
         new['versionCode'] = new_vc
         new['commit'] = sha
         new['ndk'] = ndk_ver
-        # Transient: until the next fdroid release lands a Builds entry
-        # carrying `printf 'MG_BUILD_TAG=$$VERSION$$' >> ../gradle.properties`
-        # natively, write it ourselves. fdroidserver substitutes $$VERSION$$
-        # with the recipe's versionName at build time, so the printf'd line
-        # ends up the same regardless of who appends it.
-        new.setdefault('prebuild', []).append(
-            "printf '\\nMG_BUILD_TAG=$$VERSION$$\\n' >> ../gradle.properties"
-        )
+        for key, value in overlay.items():
+            new[key] = copy.deepcopy(value)
         builds.append(new)
         print(f'[{app_key}] appended {flavor} vc={new_vc}', file=sys.stderr)
 
@@ -191,6 +195,7 @@ def main(
             tag=tag,
             apks_dir=apks_dir,
             fdroiddata_root=fdroiddata_root,
+            mg_repo=mg_repo,
             vn=vn,
             vc_base=vc_base,
             ndk_ver=ndk_ver,

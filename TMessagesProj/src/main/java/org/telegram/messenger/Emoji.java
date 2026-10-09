@@ -24,6 +24,7 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.style.DynamicDrawableSpan;
 import android.text.style.ImageSpan;
+import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.View;
 import android.view.ViewGroup;
@@ -113,6 +114,8 @@ public class Emoji {
         }
     }
 
+    private static int memoryUsage;
+
     private static void loadEmoji(final byte page, final short page2) {
         if (emojiBmp[page][page2] == null) {
             if (loadingEmoji[page][page2]) {
@@ -125,41 +128,9 @@ public class Emoji {
                 // user-supplied glyph when a pack is installed + enabled, else
                 // falls back to the bundled asset per-glyph.
                 Bitmap bitmap = it.belloworld.mercurygram.emoji.MgEmojiPack.loadEmojiBitmap(page, page2);
-                try {
-                    if (emojiAlphaMasks == null) {
-                        emojiAlphaMasks = loadEmojiAlphaMasks();
-                    }
-
-                    int maskIndex = -1;
-                    if (emojiAlphaMasks != null) {
-                        maskIndex = emojiAlphaMasks.get(page * 4096 + page2, -1);
-                    }
-
-                    if (bitmap != null && maskIndex != -1) {
-                        final Bitmap alphaBitmap = loadBitmap("emoji/masks/" + String.format(Locale.US, "%d.png", maskIndex));
-                        if (alphaBitmap != null) {
-                            final int w = bitmap.getWidth();
-                            final int h = bitmap.getHeight();
-
-                            final int[] rgbPixels = new int[w * h];
-                            final int[] alphaPixels = new int[w * h];
-
-                            bitmap.getPixels(rgbPixels, 0, w, 0, 0, w, h);
-                            alphaBitmap.getPixels(alphaPixels, 0, w, 0, 0, w, h);
-                            alphaBitmap.recycle();
-
-                            for (int i = 0; i < rgbPixels.length; i++) {
-                                int c = rgbPixels[i];
-                                c = (c & 0x00FFFFFF) | ((alphaPixels[i] & 0xFF) << 24);
-
-                                rgbPixels[i] = c;
-                            }
-
-                            bitmap.recycle();
-                            bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                            bitmap.setPixels(rgbPixels, 0, w, 0, 0, w, h);
-                        }
-                    }
+                if (bitmap == null) try {
+                    final EmojiPack emojiPack = EmojiPack.getInstance();
+                    bitmap = emojiPack.getEmoji(page, page2);
                 } catch (Exception e) {
                     FileLog.e(e);
                 }
@@ -171,12 +142,6 @@ public class Emoji {
                 loadingEmoji[page][page2] = false;
             });
         }
-    }
-
-    private static SparseIntArray emojiAlphaMasks;
-
-    private static SparseIntArray loadEmojiAlphaMasks() {
-        return null;
     }
 
     public static Bitmap loadBitmap(String path) {
@@ -797,6 +762,8 @@ public class Emoji {
         public float scale = 1f;
         public int size = AndroidUtilities.dp(20);
         public String emoji;
+        private boolean preserveFontMetrics;
+        private int minimumLineHeight;
 
         public EmojiSpan(Drawable d, int verticalAlignment, Paint.FontMetricsInt original) {
             super(d, verticalAlignment);
@@ -824,8 +791,24 @@ public class Emoji {
             }
         }
 
+        public EmojiSpan setPreserveFontMetrics(boolean preserveFontMetrics) {
+            this.preserveFontMetrics = preserveFontMetrics;
+            return this;
+        }
+
+        public EmojiSpan setMinimumLineHeight(int minimumLineHeight) {
+            this.minimumLineHeight = minimumLineHeight;
+            return this;
+        }
+
         @Override
         public int getSize(Paint paint, CharSequence text, int start, int end, Paint.FontMetricsInt fm) {
+            final boolean preserveMetrics = preserveFontMetrics && fm != null;
+            final int originalTop = preserveMetrics ? fm.top : 0;
+            final int originalAscent = preserveMetrics ? fm.ascent : 0;
+            final int originalDescent = preserveMetrics ? fm.descent : 0;
+            final int originalBottom = preserveMetrics ? fm.bottom : 0;
+            final int originalLeading = preserveMetrics ? fm.leading : 0;
             if (fm == null) {
                 fm = new Paint.FontMetricsInt();
             }
@@ -842,6 +825,14 @@ public class Emoji {
                 fm.leading = 0;
                 fm.descent = w - offset;
 
+                if (preserveMetrics) {
+                    fm.top = originalTop;
+                    fm.ascent = originalAscent;
+                    fm.descent = originalDescent;
+                    fm.bottom = originalBottom;
+                    fm.leading = originalLeading;
+                    expandFontMetrics(fm, minimumLineHeight);
+                }
                 return sz;
             } else {
                 if (fm != null) {
@@ -854,8 +845,30 @@ public class Emoji {
                 if (getDrawable() != null) {
                     getDrawable().setBounds(0, 0, scaledSize, scaledSize);
                 }
+                if (preserveMetrics) {
+                    fm.top = originalTop;
+                    fm.ascent = originalAscent;
+                    fm.descent = originalDescent;
+                    fm.bottom = originalBottom;
+                    fm.leading = originalLeading;
+                    expandFontMetrics(fm, minimumLineHeight);
+                }
                 return scaledSize;
             }
+        }
+
+        private static void expandFontMetrics(Paint.FontMetricsInt fm, int minimumHeight) {
+            final int currentHeight = fm.descent - fm.ascent;
+            if (minimumHeight <= currentHeight) {
+                return;
+            }
+            final int extra = minimumHeight - currentHeight;
+            final int above = (extra + 1) / 2;
+            final int below = extra - above;
+            fm.ascent -= above;
+            fm.descent += below;
+            fm.top = Math.min(fm.top, fm.ascent);
+            fm.bottom = Math.max(fm.bottom, fm.descent);
         }
 
         public boolean drawn;

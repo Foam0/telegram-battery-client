@@ -125,6 +125,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
     private LocaleController.LocaleInfo localeInfo;
 
     private boolean destroyed;
+    private NotificationCenter.NotificationCenterDelegate switchLanguageDelegate;
 
     private boolean isOnLogout;
 
@@ -203,7 +204,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
         };
         scrollView.addView(frameContainerView, LayoutHelper.createScroll(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
 
-        darkThemeDrawable = new RLottieDrawable(R.raw.sun, String.valueOf(R.raw.sun), dp(28), dp(28), true, null);
+        darkThemeDrawable = new RLottieDrawable(R.raw.sun, dp(28), dp(28), true, null);
         darkThemeDrawable.setPlayInDirectionOfCustomEndFrame(true);
         darkThemeDrawable.beginApplyLayerColors();
         darkThemeDrawable.commitApplyLayerColors();
@@ -405,20 +406,22 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             loaderDialog.setCanCancel(false);
             loaderDialog.showDelayed(1000);
 
-            NotificationCenter.getGlobalInstance().addObserver(new NotificationCenter.NotificationCenterDelegate() {
+            switchLanguageDelegate = new NotificationCenter.NotificationCenterDelegate() {
                 @Override
                 public void didReceivedNotification(int id, int account, Object... args) {
                     if (id == NotificationCenter.reloadInterface) {
                         loaderDialog.dismiss();
 
                         NotificationCenter.getGlobalInstance().removeObserver(this, id);
+                        switchLanguageDelegate = null;
                         AndroidUtilities.runOnUIThread(()->{
                             presentFragment(new LoginActivity().setIntroView(frameContainerView, startMessagingButton), true);
                             destroyed = true;
                         }, 100);
                     }
                 }
-            }, NotificationCenter.reloadInterface);
+            };
+            NotificationCenter.getGlobalInstance().addObserver(switchLanguageDelegate, NotificationCenter.reloadInterface);
             LocaleController.getInstance().applyLanguage(localeInfo, true, false, currentAccount);
         });
 
@@ -452,24 +455,13 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             }
             justCreated = false;
         }
-        if (!AndroidUtilities.isTablet()) {
-            Activity activity = getParentActivity();
-            if (activity != null) {
-                activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            }
-        }
+        AndroidUtilities.lockOrientation(getParentActivity(), ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
     }
 
     @Override
     public void onPause() {
         super.onPause();
-
-        if (!AndroidUtilities.isTablet()) {
-            Activity activity = getParentActivity();
-            if (activity != null) {
-                activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-            }
-        }
+        AndroidUtilities.unlockOrientation(getParentActivity());
     }
 
     @Override
@@ -483,6 +475,11 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
         destroyed = true;
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.suggestedLangpack);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.configLoaded);
+        // the language switch never completed, so its observer is still holding this fragment
+        if (switchLanguageDelegate != null) {
+            NotificationCenter.getGlobalInstance().removeObserver(switchLanguageDelegate, NotificationCenter.reloadInterface);
+            switchLanguageDelegate = null;
+        }
         MessagesController.getGlobalMainSettings().edit().putLong("intro_crashed_time", 0).apply();
     }
 

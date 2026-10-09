@@ -324,6 +324,12 @@ public class TL_bots {
     public static class TL_botInfoEmpty_layer48 extends TL_botInfo {
         public static final int constructor = 0xbb2e37ce;
 
+        // botInfoEmpty#bb2e37ce = BotInfo; carries no fields, matching
+        // serializeToStream below. Without this override the class inherits
+        // TL_botInfo.readParams, which reads a flags int plus its flag-gated
+        // fields and walks ~96 bytes past the end of the payload.
+        public void readParams(InputSerializedData stream, boolean exception) {
+        }
 
         public void serializeToStream(OutputSerializedData stream) {
             stream.writeInt32(constructor);
@@ -1209,15 +1215,15 @@ public class TL_bots {
         }
     }
 
-    public static class getRequestedWebViewButton extends TLMethod<TLRPC.KeyboardButton> {
+    public static class getRequestedWebViewButton extends TLMethod<TL_keyboard.KeyboardButton> {
         public static final int constructor = 0xbf25b7f3;
 
         public TLRPC.InputUser bot;
         public String webapp_req_id;
 
         @Override
-        public TLRPC.KeyboardButton deserializeResponseT(InputSerializedData stream, int constructor, boolean exception) {
-            return TLRPC.KeyboardButton.TLdeserialize(stream, constructor, exception);
+        public TL_keyboard.KeyboardButton deserializeResponseT(InputSerializedData stream, int constructor, boolean exception) {
+            return TL_keyboard.KeyboardButton.TLdeserialize(stream, constructor, exception);
         }
 
         @Override

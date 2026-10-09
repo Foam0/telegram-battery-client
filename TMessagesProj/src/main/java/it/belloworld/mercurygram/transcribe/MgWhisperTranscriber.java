@@ -7,8 +7,10 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.tgnet.TLRPC;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -92,6 +94,36 @@ public final class MgWhisperTranscriber {
     }
 
     /**
+     * Identifies the settings a transcription was produced with: selected model,
+     * effective language, and whether VAD actually ran. Stored in the message's
+     * {@code voiceTranscriptionId} slot so a cached transcription can be told
+     * apart from one the current settings would produce.
+     *
+     * Always negative and never 0: Telegram's server transcription ids are
+     * positive, so the two uses of the field never overlap.
+     */
+    public static long currentStamp(int account) {
+        String key = MgWhisperModel.selected().id
+                + "|" + effectiveLang(UserConfig.getInstance(account).mg.transcribeLang)
+                + "|" + (SharedConfig.mg_transcribeVad && MgWhisperModel.isVadInstalled());
+        return -(1L + (key.hashCode() & 0x7fffffffL));
+    }
+
+    /**
+     * True when the stored transcription was produced by on-device transcription
+     * under different settings (or by a build that did not stamp them yet), so
+     * re-opening it should transcribe again rather than show the old text.
+     * A server transcription (positive id) is never stale.
+     */
+    public static boolean isStale(MessageObject messageObject) {
+        if (messageObject == null || messageObject.messageOwner == null || !isUsable()) {
+            return false;
+        }
+        long stamp = messageObject.messageOwner.voiceTranscriptionId;
+        return stamp <= 0 && stamp != currentStamp(messageObject.currentAccount);
+    }
+
+    /**
      * True when the running CPU can execute the whisper.cpp build.
      *
      * The arm64 lib is compiled with {@code armv8.2-a+dotprod+fp16}
@@ -138,6 +170,15 @@ public final class MgWhisperTranscriber {
      * always invoked on the UI thread exactly once.
      */
     public static void transcribe(MessageObject messageObject, Result done) {
+        transcribe(messageObject, done, true);
+    }
+
+    /**
+     * {@code allowDownload} is false on the retry that follows a successful
+     * {@link #downloadThenTranscribe} fetch, so a file that is still missing
+     * after the download reports FILE_UNAVAILABLE instead of looping.
+     */
+    private static void transcribe(MessageObject messageObject, Result done, boolean allowDownload) {
         if (messageObject == null || messageObject.messageOwner == null) {
             post(done, null, false, Failure.of(Reason.FILE_UNAVAILABLE));
             return;
@@ -169,7 +210,13 @@ public final class MgWhisperTranscriber {
                 // getPathToMessage() + File stats are avoidable main-thread I/O on tap.
                 final String audioPath = resolveAudioPath(messageObject);
                 if (audioPath == null) {
-                    post(done, null, false, Failure.of(Reason.FILE_UNAVAILABLE));
+                    // Nothing on disk: fetch the voice message and transcribe when
+                    // it lands, instead of telling the user to go play it first.
+                    if (allowDownload) {
+                        downloadThenTranscribe(messageObject, done);
+                    } else {
+                        post(done, null, false, Failure.of(Reason.FILE_UNAVAILABLE));
+                    }
                     return;
                 }
                 if (!ensureEngine(modelPath)) {
@@ -309,7 +356,68 @@ public final class MgWhisperTranscriber {
         if (f != null && f.exists() && f.length() > 0) {
             return f.getAbsolutePath();
         }
+        // getPathToMessage() resolves through the FilePathDatabase row for the
+        // document, so a row left behind by a copy the user has since deleted (a
+        // file moved out of the app, an external dir that went away) hides the
+        // audio the app still has under its default name. Probe the two default
+        // locations by name before giving up — this is the "it IS downloaded but
+        // the app says it is not" case from issue #131.
+        TLRPC.Document document = messageObject.getDocument();
+        String name = document != null ? FileLoader.getAttachFileName(document) : null;
+        if (!TextUtils.isEmpty(name)) {
+            int mediaDir = MessageObject.isVoiceDocument(document)
+                    ? FileLoader.MEDIA_DIR_AUDIO
+                    : MessageObject.isVideoDocument(document)
+                            ? FileLoader.MEDIA_DIR_VIDEO : FileLoader.MEDIA_DIR_DOCUMENT;
+            for (int type : new int[]{mediaDir, FileLoader.MEDIA_DIR_CACHE}) {
+                File dir = FileLoader.getDirectory(type);
+                if (dir == null) {
+                    continue;
+                }
+                File probe = new File(dir, name);
+                if (probe.exists() && probe.length() > 0) {
+                    return probe.getAbsolutePath();
+                }
+            }
+        }
         return null;
+    }
+
+    /**
+     * Downloads the voice/round-video file, then retries the transcription once.
+     * Used when nothing is on disk (auto-download off, cache cleared, or a stale
+     * path row): the caller keeps the message registered as "transcribing", so the
+     * cell keeps its spinner for the whole wait instead of showing an error.
+     */
+    private static void downloadThenTranscribe(MessageObject messageObject, Result done) {
+        final TLRPC.Document document = messageObject.getDocument();
+        final String fileName = document != null ? FileLoader.getAttachFileName(document) : null;
+        if (document == null || TextUtils.isEmpty(fileName)) {
+            post(done, null, false, Failure.of(Reason.FILE_UNAVAILABLE));
+            return;
+        }
+        final int account = messageObject.currentAccount;
+        AndroidUtilities.runOnUIThread(() -> {
+            final NotificationCenter center = NotificationCenter.getInstance(account);
+            // Self-referencing observer: it unregisters itself from both events on
+            // the first one that names our file.
+            final NotificationCenter.NotificationCenterDelegate[] observer = new NotificationCenter.NotificationCenterDelegate[1];
+            observer[0] = (id, acc, args) -> {
+                if (args == null || args.length == 0 || !fileName.equals(args[0])) {
+                    return;
+                }
+                center.removeObserver(observer[0], NotificationCenter.fileLoaded);
+                center.removeObserver(observer[0], NotificationCenter.fileLoadFailed);
+                if (id == NotificationCenter.fileLoaded) {
+                    transcribe(messageObject, done, false);
+                } else {
+                    done.done(null, false, Failure.of(Reason.FILE_UNAVAILABLE));
+                }
+            };
+            center.addObserver(observer[0], NotificationCenter.fileLoaded);
+            center.addObserver(observer[0], NotificationCenter.fileLoadFailed);
+            FileLoader.getInstance(account).loadFile(document, messageObject, FileLoader.PRIORITY_NORMAL_UP, 0);
+        });
     }
 
     private static void post(Result done, String text, boolean success, Failure failure) {

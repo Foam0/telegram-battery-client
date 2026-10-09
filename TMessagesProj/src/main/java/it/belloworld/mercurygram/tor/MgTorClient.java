@@ -18,6 +18,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.text.TextUtils;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -28,10 +29,12 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.voip.VoIPService;
+import org.telegram.utils.proxy.ProxySettings;
 import org.telegram.tgnet.ConnectionsManager;
 
 import it.belloworld.mercurygram.MgUpdateChecker;
@@ -218,7 +221,82 @@ public final class MgTorClient {
     // MAX_ABORTIVE_BINDS to break the loop.
     private volatile int consecutiveAbortiveBinds;
 
+    // Port of the loopback endpoint Tor currently owns: BLOCKING_STUB_PORT
+    // before/between bootstraps, the live SOCKS port once tor is up, -1 when
+    // Tor owns nothing. Set immediately before every Tor-owned
+    // ConnectionsManager.setProxySettings call and read by blocksProxyWrite,
+    // which is the ownership check for the single global native proxy slot.
+    private static volatile int torOwnedPort = -1;
+
     // ---- Public API — static lifecycle helpers ----
+
+    /**
+     * Ownership check for the one native proxy slot, called from
+     * ConnectionsManager.setProxySettings — the single point every proxy
+     * writer in the app funnels through.
+     *
+     * MTProto has exactly one proxy tuple per account and no arbitration:
+     * last writer wins. While mg_useTor is on, that slot belongs to Tor (the
+     * blocking stub before bootstrap, the live SOCKS port after), so any other
+     * writer — adding/editing a proxy, a tg://proxy link, deleteProxy, the
+     * connection-error dialog — would silently reroute MTProto through a plain
+     * proxy while the Tor switch still reads ON, leaking the long-lived
+     * auth_key_id the toggle exists to hide.
+     *
+     * Ownership is decided by comparing the write against the endpoint Tor
+     * currently owns rather than by a flag held around Tor's own calls: the
+     * calls come from the worker thread, the UI thread and Application init,
+     * so a flag would need locking to be correct. Tor's disable-time writes
+     * (restore snapshot / clear) all happen after mg_useTor is already false
+     * and pass on the first check.
+     *
+     * A blocked write means some caller already committed its own view of the
+     * proxy to SharedConfig.currentProxy and to disk, so repairProxyState()
+     * puts both back and tells the user why nothing happened.
+     */
+    public static boolean blocksProxyWrite(boolean enabled, String address, int port) {
+        if (!SharedConfig.mg_useTor) return false;
+        int owned = torOwnedPort;
+        if (enabled && owned > 0 && port == owned && "127.0.0.1".equals(address)) return false;
+        repairProxyState(owned);
+        return true;
+    }
+
+    // Undo a blocked writer's side effects: it set currentProxy and the
+    // proxy_* prefs before calling setProxySettings, and native was never
+    // touched, so re-assert Tor's synthetic entry + prefs and repaint the
+    // proxy screen. Runs on the UI thread because publishMgInternalTorProxy
+    // mutates SharedConfig.proxyList, which the proxy list adapter reads.
+    private static void repairProxyState(int owned) {
+        AndroidUtilities.runOnUIThread(() -> {
+            try {
+                if (!SharedConfig.mg_useTor || owned <= 0) return;
+                SharedConfig.publishMgInternalTorProxy(owned);
+                // persistProxyPortToDisk repaints the proxy screen for us.
+                persistProxyPortToDisk(owned);
+                Context ctx = appContext != null ? appContext : ApplicationLoader.applicationContext;
+                if (ctx == null) return;
+                Toast.makeText(ctx,
+                        LocaleController.getString(R.string.MercurygramTorActiveProxyLocked),
+                        Toast.LENGTH_LONG).show();
+            } catch (Throwable t) { FileLog.e(t); }
+        });
+    }
+
+    // Every screen that renders proxy state (the proxy list, the drawer's
+    // proxy-active indicator) refreshes off proxySettingsChanged. Tor's own
+    // enable/disable writes happen on the worker thread, often seconds after
+    // the user left the Tor screen (stop() waits up to 7s for the daemon), so
+    // without this the proxy list keeps showing "Use proxy ON" plus the
+    // synthetic 127.0.0.1 entry until the user leaves and re-enters it.
+    private static void notifyProxySettingsChanged() {
+        AndroidUtilities.runOnUIThread(() -> {
+            try {
+                NotificationCenter.getGlobalInstance()
+                        .postNotificationName(NotificationCenter.proxySettingsChanged);
+            } catch (Throwable t) { FileLog.e(t); }
+        });
+    }
 
     /**
      * One-shot migration for users upgrading from the MgOrbotHelper era,
@@ -279,13 +357,16 @@ public final class MgTorClient {
         // force mg_useTor off + restore prior proxy (or clear) at cold
         // start so MTProto isn't permanently wedged on the blocking stub.
         if (isFdroidPreS()) {
+            // Flip the flag FIRST: while mg_useTor is true, blocksProxyWrite
+            // rejects every proxy write that isn't Tor's own loopback, which
+            // includes the snapshot restore below.
+            try { SharedConfig.toggleMgUseTor(); }
+            catch (Throwable t) { FileLog.e(t); }
             try {
                 if (!restoreSnapshottedProxy()) {
                     clearProxyOnDisk();
                 }
             } catch (Throwable t) { FileLog.e(t); }
-            try { SharedConfig.toggleMgUseTor(); }
-            catch (Throwable t) { FileLog.e(t); }
             // No toast: the user has no UI to recover from this state on
             // this platform (toggle hidden by Settings activity), and the
             // existing "plugin not installed" string is misleading here
@@ -358,6 +439,12 @@ public final class MgTorClient {
                 .putInt("proxy_port", BLOCKING_STUB_PORT)
                 .putBoolean("proxy_enabled", true)
                 .apply();
+        // Ownership of the native proxy slot moves to the stub here, before
+        // any setProxySettings call that follows — every Tor-owned write
+        // goes through this method or persistProxyPortToDisk, so the two
+        // are the only places torOwnedPort is raised.
+        torOwnedPort = BLOCKING_STUB_PORT;
+        notifyProxySettingsChanged();
     }
 
     /** Wire up the client; if {@link SharedConfig#mg_useTor} also start binding. */
@@ -414,51 +501,90 @@ public final class MgTorClient {
         String pass = prefs.getString("mg_tor_savedProxy_pass", "");
         String secret = prefs.getString("mg_tor_savedProxy_secret", "");
         boolean enabled = prefs.getBoolean("mg_tor_savedProxy_enabled", false);
+        // Resolve the entry BEFORE writing anything: the user can delete the
+        // snapshotted proxy from the proxy list while Tor is running, and
+        // restoring a proxy that is no longer in the list would point native
+        // at a server the user removed while isProxyEnabled() reads false
+        // (currentProxy stays null), i.e. traffic through a proxy no screen
+        // in the app admits to. Treat that snapshot as spent instead.
+        SharedConfig.ProxyInfo restored = enabled
+                ? findProxyInList(ip, port, user, pass, secret) : null;
+        if (enabled && restored == null) {
+            removeSnapshot(prefs.edit()).commit();
+            return false;
+        }
         // .commit() (sync) for the same crash-window reason as clearProxyOnDisk.
-        prefs.edit()
+        removeSnapshot(prefs.edit()
                 .putString("proxy_ip", ip)
                 .putInt("proxy_port", port)
                 .putString("proxy_user", user)
                 .putString("proxy_pass", pass)
                 .putString("proxy_secret", secret)
-                .putBoolean("proxy_enabled", enabled)
+                .putBoolean("proxy_enabled", enabled))
+                .commit();
+        torOwnedPort = -1;
+        ConnectionsManager.setProxySettings(enabled, snapshotSettings(ip, port, user, pass, secret));
+        // clearMgInternalTorProxy nulled SharedConfig.currentProxy when the
+        // synthetic entry was active; without re-binding it to the user's
+        // real ProxyInfo, isProxyEnabled() lies (returns false even though
+        // disk says enabled) and the drawer's proxy-active indicator goes
+        // dark until the user manually re-taps the entry.
+        SharedConfig.currentProxy = restored;
+        notifyProxySettingsChanged();
+        return true;
+    }
+
+    /** Drop every snapshot key; the single owner of that key list. */
+    private static SharedPreferences.Editor removeSnapshot(SharedPreferences.Editor editor) {
+        return editor
                 .remove("mg_tor_savedProxy_present")
                 .remove("mg_tor_savedProxy_ip")
                 .remove("mg_tor_savedProxy_port")
                 .remove("mg_tor_savedProxy_user")
                 .remove("mg_tor_savedProxy_pass")
                 .remove("mg_tor_savedProxy_secret")
-                .remove("mg_tor_savedProxy_enabled")
-                .commit();
-        ConnectionsManager.setProxySettings(enabled, ip, port, user, pass, secret);
-        // clearMgInternalTorProxy nulled SharedConfig.currentProxy when the
-        // synthetic entry was active; without re-binding it to the user's
-        // real ProxyInfo, isProxyEnabled() lies (returns false even though
-        // disk says enabled) and the drawer's proxy-active indicator goes
-        // dark until the user manually re-taps the entry.
-        SharedConfig.currentProxy = enabled ? findProxyInList(ip, port, user, pass, secret) : null;
-        return true;
+                .remove("mg_tor_savedProxy_enabled");
     }
 
     @Nullable
     private static SharedConfig.ProxyInfo findProxyInList(String ip, int port,
                                                           String user, String pass, String secret) {
         SharedConfig.loadProxyList();
+        final ProxySettings wanted = snapshotSettings(ip, port, user, pass, secret);
         for (SharedConfig.ProxyInfo info : SharedConfig.proxyList) {
             if (info.mgInternal) continue;
-            if (info.port == port
-                    && safeEq(info.address, ip)
-                    && safeEq(info.username, user)
-                    && safeEq(info.password, pass)
-                    && safeEq(info.secret, secret)) {
+            if (wanted.equals(info.settings)) {
                 return info;
             }
         }
         return null;
     }
 
-    private static boolean safeEq(String a, String b) {
-        return (a == null ? "" : a).equals(b == null ? "" : b);
+    /** The loopback SOCKS5 endpoint tor listens on, blocking stub or live port. */
+    private static ProxySettings localSocks(int port) {
+        return ProxySettings.builder()
+                .setType(ProxySettings.Type.SOCKS5)
+                .setAddress("127.0.0.1")
+                .setPort(port)
+                .build();
+    }
+
+    /**
+     * Rebuild a ProxySettings from the flat snapshot keys. The type is the
+     * same one ProxySettings.fromSharedPreferences derives when proxy_type is
+     * absent, so an entry snapshotted before the type key existed still
+     * matches its proxyList counterpart.
+     */
+    private static ProxySettings snapshotSettings(String ip, int port, String user,
+                                                  String pass, String secret) {
+        return ProxySettings.builder()
+                .setType(TextUtils.isEmpty(secret) ? ProxySettings.Type.SOCKS5 : ProxySettings.Type.MTPROTO)
+                .setAddress(ip == null ? "" : ip)
+                .setPort(port)
+                .setUser(user == null ? "" : user)
+                .setPassword(pass == null ? "" : pass)
+                .setSecret(secret == null ? "" : secret)
+                .build();
     }
 
     private static void clearProxyOnDisk() {
@@ -476,6 +602,8 @@ public final class MgTorClient {
                 .putInt("proxy_port", 1080)
                 .putBoolean("proxy_enabled", false)
                 .commit();
+        torOwnedPort = -1;
+        notifyProxySettingsChanged();
     }
 
     /**
@@ -496,6 +624,7 @@ public final class MgTorClient {
         if (appContext == null) return false;
         State s = INSTANCE.state;
         if (s == State.PLUGIN_NOT_INSTALLED
+                || s == State.PLUGIN_BIND_REFUSED
                 || s == State.PLUGIN_SIGNATURE_MISMATCH
                 || s == State.PLUGIN_OUTDATED) {
             return false;
@@ -565,7 +694,7 @@ public final class MgTorClient {
      */
     public static boolean isPluginUpdateAvailable() {
         return isPluginInstalled()
-                && !MgUpdateChecker.isFdroidBuild()
+                && MgUpdateChecker.canSelfInstall()
                 && MgUpdateChecker.isPluginOutdated(pluginPackage());
     }
 
@@ -600,7 +729,7 @@ public final class MgTorClient {
     public static void maybePromptPluginUpdate(Activity activity) {
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
         if (pluginPromptShownThisSession) return;
-        if (MgUpdateChecker.isFdroidBuild()) return;
+        if (!MgUpdateChecker.canSelfInstall()) return;
         // Only nag users who are actually relying on Tor — a plugin
         // sitting installed-but-unused (left over from prior toggle-on
         // experiments) doesn't warrant interrupting the cold start.
@@ -726,7 +855,7 @@ public final class MgTorClient {
         try {
             if (!restoreSnapshottedProxy()) {
                 clearProxyOnDisk();
-                ConnectionsManager.setProxySettings(false, "", 0, "", "", "");
+                ConnectionsManager.setProxySettings(false, null);
             }
             SharedConfig.clearMgInternalTorProxy();
         } catch (Throwable t) { FileLog.e(t); }
@@ -788,6 +917,13 @@ public final class MgTorClient {
             snapshotCurrentProxy();
             try { commitBlockingStubToDisk(); } catch (Throwable t) { FileLog.e(t); }
             try { SharedConfig.publishMgInternalTorProxy(BLOCKING_STUB_PORT); }
+            catch (Throwable t) { FileLog.e(t); }
+            // Push the stub to native as well, exactly like the re-stub in
+            // remoteCallback.onStopped. Disk + the in-memory list alone only
+            // take effect on the next cold start, so without this MTProto
+            // kept flowing through the user's previous proxy for the whole
+            // bootstrap window while the Tor switch already read ON.
+            try { ConnectionsManager.setProxySettings(true, localSocks(BLOCKING_STUB_PORT)); }
             catch (Throwable t) { FileLog.e(t); }
             // Reset the abortive-bind counter on every user-initiated start
             // so the toggle off/on cycle is a working recovery handle from
@@ -1068,6 +1204,7 @@ public final class MgTorClient {
         // path and any other late listener that races a fresh install.
         State cur = state;
         if ((cur == State.PLUGIN_NOT_INSTALLED
+                || cur == State.PLUGIN_BIND_REFUSED
                 || cur == State.PLUGIN_OUTDATED
                 || cur == State.PLUGIN_SIGNATURE_MISMATCH
                 || cur == State.ERROR)
@@ -1095,6 +1232,10 @@ public final class MgTorClient {
          *  rather than dismissing + showing the install prompt. */
         UNKNOWN,
         PLUGIN_NOT_INSTALLED,
+        /** Plugin installed and readable, but the OS refused the bind.
+         *  Typical on OEM ROMs that block background starts of an app the
+         *  user never launched (the plugin has no launcher activity). */
+        PLUGIN_BIND_REFUSED,
         PLUGIN_OUTDATED,
         PLUGIN_SIGNATURE_MISMATCH,
         BOUND_IDLE,
@@ -1108,30 +1249,34 @@ public final class MgTorClient {
     public int getSocksPort() { return socksPort; }
 
     /**
-     * Where to send the user to install / update the plugin.
-     * Route by main's own signing cert as the distribution-channel signal:
-     *  - main signed with the developer release cert → GitHub releases.
-     *    Use the tag matching this main's versionName (set by
-     *    gradle/mg-version.gradle) instead of /releases/latest, which
-     *    GitHub server-filters to non-prerelease — a 5-dotted prerelease
-     *    main would otherwise land on a stable-only page with a
-     *    versionCode-mismatched plugin APK.
-     *  - otherwise → F-Droid plugin page. Either channel of the dual-key
-     *    allowlist accepts the bind, so cross-channel installs work on
-     *    API 31+ — but staying on the same channel keeps versionCodes in
-     *    lockstep release-for-release.
+     * Where to send the user to install / update the plugin: the F-Droid
+     * catalog entry, the one channel that both lacks an in-app install path
+     * and has somewhere to send the user. The GitHub channel downloads and
+     * installs the plugin in-app (MgUpdateChecker.runPluginInstall), and
+     * Google Play has no plugin listing to open, so callers there show a
+     * dismissible "not available here" alert instead of linking out to an APK.
+     *
+     * <p>Cross-channel installs still bind on API 31+ (either cert of the
+     * dual-key allowlist is accepted), but staying on one channel keeps main
+     * and plugin versionCodes in lockstep release-for-release.
      */
     public Intent buildPluginInstallIntent() {
-        Uri uri;
-        if (MgUpdateChecker.isFdroidBuild()) {
-            uri = Uri.parse("https://f-droid.org/packages/" + PLUGIN_PACKAGE_BASE + "/");
-        } else {
-            String tag = MgUpdateChecker.currentInstallVersion();
-            uri = (tag != null && !tag.isEmpty())
-                    ? Uri.parse("https://github.com/Mercurygram/Mercurygram/releases/tag/" + tag)
-                    : Uri.parse("https://github.com/Mercurygram/Mercurygram/releases");
-        }
+        Uri uri = Uri.parse("https://f-droid.org/packages/" + PLUGIN_PACKAGE_BASE + "/");
         Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        return intent;
+    }
+
+    /**
+     * The plugin's system app-info screen. It is the one screen reachable
+     * for an app with no launcher activity, and it is where OEM ROMs park
+     * the autostart / background-run and battery restrictions that make
+     * bindService fail with the plugin installed
+     * ({@link State#PLUGIN_BIND_REFUSED}).
+     */
+    public Intent buildPluginAppInfoIntent() {
+        Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + pluginPackage()));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         return intent;
     }
@@ -1177,7 +1322,10 @@ public final class MgTorClient {
         try {
             boolean ok = ctx.bindService(i, serviceConnection, Context.BIND_AUTO_CREATE);
             if (!ok) {
-                updateState(State.PLUGIN_NOT_INSTALLED);
+                FileLog.e("MgTorClient: bindService refused for " + pluginPackage()
+                        + " (installed versionCode " + installedPluginVersionCode() + ")");
+                updateState(isPluginInstalled()
+                        ? State.PLUGIN_BIND_REFUSED : State.PLUGIN_NOT_INSTALLED);
                 // bindService==false means no ServiceConnection registration
                 // happened, so unbindService here would throw
                 // IllegalArgumentException. No paired startForegroundService
@@ -1214,19 +1362,23 @@ public final class MgTorClient {
             // user needs to resolve, not an OS limitation we can paper over.
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
                 try {
+                    // Flag first, same reason as preInit's isFdroidPreS
+                    // branch: blocksProxyWrite drops the restore below while
+                    // mg_useTor is still true.
+                    if (SharedConfig.mg_useTor) SharedConfig.toggleMgUseTor();
                     if (!restoreSnapshottedProxy()) {
                         clearProxyOnDisk();
-                        ConnectionsManager.setProxySettings(false, "", 0, "", "", "");
+                        ConnectionsManager.setProxySettings(false, null);
                     }
                     SharedConfig.clearMgInternalTorProxy();
-                    if (SharedConfig.mg_useTor) SharedConfig.toggleMgUseTor();
                 } catch (Throwable t) { FileLog.e(t); }
             }
             terminalBindFailure();
             registerPluginInstallReceiver();
         } catch (Throwable t) {
             FileLog.e(t);
-            updateState(State.PLUGIN_NOT_INSTALLED);
+            updateState(isPluginInstalled()
+                    ? State.PLUGIN_BIND_REFUSED : State.PLUGIN_NOT_INSTALLED);
             registerPluginInstallReceiver();
         }
     }
@@ -1698,7 +1850,7 @@ public final class MgTorClient {
                     if (SharedConfig.mg_useTor) {
                         commitBlockingStubToDisk();
                         SharedConfig.publishMgInternalTorProxy(BLOCKING_STUB_PORT);
-                        ConnectionsManager.setProxySettings(true, "127.0.0.1", BLOCKING_STUB_PORT, "", "", "");
+                        ConnectionsManager.setProxySettings(true, localSocks(BLOCKING_STUB_PORT));
                         // Transport switched while running: the old daemon has
                         // now cleanly reported terminal, so relaunch with the
                         // fresh argv. userInitiatedStart re-pushes the transport
@@ -1710,7 +1862,7 @@ public final class MgTorClient {
                         SharedConfig.clearMgInternalTorProxy();
                         if (!restoreSnapshottedProxy()) {
                             clearProxyOnDisk();
-                            ConnectionsManager.setProxySettings(false, "", 0, "", "", "");
+                            ConnectionsManager.setProxySettings(false, null);
                         }
                         // Daemon is down + user opted out: release the
                         // binding so the plugin's :tor process can exit.
@@ -1763,13 +1915,14 @@ public final class MgTorClient {
             try {
                 SharedConfig.publishMgInternalTorProxy(port);
                 persistProxyPortToDisk(port);
-                ConnectionsManager.setProxySettings(true, "127.0.0.1", port, "", "", "");
+                ConnectionsManager.setProxySettings(true, localSocks(port));
                 lastPushedAccount = 0;
             } catch (Throwable t) { FileLog.e(t); }
         });
     }
 
     private static void persistProxyPortToDisk(int port) {
+        torOwnedPort = port;
         SharedPreferences prefs = MessagesController.getGlobalMainSettings();
         prefs.edit()
                 .putString("proxy_ip", "127.0.0.1")
@@ -1779,5 +1932,6 @@ public final class MgTorClient {
                 .putInt("proxy_port", port)
                 .putBoolean("proxy_enabled", true)
                 .apply();
+        notifyProxySettingsChanged();
     }
 }
