@@ -6,7 +6,7 @@ The client now uses stable Mercurygram 12.10.6.1 (786811f8e907c6e1b4f83098135886
 
 The native Firebase providers, message listener, SDK version (25.1.2), and all three Firebase resource overlays are unchanged from 12.10.0.4. The application id, release certificate, preferences keys and token migration marker remain unchanged. There is no forced token rotation for this update.
 
-The new upstream UnifiedPush retry/watchdog paths are guarded while native Firebase is active. Late UnifiedPush endpoint/unregistration callbacks cannot replace or clear the primary Firebase registration. When UnifiedPush is primary, its upstream retry and endpoint recovery still work. The watchdog does not add periodic wake-ups while native Firebase is active.
+The new upstream UnifiedPush retry/watchdog paths are guarded while native Firebase is active. Late UnifiedPush endpoint/unregistration callbacks cannot replace or clear the primary Firebase registration. When UnifiedPush is primary, its upstream retry and endpoint recovery still work. The watchdog does not add periodic wake-ups while native Firebase is active or no UnifiedPush distributor is available.
 
 The build verifies the actual Firebase resources and manifest services in the packaged APK before publishing. Each expected string must match its preserved hardened source-set value; just finding the project name somewhere in the APK is insufficient.
 

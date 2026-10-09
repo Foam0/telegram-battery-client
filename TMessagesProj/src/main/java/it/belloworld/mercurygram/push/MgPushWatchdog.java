@@ -70,7 +70,9 @@ public final class MgPushWatchdog {
         if (alarmManager == null) {
             return;
         }
-        if (org.telegram.messenger.FcmPushProvider.INSTANCE.hasServices() || SharedConfig.disableUnifiedPush) {
+        if (org.telegram.messenger.FcmPushProvider.INSTANCE.hasServices()
+                || SharedConfig.disableUnifiedPush
+                || !UnifiedPushListenerServiceProvider.INSTANCE.hasServices()) {
             alarmManager.cancel(pendingIntent(context));
             return;
         }
@@ -90,7 +92,9 @@ public final class MgPushWatchdog {
      * plus resuming the connection is all that is needed to bring the missed updates in.
      */
     public static void onAlarm(Context context) {
-        if (org.telegram.messenger.FcmPushProvider.INSTANCE.hasServices() || SharedConfig.disableUnifiedPush) {
+        if (org.telegram.messenger.FcmPushProvider.INSTANCE.hasServices()
+                || SharedConfig.disableUnifiedPush
+                || !UnifiedPushListenerServiceProvider.INSTANCE.hasServices()) {
             schedule(context);
             return;
         }
