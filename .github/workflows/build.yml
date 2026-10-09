@@ -94,7 +94,7 @@ jobs:
 
       - name: Build signed arm64 beta APK
         env:
-          NINJA_PATH: ninja
+          NINJA_PATH: /usr/bin/ninja
           TELEGRAM_APP_ID: ${{ secrets.APP_ID }}
           TELEGRAM_APP_HASH: ${{ secrets.APP_HASH }}
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
