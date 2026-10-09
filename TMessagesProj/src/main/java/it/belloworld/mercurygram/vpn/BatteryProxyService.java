@@ -244,7 +244,8 @@ public class BatteryProxyService extends Service implements CommandServerHandler
                 int port = preferences.getInt("proxy_port", 1080);
                 boolean enabled = preferences.getBoolean("proxy_enabled", false) && address != null && address.length() > 0;
                 if (enabled) {
-                    ConnectionsManager.setProxySettings(true, address, port, username, password, secret);
+                    ConnectionsManager.setProxySettings(true,
+                            org.telegram.utils.proxy.ProxySettings.fromSharedPreferences(preferences));
                     SharedConfig.currentProxy = findProxyInList(address, port, username, password, secret);
                 } else {
                     ConnectionsManager.setProxySettings(false, "", 0, "", "", "");
