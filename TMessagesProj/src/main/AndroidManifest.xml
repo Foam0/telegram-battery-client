@@ -484,12 +484,21 @@
             android:exported="true"
             android:foregroundServiceType="mediaPlayback"
         />
+        <!-- [TF] specialUse, not dataSync: an app targeting API 35+ may only run dataSync
+             foreground services for 6h per day (shared with the live-location service) and is
+             killed with RemoteServiceException when the quota runs out, and BOOT_COMPLETED may
+             not start one at all, so the keep-alive died after every reboot. dataSync stays for
+             API < 34, which has neither limit and no specialUse type. -->
         <service
             android:name=".NotificationsService"
             android:enabled="true"
             android:exported="true"
-            android:foregroundServiceType="dataSync"
-        />
+            android:foregroundServiceType="specialUse|dataSync"
+        >
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the messaging connection open so new messages are delivered when push is unavailable" />
+        </service>
         <service
             android:name=".NotificationRepeat"
             android:exported="false"
@@ -574,6 +583,7 @@
                 <action android:name="org.unifiedpush.android.connector.PUSH_EVENT"/>
             </intent-filter>
         </service>
+
         <service
             android:name="org.telegram.messenger.FcmPushListenerService"
             android:exported="false">
@@ -587,6 +597,15 @@
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
             android:value="false" />
+
+        <receiver android:name="it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor"
+            android:enabled="true" android:exported="false">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.distributor.feature.BYTES_MESSAGE"/>
+                <action android:name="org.unifiedpush.android.distributor.REGISTER"/>
+                <action android:name="org.unifiedpush.android.distributor.UNREGISTER"/>
+            </intent-filter>
+        </receiver>
 
         <service
             android:name="it.belloworld.mercurygram.vpn.BatteryVpnService"
@@ -614,6 +633,8 @@
             <intent-filter>
                 <action android:name="org.telegram.start" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="it.belloworld.mercurygram.PUSH_WATCHDOG" />
             </intent-filter>
         </receiver>
 

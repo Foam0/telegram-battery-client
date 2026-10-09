@@ -1,6 +1,27 @@
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
 apply plugin: 'com.android.library'
+apply plugin: 'org.telegram.build-plugin'
+apply plugin: 'idea'
+
+idea {
+    module {
+        excludeDirs += [
+            file('jni/td'),
+            file('jni/third_party/absl'),
+            file('jni/third_party/boringssl'),
+            file('jni/third_party/dav1d'),
+            file('jni/third_party/ffmpeg'),
+            file('jni/third_party/libvpx'),
+            file('jni/third_party/libyuv'),
+            file('jni/third_party/openh264'),
+            file('jni/third_party/xiph'),
+            file('jni/tlottie'),
+            file('jni/voip/webrtc'),
+            file('jni/sqlite')
+        ]
+    }
+}
 
 repositories {
     mavenCentral()
@@ -27,6 +48,12 @@ dependencies {
     implementation "androidx.sharetarget:sharetarget:1.2.0"
     implementation 'androidx.interpolator:interpolator:1.0.0'
     implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.webkit:webkit:1.14.0'
+
+    // zxing core is Apache-2.0 pure Java on Maven Central, not Play Services;
+    // the com.google group id is a naming coincidence. Upstream dropped its
+    // vendored copy of these sources in 12.10.0 in favour of the artifact.
+    implementation 'com.google.zxing:core:3.5.4'
 
     implementation 'androidx.car.app:app:1.4.0'
     implementation 'androidx.car.app:app-projected:1.4.0'
@@ -41,7 +68,10 @@ dependencies {
     implementation 'com.stripe:stripe-android:2.0.2'
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'com.google.guava:guava:31.1-android'
-    implementation 'com.google.firebase:firebase-messaging:22.0.0'
+    // Battery Client: restore the native Telegram FCM path used by 12.9.
+    // Without it an upgrade with no external UnifiedPush distributor silently
+    // loses background notification delivery.
+    implementation 'com.google.firebase:firebase-messaging:25.1.2'
 
     implementation "androidx.credentials:credentials:1.6.0-alpha04"
 
@@ -50,7 +80,16 @@ dependencies {
     implementation "io.noties.markwon:ext-tables:4.6.2"
     implementation "io.noties.markwon:html:4.6.2"
     implementation "io.noties.markwon:inline-parser:4.6.2"
-    implementation "io.noties.markwon:ext-latex:4.6.2"
+    implementation("io.noties.markwon:ext-latex:4.6.2") {
+        exclude group: 'ru.noties', module: 'jlatexmath-android'
+    }
+
+    api project(":TMessagesProj_Modules:media3:media-lib-exoplayer")
+    api project(":TMessagesProj_Modules:media3:media-lib-exoplayer-dash")
+    api project(":TMessagesProj_Modules:media3:media-lib-exoplayer-hls")
+    api project(":TMessagesProj_Modules:media3:media-lib-decoder-ffmpeg")
+    api project(":TMessagesProj_Modules:media3:media-lib-session")
+    api project(':jlatexmath')
 
 //    implementation 'com.google.mlkit:translate:17.0.3'
 
@@ -65,7 +104,14 @@ dependencies {
 
     // Pinned to 3.0.x: 3.1.0 bumped kotlin-stdlib to 2.2.20 (3.2.0+ to 2.3.0), which exceeds
     // what R8 8.6.27 (AGP 8.6.x) can parse. Lift when upgrading AGP to 8.7+ (needs Gradle 8.9+).
-    implementation 'org.unifiedpush.android:connector:3.0.9'
+    // 3.0.10 is the last of that line and fixes push delivery here: the connector binds our
+    // PushService to hand over an event and unbinds on a fixed timer; 3.0.9 gave it 1s, which
+    // the cold start of this app regularly loses, and a bind that never connects leaves the
+    // connector's internal event queue stuck for the whole process (no endpoint, no messages).
+    // 3.0.10 raises that window to 5s and keeps kotlin-stdlib 2.0.21, so the R8 pin still holds.
+    implementation 'org.unifiedpush.android:connector:3.0.10'
+    // Pinned to 3.0.0 for the same reason: 3.1.0 requires kotlin-stdlib 2.3.0.
+    implementation 'org.unifiedpush.android:embedded-fcm-distributor:3.0.0'
     // kotlin-stdlib 2.0.20 via okhttp/okio — safe with R8 8.6.27. Re-check on major version bumps.
     implementation 'org.maplibre.gl:android-sdk:13.0.1'
 
@@ -107,10 +153,9 @@ def detectSingleFdAbi() {
 }
 def singleFdAbi = detectSingleFdAbi()
 
-def isWindows = String.valueOf(DefaultNativePlatform.currentOperatingSystem.toFamilyName() == OperatingSystemFamily.WINDOWS)
 android {
-    compileSdkVersion 35
-    buildToolsVersion '35.0.0'
+    compileSdkVersion 36
+    buildToolsVersion '36.0.0'
     ndkVersion "27.2.12479018"
 
     // Upstream points jniLibs at ./jni/, but no ABI-named subdirs exist there, so it
@@ -145,7 +190,7 @@ android {
 
     defaultConfig {
         minSdkVersion 24
-        targetSdkVersion 35
+        targetSdkVersion 36
 
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
@@ -162,6 +207,7 @@ android {
                     cmakeArgs += '-DQUIET_BUILD=ON'
                 }
                 arguments(*cmakeArgs)
+                targets 'tmessages.49'
             }
         }
 
@@ -172,51 +218,40 @@ android {
     buildTypes {
         debug {
             jniDebuggable true
-            minifyEnabled false
             shrinkResources false
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', '../TMessagesProj/proguard-rules-beta.pro'
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
-            buildConfigField "String", "APP_CENTER_HASH", "\"\""
             buildConfigField "String", "BETA_URL", "\"\""
             buildConfigField "boolean", "DEBUG_VERSION", "true"
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUNDLE", "false"
-            buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "0"
         }
 
         standalone {
+            matchingFallbacks = ['release']
             jniDebuggable false
-            minifyEnabled true
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
-            buildConfigField "String", "APP_CENTER_HASH", "\"\""
             buildConfigField "String", "BETA_URL", "\"\""
             buildConfigField "boolean", "DEBUG_VERSION", "false"
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
-            buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "6"
         }
 
         release {
             jniDebuggable false
-            minifyEnabled true
             shrinkResources false
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
-            buildConfigField "String", "APP_CENTER_HASH", "\"\""
             buildConfigField "String", "BETA_URL", "\"\""
             buildConfigField "boolean", "DEBUG_VERSION", "false"
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
-            buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "7"
         }
     }
@@ -258,63 +293,143 @@ task patchNativeSources {
         exec {
             workingDir rootDir
             commandLine 'git', 'submodule', 'update', '--init',
-                'TMessagesProj/jni/libvpx',
-                'TMessagesProj/jni/ffmpeg',
-                'TMessagesProj/jni/dav1d',
-                'TMessagesProj/jni/boringssl',
+                'TMessagesProj/jni/third_party/libvpx',
+                'TMessagesProj/jni/third_party/ffmpeg',
+                'TMessagesProj/jni/third_party/dav1d',
+                'TMessagesProj/jni/third_party/xiph/ogg',
+                'TMessagesProj/jni/third_party/xiph/opus',
+                'TMessagesProj/jni/third_party/xiph/opusfile',
+                'TMessagesProj/jni/third_party/openh264',
+                'TMessagesProj/jni/third_party/libyuv',
+                'TMessagesProj/jni/third_party/boringssl',
+                'TMessagesProj/jni/tlottie',
                 'TMessagesProj/jni/td',
                 'TMessagesProj/jni/whisper'
         }
-        def ndkDir = android.ndkDirectory.toString()
-        def ninjaPath = System.getenv('NINJA_PATH') ?: 'ninja'
-        for (script in ['patch_boringssl.sh', 'patch_td.sh']) {
+        // ffbuild/version.sh bakes FFMPEG_VERSION into libavutil, preferring a
+        // VERSION file in the source root over `git describe`. Left to git the
+        // string depends on whether the clone carries tags and on git's
+        // auto-scaled abbreviation length, so the same pin can produce
+        // "n8.1.2-30-g45f1910444" or "45f1910444" depending on how the
+        // submodule was fetched. Pinning it to the full submodule SHA makes the
+        // archives byte-identical across shallow and full checkouts, which
+        // F-Droid reproducibility needs. Upstream never hit this: it builds
+        // from a checkout that has tags.
+        def ffmpegDir = file("${projectDir}/jni/third_party/ffmpeg")
+        def ffmpegSha = providers.exec {
+            commandLine 'git', '-C', ffmpegDir.toString(), 'rev-parse', 'HEAD'
+        }.standardOutput.asText.get().trim()
+        new File(ffmpegDir, 'VERSION').text = ffmpegSha + '\n'
+
+        for (script in ['patch_dav1d.sh', 'patch_td.sh']) {
             exec {
                 workingDir "${projectDir}/jni"
-                environment 'NDK', ndkDir
-                environment 'NINJA_PATH', ninjaPath
                 commandLine 'bash', script
             }
         }
     }
 }
 
-// Mapping from Android ABI name to the short name used by libvpx/ffmpeg/boringssl scripts.
-def androidToScriptAbi = [
-    'arm64-v8a'   : 'arm64',
-    'armeabi-v7a' : 'arm',
-    'x86_64'      : 'x86_64',
-    'x86'         : 'x86',
+// Upstream builds every bundled static library from source with
+// jni/prebuild/build_*.sh and commits the resulting archives. F-Droid cannot
+// ship binaries it did not build, so the archives are gitignored and the same
+// scripts run here instead. They read ABIS/LIB_DIR/INCLUDE_DIR from the
+// environment and already do the reproducibility work the fork used to bolt on
+// itself: prefix-mapping the checkout and the NDK to /jni and /android-ndk,
+// SOURCE_DATE_EPOCH/TZ/LC_ALL, stripping debug info and .comment, and
+// rewriting the configure command line libvpx and ffmpeg compile into their
+// own archives (jni/prebuild/common.sh).
+//
+// build_all.sh is deliberately not used: it wipes lib/ and include/ before
+// running, which would throw away the other ABIs on every per-ABI task.
+def prebuildSteps = [
+    ['build_boringssl.sh', ['libcrypto.a', 'libssl.a']],
+    ['build_openh264.sh' , ['libopenh264.a']],
+    ['build_opus.sh'     , ['libopus.a']],
+    ['build_libvpx.sh'   , ['libvpx.a']],
+    ['build_dav1d.sh'    , ['libdav1d.a']],
+    ['build_ffmpeg.sh'   , ['libavcodec.a', 'libavformat.a', 'libavutil.a',
+                            'libswresample.a', 'libswscale.a']],
+    ['build_tlottie.sh'  , ['libtlottie.a']],
+    ['build_tdlib.sh'    , ['libtde2e.a', 'libtdutils.a']],
+    ['build_wamr.sh'     , ['libiwasm.a']],
 ]
 
-// Register one build task per ABI. Each task compiles only for its ABI.
-// Scripts that accept positional ABI args (libvpx, ffmpeg, boringssl) receive the
-// short internal name; dav1d, patch_ffmpeg, tde2e use the Android ABI name directly.
-['buildNativeLibsArm64'  : ['arm64-v8a'],
- 'buildNativeLibsArm32'  : ['armeabi-v7a'],
- 'buildNativeLibsX86_64' : ['x86_64'],
- 'buildNativeLibsX86'    : ['x86'],
-].each { taskName, androidAbis ->
+// Pinned rustc for jni/prebuild/build_tlottie.sh, installed by jni/setup_rust.sh.
+// A different rustc emits different code for identical sources, so the version
+// is fixed here; the paths it records are already remapped by the script.
+def rustToolchain = '1.97.1'
+def rustupHome    = '/var/tmp/mg-rustup'
+def cargoHome     = '/var/tmp/mg-cargo'
+
+// Pinned wasi-sdk for jni/build_wasm_core.sh, installed by jni/setup_wasi_sdk.sh.
+// Upstream commits the call core wasm module as jni/voip/ReferenceCoreEmbedded.cpp;
+// we build it, with the release upstream uses so the module stays byte-identical.
+def wasiSdkVersion = '33.0'
+def wasiSdkSha256  = '0ba8b5bfaeb2adf3f29bab5841d76cf5318ab8e1642ea195f88baba1abd47bce'
+def wasiSdkRoot    = '/var/tmp/mg-wasi-sdk'
+
+// Register one build task per ABI. Each task compiles only for its ABI, so an
+// F-Droid single-ABI build still compiles one ABI.
+['buildNativeLibsArm64'  : 'arm64-v8a',
+ 'buildNativeLibsArm32'  : 'armeabi-v7a',
+ 'buildNativeLibsX86_64' : 'x86_64',
+ 'buildNativeLibsX86'    : 'x86',
+].each { taskName, abi ->
     tasks.register(taskName) {
-        description = "Build native libraries for ${androidAbis}."
+        description = "Build native libraries for ${abi}."
         dependsOn patchNativeSources
         doLast {
-            def ndkDir = android.ndkDirectory.toString()
-            def ninjaPath = System.getenv('NINJA_PATH') ?: 'ninja'
-            def quietBuild = getProps('QUIET_NATIVE_BUILD') ? '1' : '0'
-            def scriptAbis = androidAbis.collect { androidToScriptAbi[it] ?: it }
-            [['build_libvpx_clang.sh', scriptAbis],
-             ['build_dav1d.sh',        androidAbis],
-             ['build_ffmpeg_clang.sh', scriptAbis],
-             ['patch_ffmpeg.sh',       androidAbis],
-             ['build_boringssl.sh',    scriptAbis],
-             ['build_tde2e.sh',        androidAbis],
-            ].each { script, abis ->
+            def prebuildDir = "${projectDir}/jni/prebuild"
+            def libDir = file("${prebuildDir}/lib/${abi}")
+            def baseEnv = [
+                ANDROID_NDK_HOME: android.ndkDirectory.toString(),
+                ANDROID_SDK_ROOT: android.sdkDirectory.toString(),
+                ABIS            : abi,
+            ]
+            if (System.getenv('NINJA_PATH')) {
+                baseEnv['NINJA_BIN'] = System.getenv('NINJA_PATH')
+            }
+
+            // ABI independent, so the first per-ABI task to run builds it.
+            if (!file("${projectDir}/jni/voip/ReferenceCoreEmbedded.cpp").exists()) {
                 exec {
                     workingDir "${projectDir}/jni"
-                    environment 'NDK', ndkDir
-                    environment 'NINJA_PATH', ninjaPath
-                    environment 'QUIET_BUILD', quietBuild
-                    commandLine(['bash', script] + abis)
+                    environment WASI_SDK_ROOT: wasiSdkRoot
+                    commandLine 'bash', 'setup_wasi_sdk.sh', wasiSdkVersion, wasiSdkSha256
+                }
+                exec {
+                    workingDir "${projectDir}/jni"
+                    commandLine 'bash', 'build_wasm_core.sh', "${wasiSdkRoot}/wasi-sdk-${wasiSdkVersion}"
+                }
+            }
+
+            prebuildSteps.each { script, archives ->
+                // build_ffmpeg.sh also writes the per-ABI generated headers
+                // CMake compiles against, so a run interrupted between the
+                // archives and the overlay has to repeat.
+                def done = archives.every { new File(libDir, it).exists() } &&
+                    (script != 'build_ffmpeg.sh' ||
+                        file("${prebuildDir}/include/${abi}/libavutil/avconfig.h").exists())
+                if (done) {
+                    return
+                }
+                def env = new LinkedHashMap(baseEnv)
+                if (script == 'build_tlottie.sh') {
+                    env['RUSTUP_HOME'] = rustupHome
+                    env['CARGO_HOME'] = cargoHome
+                    env['PATH'] = "${cargoHome}/bin:" + System.getenv('PATH')
+                    env['TLOTTIE_RUST_TOOLCHAIN'] = rustToolchain
+                    exec {
+                        workingDir "${projectDir}/jni"
+                        environment env
+                        commandLine 'bash', 'setup_rust.sh', rustToolchain
+                    }
+                }
+                exec {
+                    workingDir prebuildDir
+                    environment env
+                    commandLine 'bash', "${prebuildDir}/${script}"
                 }
             }
         }

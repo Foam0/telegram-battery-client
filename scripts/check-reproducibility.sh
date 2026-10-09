@@ -84,7 +84,7 @@
 #   scripts/check-reproducibility.sh --app=plugin.tor determinism HEAD
 #   scripts/check-reproducibility.sh --app=plugin.tor verify-build arm64-v8a HEAD -o /tmp/p.apk
 #
-# Requires: podman, git, network. Heavy: full native build x2 (determinism)
+# Requires: podman or docker, git, network. Heavy: full native build x2 (determinism)
 # or x1 (verify / verify-build). verify-diff is fast (~1 min).
 
 set -euo pipefail
@@ -207,12 +207,23 @@ mode="${1:-determinism}"
 work_base="${MG_REPRO_WORK:-$HOME/.cache/mg-repro}"
 mkdir -p "$work_base"
 work=$(mktemp -d "$work_base/run.XXXXXX")
-trap '[ -n "${MG_REPRO_KEEP:-}" ] && echo "work kept: $work" || rm -rf "$work"' EXIT
 
-command -v podman >/dev/null || die "podman not found"
+# Prefer podman; docker works too. Rootful docker leaves root-owned build files
+# in $work, so fall back to removing them from inside a container.
+if command -v podman >/dev/null; then CE=podman
+elif command -v docker >/dev/null; then CE=docker
+else die "podman or docker not found"; fi
+
+cleanup() {
+    if [ -n "${MG_REPRO_KEEP:-}" ]; then echo "work kept: $work"; return; fi
+    rm -rf "$work" 2>/dev/null ||
+        "$CE" run --rm -v "$work_base":/b:z docker.io/library/debian:trixie-slim \
+            rm -rf "/b/${work##*/}"
+}
+trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
-# Container image builders. Cheap to call repeatedly — podman caches layers,
+# Container image builders. Cheap to call repeatedly — the engine caches layers,
 # so a second invocation is a metadata check. Each mode calls only the images
 # it needs (verify-diff skips the heavy buildserver build entirely).
 # ---------------------------------------------------------------------------
@@ -247,7 +258,7 @@ RUN mkdir -p /opt/android-sdk/cmdline-tools && \\
     /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --install \\
       "platform-tools" "platforms;android-35" "build-tools;$BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION" >/dev/null
 EOF
-    podman build --network=host -t "$IMG" "$work/ctx" >/dev/null
+    "$CE" build --network=host -f "$work/ctx/Containerfile" -t "$IMG" "$work/ctx" >/dev/null
 }
 
 build_diff_image() {
@@ -260,7 +271,7 @@ RUN apt-get update -qq \
     && apt-get install -y --no-install-recommends diffoscope unzip \
     && rm -rf /var/lib/apt/lists/*
 EOF
-    podman build --network=host -t "$DIFF_IMG" "$work/dctx" >/dev/null
+    "$CE" build --network=host -f "$work/dctx/Containerfile" -t "$DIFF_IMG" "$work/dctx" >/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -284,12 +295,16 @@ fetch_recipe() {
     [ -s "$recipe" ] || die "recipe metadata/${APPID}.yml empty/missing"
     printf 'sdk_path: %s\n' "${ANDROID_SDK_IN_IMAGE:-/opt/android-sdk}" \
         > "$work/fdroiddata/config.yml"
+    # Build-entry keys this tree owns; the recipe rewriters below apply them
+    # to the entry they build, so a path that moved in the tree is fixed
+    # here instead of waiting for the fdroiddata merge request to land.
+    cp "$repo_root/.github/fdroid/recipe-overlay.yml" "$work/recipe-overlay.yml"
 }
 
 # Run fdroid inside the buildserver image, exactly as fdroiddata CI does:
 # source the buildserver env, overlay the pinned fdroidserver on PATH/PYTHONPATH.
 fdroid_in_container() {
-    podman run --rm --network=host -v "$work":/w:z -w /w/fdroiddata "$IMG" \
+    "$CE" run --rm --network=host -v "$work":/w:z -w /w/fdroiddata "$IMG" \
         bash -euo pipefail -c '
             test -f /etc/profile.d/bsenv.sh && . /etc/profile.d/bsenv.sh
             export PATH=/opt/fdroidserver:$PATH
@@ -301,7 +316,7 @@ fdroid_in_container() {
 # diffoscope two APK files directly (zip-aware), excluding signature blocks
 # and filesystem dir mtimes (those come from the extractor, not the APK).
 diffoscope_apks() {  # $1 $2 = apk filenames under $work
-    podman run --rm -v "$work":/w:z "$DIFF_IMG" \
+    "$CE" run --rm -v "$work":/w:z "$DIFF_IMG" \
         diffoscope --exclude-directory-metadata=yes \
             --exclude 'META-INF/.*\.(RSA|SF|DSA)$' \
             --exclude 'META-INF/MANIFEST\.MF$' \
@@ -350,11 +365,12 @@ override_recipe_keep_flavor() {
     local snap_sha="$1"
     local MG_VC_BASE
     MG_VC_BASE=$(compute_mg_vc_base "$MG_BUILD_TAG_OVERRIDE")
-    podman run --rm -i -v "$work":/w:z "$IMG" python3 - \
+    "$CE" run --rm -i -v "$work":/w:z "$IMG" python3 - \
         "/w/fdroiddata/metadata/${APPID}.yml" "/w/fdroiddata/${APPID}.git" \
-        "$snap_sha" "$NDK_VERSION" "$MG_VC_BASE" "$MG_BUILD_TAG_OVERRIDE" <<'PY'
+        "$snap_sha" "$NDK_VERSION" "$MG_VC_BASE" "$MG_BUILD_TAG_OVERRIDE" \
+        "$APPID" <<'PY'
 import sys, yaml
-recipe, bundle, sha, ndk, vc_base, build_tag = sys.argv[1:7]
+recipe, bundle, sha, ndk, vc_base, build_tag, appid = sys.argv[1:8]
 FLAVOR_OFFSETS = {
     'afatFdX86': 3, 'afatFdX86_64': 4, 'afatFdArm32': 7, 'afatFdArm64': 8,
 }
@@ -380,12 +396,12 @@ AUTOTOOLS_LINE = 'apt-get install -y automake autoconf libtool pkg-config'
 sudo_list = last.setdefault('sudo', [])
 if AUTOTOOLS_LINE not in sudo_list:
     sudo_list.append(AUTOTOOLS_LINE)
-# Transient: see .github/scripts/fdroid_sync.py for context — until the
-# next fdroid release lands a Builds entry carrying the $$VERSION$$
-# prebuild line natively, write it ourselves.
-last.setdefault('prebuild', []).append(
-    "printf '\\nMG_BUILD_TAG=$$VERSION$$\\n' >> ../gradle.properties"
-)
+# Build-entry keys this tree owns (rm/prebuild). The fdroiddata recipe
+# still describes the previous release's tree, so apply the overlay on
+# top of it: the same keys fdroid_sync.py writes into the merge request.
+with open('/w/recipe-overlay.yml') as f:
+    for key, value in (yaml.safe_load(f).get(appid) or {}).items():
+        last[key] = value
 with open(recipe, 'w') as f:
     yaml.safe_dump(m, f, sort_keys=False, default_flow_style=False)
 print(new_vc)
@@ -400,11 +416,12 @@ override_recipe_for_abi() {
     local abi="$2"
     local MG_VC_BASE
     MG_VC_BASE=$(compute_mg_vc_base "$MG_BUILD_TAG_OVERRIDE")
-    podman run --rm -i -v "$work":/w:z "$IMG" python3 - \
+    "$CE" run --rm -i -v "$work":/w:z "$IMG" python3 - \
         "/w/fdroiddata/metadata/${APPID}.yml" "/w/fdroiddata/${APPID}.git" \
-        "$snap_sha" "$NDK_VERSION" "$MG_VC_BASE" "$abi" "$MG_BUILD_TAG_OVERRIDE" <<'PY'
+        "$snap_sha" "$NDK_VERSION" "$MG_VC_BASE" "$abi" "$MG_BUILD_TAG_OVERRIDE" \
+        "$APPID" <<'PY'
 import sys, yaml
-recipe, bundle, sha, ndk, vc_base, abi, build_tag = sys.argv[1:8]
+recipe, bundle, sha, ndk, vc_base, abi, build_tag, appid = sys.argv[1:9]
 ABI_FLAVOR = {
     'x86':         ('afatFdX86', 3),
     'x86_64':      ('afatFdX86_64', 4),
@@ -440,12 +457,12 @@ AUTOTOOLS_LINE = 'apt-get install -y automake autoconf libtool pkg-config'
 sudo_list = last.setdefault('sudo', [])
 if AUTOTOOLS_LINE not in sudo_list:
     sudo_list.append(AUTOTOOLS_LINE)
-# Transient: see .github/scripts/fdroid_sync.py for context — until the
-# next fdroid release lands a Builds entry carrying the $$VERSION$$
-# prebuild line natively, write it ourselves.
-last.setdefault('prebuild', []).append(
-    "printf '\\nMG_BUILD_TAG=$$VERSION$$\\n' >> ../gradle.properties"
-)
+# Build-entry keys this tree owns (rm/prebuild). The fdroiddata recipe
+# still describes the previous release's tree, so apply the overlay on
+# top of it: the same keys fdroid_sync.py writes into the merge request.
+with open('/w/recipe-overlay.yml') as f:
+    for key, value in (yaml.safe_load(f).get(appid) or {}).items():
+        last[key] = value
 with open(recipe, 'w') as f:
     yaml.safe_dump(m, f, sort_keys=False, default_flow_style=False)
 print(new_vc)
@@ -460,11 +477,11 @@ PY
 override_recipe_with_vc() {
     local snap_sha="$1"
     local vc="$2"
-    podman run --rm -i -v "$work":/w:z "$IMG" python3 - \
+    "$CE" run --rm -i -v "$work":/w:z "$IMG" python3 - \
         "/w/fdroiddata/metadata/${APPID}.yml" "/w/fdroiddata/${APPID}.git" \
-        "$snap_sha" "$vc" "$NDK_VERSION" "$MG_BUILD_TAG_OVERRIDE" <<'PY'
+        "$snap_sha" "$vc" "$NDK_VERSION" "$MG_BUILD_TAG_OVERRIDE" "$APPID" <<'PY'
 import sys, yaml
-recipe, bundle, sha, vc, ndk, build_tag = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5], sys.argv[6]
+recipe, bundle, sha, vc, ndk, build_tag, appid = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5], sys.argv[6], sys.argv[7]
 with open(recipe) as f:
     data = yaml.safe_load(f)
 data['Repo'] = bundle
@@ -483,12 +500,12 @@ AUTOTOOLS_LINE = 'apt-get install -y automake autoconf libtool pkg-config'
 sudo_list = last.setdefault('sudo', [])
 if AUTOTOOLS_LINE not in sudo_list:
     sudo_list.append(AUTOTOOLS_LINE)
-# Transient: see .github/scripts/fdroid_sync.py for context — until the
-# next fdroid release lands a Builds entry carrying the $$VERSION$$
-# prebuild line natively, write it ourselves.
-last.setdefault('prebuild', []).append(
-    "printf '\\nMG_BUILD_TAG=$$VERSION$$\\n' >> ../gradle.properties"
-)
+# Build-entry keys this tree owns (rm/prebuild). The fdroiddata recipe
+# still describes the previous release's tree, so apply the overlay on
+# top of it: the same keys fdroid_sync.py writes into the merge request.
+with open('/w/recipe-overlay.yml') as f:
+    for key, value in (yaml.safe_load(f).get(appid) or {}).items():
+        last[key] = value
 with open(recipe, 'w') as f:
     yaml.dump(data, f, sort_keys=False)
 print(vc)
@@ -509,7 +526,7 @@ run_fdroid_build() {
     local snap_sha="$1"
     local vc="$2"
     local log="$3"
-    podman run --rm --network=host -v "$work":/w:z -w /w/fdroiddata "$IMG" \
+    "$CE" run --rm --network=host -v "$work":/w:z -w /w/fdroiddata "$IMG" \
         bash -euo pipefail -c "
             test -f /etc/profile.d/bsenv.sh && . /etc/profile.d/bsenv.sh
             export PATH=/opt/fdroidserver:\$PATH
@@ -630,7 +647,7 @@ case "$mode" in
     # `|| true` so a pipeline component returning non-zero (corrupt APK,
     # aapt2 abort, head closing pipe early) doesn't trip set -e + pipefail
     # before the explicit die guard fires.
-    apk_vc=$(podman run --rm -v "$work":/w:z "$IMG" \
+    apk_vc=$("$CE" run --rm -v "$work":/w:z "$IMG" \
         /opt/android-sdk/build-tools/$BUILD_TOOLS_VERSION/aapt2 dump badging /w/github.apk \
         | sed -n "s/^package: .*versionCode='\([0-9]\+\)'.*/\1/p" | head -1 || true)
     [ -n "$apk_vc" ] || die "could not extract versionCode from $url"
@@ -651,7 +668,7 @@ case "$mode" in
     unzip -qq "$work/local.apk"  -d "$work/local.unzip"  -x 'META-INF/*'
 
     log "diffoscope github.apk content vs local.apk content"
-    if podman run --rm -v "$work":/w:z "$DIFF_IMG" \
+    if "$CE" run --rm -v "$work":/w:z "$DIFF_IMG" \
         diffoscope --exclude-directory-metadata=yes \
             /w/github.unzip /w/local.unzip; then
         log "RESULT: VERIFIED — GitHub APK matches local F-Droid-env build (signatures excluded)"
@@ -744,7 +761,7 @@ case "$mode" in
     unzip -qq "$work/b.apk" -d "$work/b.unzip" -x 'META-INF/*'
 
     log "diffoscope a.apk content vs b.apk content"
-    if podman run --rm -v "$work":/w:z "$DIFF_IMG" \
+    if "$CE" run --rm -v "$work":/w:z "$DIFF_IMG" \
         diffoscope --exclude-directory-metadata=yes \
             /w/a.unzip /w/b.unzip; then
         log "RESULT: VERIFIED — APKs match (signatures excluded)"

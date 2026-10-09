@@ -23,7 +23,7 @@ class MgTranslateModeConfigTest {
     fun setUp() {
         ensureAppContext()
         prefs = InstrumentationRegistry.getInstrumentation().targetContext
-            .getSharedPreferences("mainconfig", Context.MODE_PRIVATE)
+            .getSharedPreferences("userconfing", Context.MODE_PRIVATE)
         savedMode = SharedConfig.mg_translateMode
         savedAutoFallback = SharedConfig.mg_translateAutoFallback
         savedToastShown = SharedConfig.mg_translateOfflineFormatToastShown

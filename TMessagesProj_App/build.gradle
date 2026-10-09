@@ -1,23 +1,8 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.telegram.build-app-plugin'
 
 // Derive rootProject.ext.MG_VERSION_NAME / MG_VERSION_CODE from MG_BUILD_TAG.
 apply from: "$rootDir/gradle/mg-version.gradle"
-
-// Wire each variant's merge*JniLibFolders task to run after all per-ABI native build
-// tasks that are scheduled. jniLibs.srcDirs points to jni/ but contributes no .so files
-// (no ABI-named subdirs exist there); mustRunAfter is sufficient to prevent the race
-// where a concurrent native build creates/deletes intermediate files (.d, .o) while
-// the merge task walks the tree. Native builds are scheduled by CMake task dependencies
-// (already per-ABI aware), so this ordering does not force unneeded ABIs to build.
-afterEvaluate {
-    def nativeTasks = ['buildNativeLibsArm64', 'buildNativeLibsArm32',
-                       'buildNativeLibsX86_64', 'buildNativeLibsX86']
-    tasks.matching { it.name.matches('merge.*JniLibFolders') }.configureEach { mergeTask ->
-        nativeTasks.each { taskName ->
-            mergeTask.mustRunAfter(project(':TMessagesProj').tasks.named(taskName))
-        }
-    }
-}
 
 repositories {
     mavenCentral()
@@ -39,8 +24,8 @@ dependencies {
 }
 
 android {
-    compileSdkVersion 35
-    buildToolsVersion '35.0.0'
+    compileSdkVersion 36
+    buildToolsVersion '36.0.0'
 
     defaultConfig.applicationId = APP_PACKAGE
 
@@ -57,7 +42,10 @@ android {
         includeInBundle = false
     }
 
-    sourceSets.main.jniLibs.srcDirs = ['../TMessagesProj/jni/']
+    // Empty for the same reason as :TMessagesProj, see its build.gradle.
+    // Emptying it also removes the merge-vs-native-build race outright, which
+    // the mustRunAfter ordering that used to live here only papered over.
+    sourceSets.main.jniLibs.srcDirs = []
 
     aaptOptions {
         cruncherEnabled = false
@@ -74,6 +62,11 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
 
         coreLibraryDesugaringEnabled true
+    }
+
+    androidResources {
+        noCompress += "pack"
+        localeFilters += ["zz"]
     }
 
     signingConfigs {
@@ -117,7 +110,7 @@ android {
             minifyEnabled false
             shrinkResources false
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', '../TMessagesProj/proguard-rules-beta.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
 
@@ -127,9 +120,9 @@ android {
             signingConfig signingConfigs.release
             applicationIdSuffix ".web"
             minifyEnabled true
-            shrinkResources false
+            shrinkResources true
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
 
@@ -138,9 +131,9 @@ android {
             jniDebuggable false
             signingConfig signingConfigs.release
             minifyEnabled true
-            shrinkResources false
+            shrinkResources true
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
 
@@ -332,7 +325,7 @@ android {
 
     defaultConfig {
         minSdkVersion 24
-        targetSdkVersion 35
+        targetSdkVersion 36
         versionName rootProject.ext.MG_VERSION_NAME
         ndkVersion "27.2.12479018"
 
@@ -342,9 +335,21 @@ android {
 
         externalNativeBuild {
             cmake {
-                version '3.10.2'
+                version '3.22.1'
                 arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-24' // , '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                targets 'tmessages.49'
             }
+        }
+    }
+
+    bundle {
+        language {
+            // Ship every locale in the base install. Telegram's own strings come
+            // from the server langpack, but the Mercurygram ones live in
+            // res/values-*, so a per-language split leaves them English for
+            // anyone whose in-app language differs from the device locale Play
+            // installed a split for.
+            enableSplit = false
         }
     }
 

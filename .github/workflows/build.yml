@@ -2,6 +2,11 @@ name: Build signed beta APK
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional X.Y.Z.M or X.Y.Z.M.K release tag
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -30,6 +35,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Check notification delivery contract
+        run: |
+          scripts/check-push-contract.sh
+          scripts/check-sensitive-logs.sh
+          scripts/check-public-source.sh
+
       - name: Set up JDK 17
         uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
@@ -45,31 +56,45 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: Install Android and native build tools
         run: |
           sdkmanager \
             "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
             "ndk;27.2.12479018" \
             "cmake;3.22.1"
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake gperf meson nasm ninja-build pkg-config
+            cmake gperf meson nasm ninja-build pkg-config libuv1-dev autoconf automake libtool
 
       - name: Compute build version
         id: version
+        env:
+          REQUESTED_TAG: ${{ inputs.release_tag }}
         run: |
-          base_version=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
-          test -n "$base_version"
-          build_tag=${base_version}.${GITHUB_RUN_NUMBER}
+          set -euo pipefail
+          if [ -n "${REQUESTED_TAG:-}" ]; then
+            build_tag=$REQUESTED_TAG
+          else
+            base_version=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
+            test -n "$base_version"
+            build_tag=${base_version}.${GITHUB_RUN_NUMBER}
+          fi
+          if ! [[ "$build_tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Invalid release tag: $build_tag"
+            exit 1
+          fi
           echo "MG_BUILD_TAG=$build_tag" >> "$GITHUB_ENV"
           echo "build_tag=$build_tag" >> "$GITHUB_OUTPUT"
 
       - name: Build signed arm64 beta APK
         env:
-          NINJA_PATH: ninja
+          NINJA_PATH: /usr/bin/ninja
           TELEGRAM_APP_ID: ${{ secrets.APP_ID }}
           TELEGRAM_APP_HASH: ${{ secrets.APP_HASH }}
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE }}
@@ -108,42 +133,49 @@ jobs:
       - name: Verify and package beta APK
         run: |
           set -euo pipefail
-          source_beta_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/afatFdArm64.apk
-          beta_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/BatteryTelegramClient-beta-${MG_BUILD_TAG}-arm64-v8a.apk
-          test -f "$source_beta_apk"
+          source_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/afatFdArm64.apk
+          release_apk=TMessagesProj_App/build/outputs/apk/afatFdArm64/hardened/BatteryTelegramClient-beta-${MG_BUILD_TAG}-arm64-v8a.apk
+          expected_cert=A08D7DC323DDF71EF3201944397E0D3CCE7D40847263E11F328B68BBE19229AB
+          test -f "$source_apk"
 
-          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose "$source_beta_apk"
-          badging=$("$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$source_beta_apk")
+          apksigner="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          aapt="$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt"
+          "$apksigner" verify --verbose "$source_apk"
+          cert=$($apksigner verify --print-certs "$source_apk" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            | tr '[:lower:]' '[:upper:]')
+          if [ "$cert" != "$expected_cert" ]; then
+            echo "::error::Unexpected signing certificate: $cert"
+            exit 1
+          fi
+
+          badging=$($aapt dump badging "$source_apk")
           if [[ "$badging" == *application-debuggable* ]]; then
-            echo "::error::Beta APK is debuggable"
+            echo "::error::Release APK is debuggable"
             exit 1
           fi
           if [[ "$badging" != *"package: name='it.belloworld.mercurygram.beta'"* ]]; then
-            echo "::error::Unexpected application id; only the .beta package may be published"
+            echo "::error::Unexpected application id"
+            exit 1
+          fi
+          if [[ "$badging" != *"versionName='${MG_BUILD_TAG}'"* ]]; then
+            echo "::error::Unexpected version name"
             exit 1
           fi
 
-          resources_dump="$RUNNER_TEMP/beta-resources.txt"
-          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump --values resources "$source_beta_apk" > "$resources_dump"
-          for expected in \
-            '1:136449433263:android:c0a5fae26b3e384915be5a' \
-            '136449433263' \
-            'telegram-514ca'; do
-            if ! grep -Fq "$expected" "$resources_dump"; then
-              echo "::error::Expected Firebase client configuration is missing from the beta APK"
-              exit 1
-            fi
-          done
-          if grep -Fq 'tmessages2' "$resources_dump"; then
-            echo "::error::Fallback Firebase project leaked into the beta APK"
+          manifest=$($aapt dump xmltree "$source_apk" AndroidManifest.xml)
+          if [[ "$manifest" != *"org.telegram.messenger.FcmPushListenerService"* ]] || \
+             [[ "$manifest" != *"com.google.firebase.MESSAGING_EVENT"* ]] || \
+             [[ "$manifest" != *"com.google.firebase.provider.FirebaseInitProvider"* ]]; then
+            echo "::error::Release APK is missing the Firebase notification path"
             exit 1
           fi
-          rm -f "$resources_dump"
 
-          echo "Beta APK is signed, non-debuggable, uses the .beta package, and contains the expected Firebase client configuration"
-          cp "$source_beta_apk" "$beta_apk"
-          sha256sum "$beta_apk"
-          echo "BETA_APK=$beta_apk" >> "$GITHUB_ENV"
+          python3 scripts/check-firebase-apk.py "$source_apk" "$aapt"
+
+          cp "$source_apk" "$release_apk"
+          sha256sum "$release_apk"
+          echo "BETA_APK=$release_apk" >> "$GITHUB_ENV"
 
       - name: Upload beta APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -174,15 +206,18 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          beta_apk=$(find release-apk -type f -name "BatteryTelegramClient-beta-${RELEASE_TAG}-arm64-v8a.apk" -print -quit)
-          test -f "$beta_apk"
+          release_apk=$(find release-apk -type f \
+            -name "BatteryTelegramClient-beta-${RELEASE_TAG}-arm64-v8a.apk" \
+            -print -quit)
+          test -f "$release_apk"
           if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$beta_apk" --repo "$REPOSITORY" --clobber
+            echo "::error::Release tag already exists; choose a new version"
+            exit 1
           else
-            gh release create "$RELEASE_TAG" "$beta_apk" \
+            gh release create "$RELEASE_TAG" "$release_apk" \
               --repo "$REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "Battery Telegram Client $RELEASE_TAG" \
-              --notes "Signed, non-debuggable arm64 hardened build for the permanent it.belloworld.mercurygram.beta package. Signature, application id, and Firebase client configuration are verified in GitHub Actions before publication." \
+              --notes "Signed, non-debuggable arm64 hardened Battery Client build based on stable Mercurygram. Package, version, and signing certificate were verified before publication." \
               --latest
           fi

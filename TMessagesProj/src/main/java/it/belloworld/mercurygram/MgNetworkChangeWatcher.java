@@ -49,9 +49,15 @@ public final class MgNetworkChangeWatcher {
     // Poll interval while the rotation is deferred waiting for the socket to
     // finish the post-foreground getDifference on the warm temp key.
     private static final long ROTATE_POLL_MS = 1_000L;
-    // ponytail: hard cap so the anti-fingerprint rotation still fires if a
+    // Hard cap so the anti-fingerprint rotation still fires if a
     // socket never reaches Connected (e.g. persistent offline); privacy over UX.
     private static final long ROTATE_MAX_DEFER_MS = 20_000L;
+    // Longer cap while an account is Updating: the socket is connected and a
+    // getDifference is in flight. On a large account (hundreds of chats, many
+    // devices) that diff can run for minutes; wiping the temp key restarts it
+    // and the open chat's history load, so the user sits on "Updating..." for
+    // as long as network events keep coming.
+    private static final long ROTATE_MAX_DEFER_UPDATING_MS = 5L * 60L * 1000L;
     // LRU cap for addressesByNetId. Android reuses netIds slowly, and a
     // heavy-roaming user (cafes, airports, transit) can otherwise grow this
     // map without bound over the process lifetime.
@@ -266,10 +272,13 @@ public final class MgNetworkChangeWatcher {
         // handshake. Wait until every active account is back at
         // ConnectionStateConnected (connected and no longer Updating), capped
         // by ROTATE_MAX_DEFER_MS so the rotation still happens if a socket
-        // never settles.
+        // never settles, or by ROTATE_MAX_DEFER_UPDATING_MS while the socket is
+        // up and only the diff is outstanding.
         long now = SystemClock.elapsedRealtime();
         if (deferStartMs == 0L) deferStartMs = now;
-        if (now - deferStartMs < ROTATE_MAX_DEFER_MS && anyAccountSyncing()) {
+        long waited = now - deferStartMs;
+        if (anyAccountSyncing() && (waited < ROTATE_MAX_DEFER_MS
+                || (anyAccountUpdating() && waited < ROTATE_MAX_DEFER_UPDATING_MS))) {
             handler.postDelayed(rotateRunnable, ROTATE_POLL_MS);
             return;
         }
@@ -312,6 +321,24 @@ public final class MgNetworkChangeWatcher {
                 }
             } catch (Throwable ignored) {
                 // treat an unreadable account as not syncing
+            }
+        }
+        return false;
+    }
+
+    // True while any active account is Connected but still running its
+    // getDifference (the "Updating..." title).
+    private static boolean anyAccountUpdating() {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            try {
+                UserConfig uc = UserConfig.getInstance(a);
+                if (uc.isClientActivated() && uc.getCurrentUser() != null
+                        && ConnectionsManager.getInstance(a).getConnectionState()
+                            == ConnectionsManager.ConnectionStateUpdating) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+                // treat an unreadable account as not updating
             }
         }
         return false;

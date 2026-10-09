@@ -28,13 +28,13 @@ class MgReduceTrackingFingerprintTest {
     }
 
     @Test
-    fun togglePersistsToMainConfigPrefs() {
+    fun togglePersistsToUserConfigPrefs() {
         assertFalse(SharedConfig.reduceTrackingFingerprint)
         SharedConfig.toggleReduceTrackingFingerprint()
         assertTrue(SharedConfig.reduceTrackingFingerprint)
 
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val prefs = ctx.getSharedPreferences("mainconfig", Context.MODE_PRIVATE)
+        val prefs = ctx.getSharedPreferences("userconfing", Context.MODE_PRIVATE)
         assertTrue(prefs.getBoolean("mg_reduceTrackingFingerprint", false))
 
         SharedConfig.toggleReduceTrackingFingerprint()

@@ -9,7 +9,11 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.Utilities;
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.TranslateAlert2;
+
+import java.util.List;
 
 /**
  * Central dispatcher for Mercurygram translation modes. Replaces the
@@ -64,6 +68,32 @@ public final class MgTranslateDispatcher {
     }
 
     /**
+     * Name of the backend that will actually translate the next request, for
+     * the "powered by" credit in the chat translate bar. Null in the two modes
+     * that reach Telegram's own translation service, where the upstream credit
+     * applies instead.
+     *
+     * <p>Mirrors {@link #dispatch}: offline names the provider app only while
+     * that app is usable, otherwise the request lands on Alternative HTTP and
+     * the credit names the engine that gets the text.
+     */
+    @Nullable
+    public static String poweredByLabel() {
+        final String mode = SharedConfig.mg_translateMode;
+        if (SharedConfig.MG_TRANSLATE_MODE_DEFAULT.equals(mode)
+                || SharedConfig.MG_TRANSLATE_MODE_CLOUD.equals(mode)) {
+            return null;
+        }
+        if (isOfflineUsable()) {
+            final String label = MgAidlTranslate.providerLabel(ApplicationLoader.applicationContext);
+            if (label != null) {
+                return label;
+            }
+        }
+        return MgMozhiClient.engineLabel(SharedConfig.mg_translateAltEngine);
+    }
+
+    /**
      * Pick the dispatch path for the current {@link SharedConfig#mg_translateMode}.
      * Read the {@link Outcome} return value to decide whether to also run the
      * caller's upstream RPC.
@@ -84,7 +114,7 @@ public final class MgTranslateDispatcher {
                     return;
                 }
                 if (SharedConfig.mg_translateAutoFallback) {
-                    runAlternative(text, fromLng, toLng, done);
+                    runAlternative(text, fromLng, toLng, aidlFailure, done);
                 } else {
                     done.done(null, false, aidlFailure != null
                             ? aidlFailure
@@ -96,8 +126,105 @@ public final class MgTranslateDispatcher {
         // "alternative", or "offline" with no usable provider.
         // The provider-missing downgrade preserves the privacy invariant:
         // offline-mode failure routes through Alternative HTTP, never Telegram cloud.
-        runAlternative(text, fromLng, toLng, done);
+        // In offline mode the provider itself is what is missing, so keep that
+        // as the reported cause if Alternative HTTP also fails.
+        final MgAidlTranslate.Failure cause = SharedConfig.MG_TRANSLATE_MODE_OFFLINE.equals(mode)
+                ? MgAidlTranslate.Failure.of(MgAidlTranslate.Reason.PROVIDER_UNAVAILABLE)
+                : null;
+        runAlternative(text, fromLng, toLng, cause, done);
         return Outcome.HANDLED;
+    }
+
+    /** Result of the entity-aware overloads: text plus the re-anchored entities. */
+    public interface ResultWithEntities {
+        void done(@Nullable TLRPC.TL_textWithEntities text, boolean rateLimit, @Nullable MgAidlTranslate.Failure failure);
+    }
+
+    /**
+     * Entity-aware {@link #dispatch}: the link-carrying runs of {@code src} are
+     * replaced by sentinels before the engine sees the text and restored after,
+     * so links stay clickable (see {@link MgTranslateEntities}). Mode selection
+     * and the offline to alternative fallback chain are the String overload's,
+     * unchanged.
+     */
+    public static Outcome dispatch(TLRPC.TL_textWithEntities src, @Nullable String fromLng, String toLng, ResultWithEntities done) {
+        final String mode = SharedConfig.mg_translateMode;
+        if (SharedConfig.MG_TRANSLATE_MODE_DEFAULT.equals(mode)) {
+            return Outcome.PUNT_TO_UPSTREAM;
+        }
+        if (SharedConfig.MG_TRANSLATE_MODE_CLOUD.equals(mode)) {
+            return Outcome.FORCE_CLOUD;
+        }
+        return dispatchProtected(src, fromLng, toLng, done, false);
+    }
+
+    /** Entity-aware {@link #dispatchSecret}, with the same fail-closed invariant. */
+    public static Outcome dispatchSecret(TLRPC.TL_textWithEntities src, @Nullable String fromLng, String toLng, ResultWithEntities done) {
+        return dispatchProtected(src, fromLng, toLng, done, true);
+    }
+
+    private static Outcome dispatchProtected(TLRPC.TL_textWithEntities src, @Nullable String fromLng, String toLng, ResultWithEntities done, boolean secret) {
+        final MgTranslateEntities.Protected prot = MgTranslateEntities.protect(src);
+        if (prot.nothingToTranslate) {
+            // Link-only message: nothing left for the engine but markers.
+            done.done(prot.unchanged(), false, null);
+            return Outcome.HANDLED;
+        }
+        final Result result = (out, rateLimit, failure) -> {
+            if (out == null) {
+                done.done(null, rateLimit, failure);
+                return;
+            }
+            TLRPC.TL_textWithEntities restored = MgTranslateEntities.restore(prot, out);
+            if (restored == null) {
+                // The engine mangled the markers: fall back to plain text, as before.
+                restored = new TLRPC.TL_textWithEntities();
+                restored.text = out;
+            } else if (src != null && src.text != null && src.entities != null) {
+                // Same normalisation the cloud path gets: textUrl to url/mention
+                // collapse plus custom-emoji re-anchoring.
+                restored = TranslateAlert2.preprocess(src, restored);
+            }
+            done.done(restored, false, null);
+        };
+        return secret
+                ? dispatchSecret(prot.text, fromLng, toLng, result)
+                : dispatch(prot.text, fromLng, toLng, result);
+    }
+
+    /**
+     * Batch variant of {@link #dispatch}: translates {@code texts} one by one
+     * through the selected engine and reports the whole list at once. Used by
+     * the poll path, where one message carries several independent strings
+     * (question, answers, solution) that upstream sends as a single RPC.
+     * {@code done} receives {@code null} as soon as any single text fails —
+     * a half-translated poll would render worse than an untranslated one.
+     */
+    public static Outcome dispatchTexts(List<String> texts, String toLng, Utilities.Callback<List<String>> done) {
+        final String mode = SharedConfig.mg_translateMode;
+        if (SharedConfig.MG_TRANSLATE_MODE_DEFAULT.equals(mode)) {
+            return Outcome.PUNT_TO_UPSTREAM;
+        }
+        if (SharedConfig.MG_TRANSLATE_MODE_CLOUD.equals(mode)) {
+            return Outcome.FORCE_CLOUD;
+        }
+        dispatchTextAt(texts, 0, new String[texts.size()], toLng, done);
+        return Outcome.HANDLED;
+    }
+
+    private static void dispatchTextAt(List<String> texts, int index, String[] out, String toLng, Utilities.Callback<List<String>> done) {
+        if (index >= texts.size()) {
+            done.run(java.util.Arrays.asList(out));
+            return;
+        }
+        dispatch(texts.get(index), null, toLng, (text, rateLimit, failure) -> {
+            if (text == null) {
+                done.run(null);
+                return;
+            }
+            out[index] = text;
+            dispatchTextAt(texts, index + 1, out, toLng, done);
+        });
     }
 
     /**
@@ -136,12 +263,20 @@ public final class MgTranslateDispatcher {
         return Outcome.HANDLED;
     }
 
-    private static void runAlternative(String text, @Nullable String fromLng, String toLng, Result done) {
+    /**
+     * @param cause the offline failure that sent us here, or null in pure
+     *              Alternative-HTTP mode. Reported verbatim when Mozhi also
+     *              fails, so an offline fallback still names the offline
+     *              reason instead of a generic one; a null cause maps to the
+     *              upstream "Translation failed" bulletins, which is what an
+     *              Alternative-HTTP failure actually is.
+     */
+    private static void runAlternative(String text, @Nullable String fromLng, String toLng, @Nullable MgAidlTranslate.Failure cause, Result done) {
         TranslateAlert2.alternativeTranslate(text, fromLng, toLng, (altText, altRate) -> {
             if (altText != null) {
                 done.done(altText, false, null);
             } else {
-                done.done(null, altRate, MgAidlTranslate.Failure.of(MgAidlTranslate.Reason.UNEXPECTED));
+                done.done(null, altRate, cause);
             }
         });
     }

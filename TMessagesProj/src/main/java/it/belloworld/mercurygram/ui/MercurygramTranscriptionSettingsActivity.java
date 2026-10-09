@@ -58,7 +58,7 @@ public class MercurygramTranscriptionSettingsActivity extends UniversalFragment 
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        items.add(UItem.asCheck(ID_ENABLE,
+        items.add(MgSettingsScope.globalCheck(ID_ENABLE,
                         LocaleController.getString(R.string.MercurygramTranscriptionEnable))
                 .setChecked(SharedConfig.mg_transcribeOffline));
         items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramTranscriptionEnableInfo)));
@@ -74,9 +74,13 @@ public class MercurygramTranscriptionSettingsActivity extends UniversalFragment 
                         : LocaleController.getString(R.string.MercurygramTranscriptionModelNotInstalled))));
 
         if (downloading) {
+            // Only the network download can be stopped; a SAF import shares the
+            // flag but has no cancel, so it keeps the plain percentage.
             items.add(UItem.asButton(ID_DOWNLOAD,
                     LocaleController.getString(R.string.MercurygramTranscriptionDownloading),
-                    downloadPct + "%"));
+                    MgWhisperModel.isDownloading()
+                            ? downloadPct + "% · " + LocaleController.getString(R.string.MercurygramTranscriptionDownloadCancel)
+                            : downloadPct + "%"));
         } else if (installed) {
             items.add(UItem.asButton(ID_DELETE,
                     LocaleController.getString(R.string.MercurygramTranscriptionDelete), ""));
@@ -92,12 +96,18 @@ public class MercurygramTranscriptionSettingsActivity extends UniversalFragment 
                     LocaleController.getString(R.string.MercurygramTranscriptionImport), ""));
         }
 
+        // The model lives on disk once for the whole device; the language below
+        // is per account, so split the two with the scope note.
+        if (MgSettingsScope.multiAccount()) {
+            items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramScopeAllAccountsFooter)));
+        }
+
         items.add(UItem.asButton(ID_LANGUAGE,
                 LocaleController.getString(R.string.MercurygramTranscriptionLanguage),
                 languageLabel()));
         items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramTranscriptionLanguageInfo)));
 
-        items.add(UItem.asCheck(ID_VAD,
+        items.add(MgSettingsScope.globalCheck(ID_VAD,
                         LocaleController.getString(R.string.MercurygramTranscriptionVad))
                 .setChecked(SharedConfig.mg_transcribeVad));
         items.add(UItem.asShadow(LocaleController.getString(R.string.MercurygramTranscriptionVadInfo)));
@@ -158,6 +168,10 @@ public class MercurygramTranscriptionSettingsActivity extends UniversalFragment 
 
     private void startDownload() {
         if (downloading) {
+            // Second tap on the progress row: the user mis-clicked download.
+            if (MgWhisperModel.isDownloading()) {
+                MgWhisperModel.cancelDownload();
+            }
             return;
         }
         downloading = true;
@@ -184,7 +198,10 @@ public class MercurygramTranscriptionSettingsActivity extends UniversalFragment 
             public void onError(String message) {
                 downloading = false;
                 refreshList();
-                toast(R.string.MercurygramTranscriptionDownloadFailed);
+                // A cancel is not a failure — the user asked for it.
+                if (!"cancelled".equals(message)) {
+                    toast(R.string.MercurygramTranscriptionDownloadFailed);
+                }
             }
         });
     }

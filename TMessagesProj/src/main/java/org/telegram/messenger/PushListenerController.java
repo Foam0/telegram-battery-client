@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @Keep
 public class PushListenerController {
@@ -43,7 +44,6 @@ public class PushListenerController {
     public @interface PushType {}
 
     public static final int NOTIFICATION_ID = 1;
-    private static CountDownLatch countDownLatch = new CountDownLatch(1);
 
     public static void sendRegistrationToServer(@PushType int pushType, String token) {
         Utilities.stageQueue.postRunnable(() -> {
@@ -51,8 +51,9 @@ public class PushListenerController {
             if (token == null) {
                 return;
             }
+            boolean tokenChanged = pushType != SharedConfig.pushType || !TextUtils.equals(SharedConfig.pushString, token);
             boolean sendStat = false;
-            if (SharedConfig.pushStringGetTimeStart != 0 && SharedConfig.pushStringGetTimeEnd != 0 && (!SharedConfig.pushStatSent || !TextUtils.equals(SharedConfig.pushString, token))) {
+            if (SharedConfig.pushStringGetTimeStart != 0 && SharedConfig.pushStringGetTimeEnd != 0 && (!SharedConfig.pushStatSent || tokenChanged)) {
                 sendStat = true;
                 SharedConfig.pushStatSent = false;
             }
@@ -61,9 +62,17 @@ public class PushListenerController {
             SharedConfig.saveConfig();
             for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
                 UserConfig userConfig = UserConfig.getInstance(a);
-                userConfig.registeredForPush = false;
-                userConfig.saveConfig(false);
-                if (userConfig.getClientUserId() != 0) {
+                if (tokenChanged) {
+                    userConfig.registeredForPush = false;
+                    userConfig.saveConfig(false);
+                }
+                // Mercurygram supports 32 accounts. Firebase returns the same
+                // cached token on ordinary startups, so invalidating every
+                // account here would fan out up to 32 redundant
+                // account.registerDevice calls and eventually hit FLOOD_WAIT.
+                // A new token still re-registers everybody; an unchanged one
+                // only repairs accounts that are actually missing registration.
+                if (userConfig.getClientUserId() != 0 && (tokenChanged || !userConfig.registeredForPush)) {
                     final int currentAccount = a;
                     if (sendStat) {
                         String tag = pushType == PUSH_TYPE_FIREBASE ? "fcm" : (pushType == PUSH_TYPE_HUAWEI ? "hcm" : "wp");
@@ -99,6 +108,12 @@ public class PushListenerController {
             FileLog.d(tag + " PRE START PROCESSING");
         }
         long receiveTime = SystemClock.elapsedRealtime();
+        // [MG] One latch per message. It used to be a static counted down once and never
+        // recreated, so every push after the first returned from await() at once and the caller
+        // dropped its wakelock while the notification was still queued. A static recreated per
+        // push is no better: a push that outlives the await() below would count down the latch
+        // of the push that replaced it.
+        final CountDownLatch countDownLatch = new CountDownLatch(1);
         AndroidUtilities.runOnUIThread(() -> {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d(tag + " PRE INIT APP");
@@ -120,6 +135,9 @@ public class PushListenerController {
                     buffer.writeBytes(bytes);
                     buffer.position(0);
 
+                    if (SharedConfig.pushAuthKey == null) {
+                        it.belloworld.mercurygram.push.MgPushWatchdog.onNullPushKey();
+                    }
                     if (SharedConfig.pushAuthKeyId == null) {
                         SharedConfig.pushAuthKeyId = new byte[8];
                         byte[] authKeyHash = Utilities.computeSHA1(SharedConfig.pushAuthKey);
@@ -128,7 +146,7 @@ public class PushListenerController {
                     byte[] inAuthKeyId = new byte[8];
                     buffer.readBytes(inAuthKeyId, true);
                     if (!Arrays.equals(SharedConfig.pushAuthKeyId, inAuthKeyId)) {
-                        onDecryptError();
+                        onDecryptError(countDownLatch);
                         if (BuildVars.LOGS_ENABLED) {
                             FileLog.d(String.format(Locale.US, tag + " DECRYPT ERROR 2 k1=%s k2=%s", Utilities.bytesToHex(SharedConfig.pushAuthKeyId), Utilities.bytesToHex(inAuthKeyId)));
                         }
@@ -143,7 +161,7 @@ public class PushListenerController {
 
                     byte[] messageKeyFull = Utilities.computeSHA256(SharedConfig.pushAuthKey, 88 + 8, 32, buffer.buffer, 24, buffer.buffer.limit());
                     if (!Utilities.arraysEquals(messageKey, 0, messageKeyFull, 8)) {
-                        onDecryptError();
+                        onDecryptError(countDownLatch);
                         if (BuildVars.LOGS_ENABLED) {
                             FileLog.d(tag + " DECRYPT ERROR 3");
                         }
@@ -279,12 +297,19 @@ public class PushListenerController {
                                     args[a] = loc_args.getString(a);
                                 }
                             } else {
+                                countDownLatch.countDown();
                                 return;
                             }
-                            if (args.length < 2) return;
+                            if (args.length < 2) {
+                                countDownLatch.countDown();
+                                return;
+                            }
 
                             final String data_url = custom.optString("url");
-                            if (TextUtils.isEmpty(data_url)) return;
+                            if (TextUtils.isEmpty(data_url)) {
+                                countDownLatch.countDown();
+                                return;
+                            }
 
                             final long dialogId = UserObject.OAUTH; // UserConfig.getInstance(currentAccount).getClientUserId();
                             final String messageText = LocaleController.formatString(R.string.BotAuthNotification, args[0], args[1]);
@@ -1500,7 +1525,7 @@ public class PushListenerController {
                         ConnectionsManager.getInstance(currentAccount).resumeNetworkMaybe();
                         countDownLatch.countDown();
                     } else {
-                        onDecryptError();
+                        onDecryptError(countDownLatch);
                     }
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.e("error in loc_key = " + loc_key + " json " + jsonString);
@@ -1510,7 +1535,9 @@ public class PushListenerController {
             });
         });
         try {
-            countDownLatch.await();
+            // [MG] Bounded wait: a branch that returns without counting down (OAUTH_REQUEST did)
+            // would otherwise block the globalQueue thread forever, killing every later push.
+            countDownLatch.await(20, TimeUnit.SECONDS);
         } catch (Throwable ignore) {
 
         }
@@ -1643,7 +1670,7 @@ public class PushListenerController {
         return null;
     }
 
-    private static void onDecryptError() {
+    private static void onDecryptError(CountDownLatch countDownLatch) {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
                 ConnectionsManager.onInternalPushReceived(a);

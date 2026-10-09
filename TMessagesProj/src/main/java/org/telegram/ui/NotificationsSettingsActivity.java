@@ -25,7 +25,6 @@ import android.text.TextUtils;
 import android.util.LongSparseArray;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -41,7 +40,6 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
-import org.telegram.messenger.FcmPushProvider;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
@@ -739,12 +737,15 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 editor.commit();
                 getNotificationsController().updateBadge();
             } else if (position == notificationsServiceConnectionRow) {
-                FcmPushProvider.onManualBackgroundFallbackChanged();
+                // Device-wide: ConnectionsManager.isPushConnectionEnabled and ApplicationLoader.startPushService
+                // read the first account's file, so writing this per account made the toggle a no-op elsewhere.
                 SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
                 enabled = preferences.getBoolean("pushConnection", getMessagesController().backgroundConnection);
                 SharedPreferences.Editor editor = preferences.edit();
                 editor.putBoolean("pushConnection", !enabled);
                 editor.commit();
+                // The pref is device-wide, so apply it to every logged-in account right away instead of
+                // leaving the others on their old state until the next launch re-reads the pref.
                 for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
                     if (UserConfig.getInstance(a).isClientActivated()) {
                         ConnectionsManager.getInstance(a).setPushConnectionEnabled(!enabled);
@@ -769,7 +770,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     }
                 }
             } else if (position == notificationsServiceRow) {
-                FcmPushProvider.onManualBackgroundFallbackChanged();
+                // Device-wide, same as the row above: the keep-alive Service is one per process.
                 SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
                 enabled = preferences.getBoolean("pushService", getMessagesController().keepAliveService);
                 SharedPreferences.Editor editor = preferences.edit();
@@ -948,26 +949,25 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         List<String> alternatives = new ArrayList<>(allDistributors);
         alternatives.remove("io.heckel.ntfy");
 
-        String baseMessage = activity.getString(R.string.NtfyDefaultServerMessage);
+        String baseMessage = getString(R.string.NtfyDefaultServerMessage);
 
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(activity);
-        builder.setTitle(activity.getString(R.string.NtfyDefaultServerTitle));
+        builder.setTitle(getString(R.string.NtfyDefaultServerTitle));
         builder.setCancelable(false);
 
         if (!alternatives.isEmpty()) {
             String alt = alternatives.get(0);
-            UnifiedPush.saveDistributor(activity, alt);
-            UnifiedPush.register(activity, "default", "Mercurygram WebPush", null);
-            SharedConfig.setUnifiedPushEndpointUrl("");
-            builder.setMessage(baseMessage + "\n\n" + activity.getString(R.string.NtfyDefaultServerSwitched, alt));
-            builder.setPositiveButton(activity.getString(R.string.OK), null);
+            it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.switchDistributor(alt);
+            builder.setMessage(baseMessage + "\n\n" + LocaleController.formatString(R.string.NtfyDefaultServerSwitched, alt));
+            builder.setPositiveButton(getString(R.string.OK), null);
         } else {
-            builder.setMessage(baseMessage + "\n\n" + activity.getString(R.string.NtfyDefaultServerNoAlternative));
-            builder.setPositiveButton(activity.getString(R.string.NtfyDefaultServerDisableUP), (dialog, which) -> {
+            builder.setMessage(baseMessage + "\n\n" + getString(R.string.NtfyDefaultServerNoAlternative));
+            builder.setPositiveButton(getString(R.string.NtfyDefaultServerDisableUP), (dialog, which) -> {
                 UnifiedPush.forceRemoveDistributor(activity);
                 if (!SharedConfig.disableUnifiedPush) {
                     SharedConfig.toggleDisableUnifiedPush();
                 }
+                it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.applyDisabled();
                 SharedConfig.setUnifiedPushEndpointUrl("");
             });
         }
@@ -1070,11 +1070,10 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     } else if (position == androidAutoAlertRow) {
                         checkCell.setTextAndCheck("Android Auto", preferences.getBoolean("EnableAutoNotifications", false), true);
                     } else if (position == notificationsServiceRow) {
-                        SharedPreferences globalPreferences = MessagesController.getGlobalNotificationsSettings();
-                        checkCell.setTextAndValueAndCheck(getString("NotificationsService", R.string.NotificationsService), getString("NotificationsServiceInfo", R.string.NotificationsServiceInfo), globalPreferences.getBoolean("pushService", getMessagesController().keepAliveService), true, true);
+                        // Both rows are device-wide, so they render from the global file the readers use.
+                        checkCell.setTextAndValueAndCheck(getString("NotificationsService", R.string.NotificationsService), getString("NotificationsServiceInfo", R.string.NotificationsServiceInfo), MessagesController.getGlobalNotificationsSettings().getBoolean("pushService", getMessagesController().keepAliveService), true, true);
                     } else if (position == notificationsServiceConnectionRow) {
-                        SharedPreferences globalPreferences = MessagesController.getGlobalNotificationsSettings();
-                        checkCell.setTextAndValueAndCheck(getString("NotificationsServiceConnection", R.string.NotificationsServiceConnection), getString("NotificationsServiceConnectionInfo", R.string.NotificationsServiceConnectionInfo), globalPreferences.getBoolean("pushConnection", getMessagesController().backgroundConnection), true, true);
+                        checkCell.setTextAndValueAndCheck(getString("NotificationsServiceConnection", R.string.NotificationsServiceConnection), getString("NotificationsServiceConnectionInfo", R.string.NotificationsServiceConnectionInfo), MessagesController.getGlobalNotificationsSettings().getBoolean("pushConnection", getMessagesController().backgroundConnection), true, true);
                     } else if (position == badgeNumberShowRow) {
                         checkCell.setTextAndCheck(getString("BadgeNumberShow", R.string.BadgeNumberShow), getNotificationsController().showBadgeNumber, true);
                     } else if (position == badgeNumberMutedRow) {

@@ -1,3 +1,7 @@
+-keep @interface androidx.annotation.Keep
+-keep @androidx.annotation.Keep class * { *; }
+-keepclasseswithmembers class * { @androidx.annotation.Keep *; }
+
 -keep class it.belloworld.mercurygram.** { *; }
 -keep class org.webrtc.* { *; }
 -keep class org.webrtc.audio.* { *; }
@@ -15,11 +19,9 @@
 -keep class org.telegram.tgnet.NativeByteBuffer { *; }
 -keep class org.telegram.tgnet.RequestTimeDelegate { *; }
 -keep class org.telegram.tgnet.RequestDelegate { *; }
--keep class com.google.android.exoplayer2.ext.** { *; }
--keep class com.google.android.exoplayer2.extractor.FlacStreamMetadata { *; }
--keep class com.google.android.exoplayer2.metadata.flac.PictureFrame { *; }
--keep class com.google.android.exoplayer2.decoder.SimpleDecoderOutputBuffer { *; }
 -keep class org.telegram.ui.Stories.recorder.FfmpegAudioWaveformLoader { *; }
+# ThemeDescription looks up view fields by name via reflection
+-keepclassmembernames,allowoptimization class org.telegram.ui.** { <fields>; }
 -keep class androidx.mediarouter.app.MediaRouteButton { *; }
 -keepclassmembers class ** {
     @android.webkit.JavascriptInterface <methods>;
@@ -99,11 +101,13 @@
 
 -keep class io.nano.tex.** {*;}
 
+-keep class org.telegram.tgnet.** { *; }
+
 # JLatexMath: macro/atom classes are loaded reflectively by Class.forName
 -keep class org.scilab.forge.jlatexmath.** { *; }
 -keep class ru.noties.jlatexmath.** { *; }
 -dontwarn org.scilab.forge.jlatexmath.**
 
 # Use -keep to explicitly keep any other classes shrinking would remove
--dontoptimize
--dontobfuscate
+#-dontoptimize
+#-dontobfuscate

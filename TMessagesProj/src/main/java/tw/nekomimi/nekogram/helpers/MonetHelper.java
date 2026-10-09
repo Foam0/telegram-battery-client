@@ -6,10 +6,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Build;
 import android.os.PatternMatcher;
+import android.util.Log;
 
 import androidx.annotation.RequiresApi;
-
-import com.google.android.exoplayer2.util.Log;
 
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.R;

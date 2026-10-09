@@ -9,8 +9,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.DialogObject
+import org.telegram.messenger.Utilities
 import org.telegram.tgnet.NativeByteBuffer
 import org.telegram.tgnet.TLRPC
 
@@ -129,6 +132,38 @@ class MgMessageHistoryTest {
             .getDeletedEntries(testAccount, otherDialog).isEmpty())
         assertTrue(MgMessageHistory.getInstance()
             .getMidsForDialog(testAccount, otherDialog, false).isEmpty())
+    }
+
+    @Test
+    fun forgetDeleted_removesOnlyTheGivenMid() {
+        val blob = serialize(newMessage())
+        val otherMid = testMid + 1
+        ApplicationLoader.applicationContext
+            .openOrCreateDatabase(dbName, Context.MODE_PRIVATE, null).use { db ->
+                db.insert(tblDeleted, null, row(testMid, blob, System.currentTimeMillis()))
+                db.insert(tblDeleted, null, row(otherMid, blob, System.currentTimeMillis()))
+            }
+
+        MgMessageHistory.getInstance().forgetDeleted(testAccount, testDialog, listOf(testMid))
+        // forgetDeleted posts on the serial globalQueue; a latch posted after it runs once it is done.
+        val done = CountDownLatch(1)
+        Utilities.globalQueue.postRunnable { done.countDown() }
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+
+        assertEquals(setOf(otherMid), MgMessageHistory.getInstance()
+            .getMidsForDialog(testAccount, testDialog, false))
+    }
+
+    // --- Remote-delete marking ---------------------------------------------
+
+    @Test
+    fun takeRemote_returnsMarkedMidsOnce() {
+        val history = MgMessageHistory.getInstance()
+        history.markRemote(testDialog, listOf(testMid, testMid + 1))
+        history.markRemote(testDialog, listOf(testMid + 2))
+        assertEquals(setOf(testMid, testMid + 1, testMid + 2), history.takeRemote(testDialog))
+        assertTrue(history.takeRemote(testDialog).isEmpty())
+        assertTrue(history.takeRemote(testDialog + 1).isEmpty())
     }
 
     // --- helpers -----------------------------------------------------------

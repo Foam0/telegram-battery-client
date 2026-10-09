@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="BatteryAuthKeyDropAccount">Проблема авторизации в аккаунте %1$d</string>
+    <string name="BatteryClientFirebasePush">Предпочитать Firebase push</string>
+    <string name="BatteryClientFirebasePushAbout">Firebase используется автоматически, если дистрибьютор UnifiedPush недоступен. Включите, чтобы предпочитать Firebase даже при установленном дистрибьюторе.</string>
+    <string name="BatteryClientFirebasePushEnableTitle">Предпочитать Firebase push?</string>
+    <string name="BatteryClientFirebasePushEnableMessage">Firebase Cloud Messaging станет основным способом доставки уведомлений. При ошибке Battery Client переключится на UnifiedPush или фоновое соединение.</string>
     <string name="MessageDetailsMediaType">Тип медиа</string>
     <string name="MessageDetailsVideoMessage">Видеосообщение</string>
     <string name="MessageDetailsMimeType">MIME-тип</string>

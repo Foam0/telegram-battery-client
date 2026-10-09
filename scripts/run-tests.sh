@@ -2,18 +2,18 @@
 # run-tests.sh — run :TMessagesProj_AppTests:api30AfatDebugAndroidTest inside a
 # podman ubuntu:24.04 container. Mirrors .github/workflows/tests.yml: same
 # apt set, JDK 17 temurin, sdkmanager components, gradle invocation, and gate
-# (KNOWN_FAILURES=39).
+# (KNOWN_FAILURES=0).
 #
 # Why: AGP's Gradle Managed Devices emulator boot/snapshot is unreliable on
 # host Fedora. The container provides a known-good ubuntu environment matching
 # CI exactly, with /dev/kvm passed through for hardware-accelerated emulation.
 #
 # Usage:
-#   scripts/run-tests.sh                                # default MG_BUILD_TAG=12.7.3.99.0
-#   scripts/run-tests.sh -PMG_BUILD_TAG=12.7.3.99.5
-#   MG_BUILD_TAG=12.7.3.99.5 scripts/run-tests.sh
+#   scripts/run-tests.sh                                # default MG_BUILD_TAG=<APP_VERSION_NAME>.<newest stable M>.99
+#   scripts/run-tests.sh -PMG_BUILD_TAG=12.9.2.1.99
+#   MG_BUILD_TAG=12.9.2.1.99 scripts/run-tests.sh
 #   MG_TESTS_REBUILD=1 scripts/run-tests.sh             # force image rebuild
-#   KNOWN_FAILURES=0 scripts/run-tests.sh               # strict gate
+#   KNOWN_FAILURES=1 scripts/run-tests.sh               # tolerate one failure
 #
 # Persistent caches under ~/.cache/mg-tests:
 #   ./avd     AVD + snapshot (warm second run ~30-60 s vs cold ~3-5 min)
@@ -38,11 +38,11 @@
 set -euo pipefail
 
 IMG="${MG_TESTS_IMAGE:-mg-tests-runner:local}"
-KNOWN_FAILURES="${KNOWN_FAILURES:-39}"
+KNOWN_FAILURES="${KNOWN_FAILURES:-0}"
 
 repo_root=$(git rev-parse --show-toplevel)
 # Worktree support: when scripts/run-tests.sh runs from a git worktree
-# (e.g. .claude/worktrees/foo), .git is a file pointing at an absolute
+# (e.g. ../worktrees/foo), .git is a file pointing at an absolute
 # path under the main repo's $GIT_DIR. The container can't resolve that
 # unless we bind-mount the common gitdir at the same absolute path.
 # git_common_dir is empty / matches "$repo_root/.git" for a non-worktree
@@ -74,7 +74,27 @@ for arg in "$@"; do
         -PMG_BUILD_TAG=*) MG_BUILD_TAG_VALUE="${arg#-PMG_BUILD_TAG=}" ;;
     esac
 done
-MG_BUILD_TAG_VALUE="${MG_BUILD_TAG_VALUE:-12.7.3.99.0}"
+# Default: the current upstream version from gradle.properties, the newest
+# stable M already tagged for that version, and 99 as the throwaway K, so the
+# placeholder tracks rebases automatically.
+#
+# The 99 must sit in K, never in M: gradle/mg-version.gradle derives
+# MG_VERSION_CODE = APP_VERSION_CODE * 100 + M, so an M of 99 outranks every
+# release of the cycle, and a device that installed such a build can no longer
+# be moved back to a stable or prerelease APK (PackageInstaller refuses the
+# downgrade). Reusing the stable's own M keeps the versionCode identical, so
+# swapping in either direction is a plain reinstall.
+if [ -z "$MG_BUILD_TAG_VALUE" ]; then
+    app_version_name=$(sed -n 's/^APP_VERSION_NAME=//p' "$repo_root/gradle.properties")
+    [ -n "$app_version_name" ] || die "APP_VERSION_NAME not found in gradle.properties"
+    # Newest 4-dotted stable tag of this cycle, 0 before the first one ships
+    # (the pre-stable namespace, which ranks below every stable by design).
+    stable_m=$(git -C "$repo_root" tag --list "$app_version_name.*" 2>/dev/null \
+        | awk -F. -v v="$app_version_name" \
+              'NF == 4 && $1"."$2"."$3 == v && $4 ~ /^[0-9]+$/ { print $4 }' \
+        | sort -n | tail -1)
+    MG_BUILD_TAG_VALUE="$app_version_name.${stable_m:-0}.99"
+fi
 
 work_base="${MG_TESTS_WORK:-$HOME/.cache/mg-tests}"
 mkdir -p "$work_base"
@@ -163,13 +183,12 @@ ENV JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
 # Base tooling + emulator runtime libs. The QEMU launched by AGP's emulator
 # binary dlopens libpulse / libgl / libnss even with -no-window, and missing
 # any of them aborts the snapshot step with a cryptic "cannot open library".
-# `patch` is required by patch_ffmpeg.sh / patch_boringssl.sh / patch_td.sh —
-# ubuntu:24.04 doesn't ship it by default, and those scripts swallow errors
-# via `|| true`, so a missing tool silently leaves headers unpatched and
-# breaks the C++ CMake compile of gifvideo.cpp (isom.h `class` field).
+# `patch` is required by patch_td.sh. ubuntu:24.04 doesn't ship it by
+# default, and a missing tool silently leaves the TDLib linker-flag patch
+# unapplied.
 # autoconf / automake / libtool are required by build_libevent.sh and
 # build_tor.sh which regen `configure` via ./autogen.sh.
-# g++ is required by the tde2e host build (CMake compiles the TL source
+# g++ is required by the TDLib host build (CMake compiles the TL source
 # generator with the host C++ toolchain). CI's ubuntu-24.04 runner image
 # ships build-essential preinstalled — the plain ubuntu:24.04 base does
 # not, so add g++ explicitly here.
@@ -287,7 +306,7 @@ EOF
 # `crun: setgroups: Invalid argument` because the host UID isn't a valid UID
 # inside the user namespace — only the subuid-mapped range is. --device
 # /dev/kvm hands KVM through to the emulator. Workspace bind mount carries:
-#   - TMessagesProj/jni/{boringssl,ffmpeg,dav1d,libvpx,td}/build           native cache
+#   - TMessagesProj/jni/prebuild/{lib,include}/<abi>                       native cache
 #   - TMessagesProj/jni/td/td/generate/auto, td/tdutils/generate/auto      tdlib generated
 #   - TMessagesProj_AppTests/build/outputs/androidTest-results/            gate input
 # AVD + gradle caches are bind-mounted out of the repo so they survive
@@ -353,9 +372,8 @@ run_gradle() {
 
 # ---------------------------------------------------------------------------
 # Gate — verbatim port of .github/workflows/tests.yml `Gate on failure count`.
-# Keeps a single source of truth for the upstream-defect baseline: bump
-# KNOWN_FAILURES here AND in the workflow when a new fixture passes / fails
-# share the same ClassGraph / jvm-driver root cause.
+# Baseline is 0 in both: any failure is a regression. Raise it here AND in the
+# workflow together if a batch of fixtures ever has to be tolerated.
 # ---------------------------------------------------------------------------
 gate() {
     local results_dir="$repo_root/TMessagesProj_AppTests/build/outputs/androidTest-results"
@@ -376,9 +394,6 @@ gate() {
         || die "XMLs present but tests=0 — likely truncated/corrupt reports"
     if [ "$total" -gt "$KNOWN_FAILURES" ]; then
         die "Regression: $total failures > baseline $KNOWN_FAILURES"
-    fi
-    if [ "$total" -lt "$KNOWN_FAILURES" ]; then
-        log "Failures dropped to $total < baseline $KNOWN_FAILURES — lower KNOWN_FAILURES"
     fi
     log "RESULT: PASS (total=$total <= $KNOWN_FAILURES)"
 }

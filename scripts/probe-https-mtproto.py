@@ -49,8 +49,8 @@ Per-DC verdict:
 Final stdout line: `https_mtproto=supported|unsupported|partial`.
 
   supported   - every endpoint returned OK. Greenlight to implement the
-                native HTTPS-MTProto transport (see the plan at
-                ~/.claude/plans/about-last-commit-we-merry-wren.md).
+                native HTTPS-MTProto transport: frame MTProto inside HTTP
+                POST over TLS straight to the DC, no third-party proxy.
   unsupported - zero endpoints returned OK. Design dies; the plan must fall
                 back to MTProto-TLS proxy or another approach.
   partial     - some OK, some not. Silent degradation for users on the

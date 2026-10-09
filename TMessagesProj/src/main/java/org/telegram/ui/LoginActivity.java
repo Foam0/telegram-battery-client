@@ -240,7 +240,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             MODE_CHANGE_PHONE_NUMBER = 2,
             MODE_CHANGE_LOGIN_EMAIL = 3;
 
-    private final static int VIEW_PHONE_INPUT = 0,
+    public final static int VIEW_PHONE_INPUT = 0,
             VIEW_CODE_MESSAGE = 1,
             VIEW_CODE_SMS = 2,
             VIEW_CODE_FLASH_CALL = 3,
@@ -1643,7 +1643,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         onAuthSuccess(res);
     }
 
-    private void onAuthSuccess(TLRPC.TL_auth_authorization res) {
+    public void onAuthSuccess(TLRPC.TL_auth_authorization res) {
         onAuthSuccess(res, false);
     }
 
@@ -2496,6 +2496,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     loadCountries();
                 });
             }
+
+            if (activityMode == MODE_LOGIN) bottomMargin -= it.belloworld.mercurygram.MgQrLogin.addButton(this, LoginActivity.this, currentAccount);
 
             if (bottomMargin > 0 && !AndroidUtilities.isSmallScreen()) {
                 Space bottomSpacer = new Space(context);
@@ -3727,7 +3729,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 innerLinearLayout.addView(frameLayout, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
 
                 blueImageView = new RLottieImageView(context);
-                hintDrawable = new RLottieDrawable(R.raw.phone_flash_call, String.valueOf(R.raw.phone_flash_call), AndroidUtilities.dp(64), AndroidUtilities.dp(64), true, null);
+                hintDrawable = new RLottieDrawable(R.raw.phone_flash_call, AndroidUtilities.dp(64), AndroidUtilities.dp(64), true, null);
                 blueImageView.setAnimation(hintDrawable);
                 frameLayout.addView(blueImageView, LayoutHelper.createFrame(64, 64));
 
@@ -3742,13 +3744,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
                 int size = currentType == AUTH_TYPE_MESSAGE ? 128 : 64;
                 if (currentType == AUTH_TYPE_MESSAGE) {
-                    hintDrawable = new RLottieDrawable(R.raw.code_laptop, String.valueOf(R.raw.code_laptop), AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
+                    hintDrawable = new RLottieDrawable(R.raw.code_laptop, AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
                 } else {
-                    hintDrawable = new RLottieDrawable(R.raw.sms_incoming_info, String.valueOf(R.raw.sms_incoming_info), AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
+                    hintDrawable = new RLottieDrawable(R.raw.sms_incoming_info, AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
 
-                    starsToDotsDrawable = new RLottieDrawable(R.raw.phone_stars_to_dots, String.valueOf(R.raw.phone_stars_to_dots), AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
-                    dotsDrawable = new RLottieDrawable(R.raw.phone_dots, String.valueOf(R.raw.phone_dots), AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
-                    dotsToStarsDrawable = new RLottieDrawable(R.raw.phone_dots_to_stars, String.valueOf(R.raw.phone_dots_to_stars), AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
+                    starsToDotsDrawable = new RLottieDrawable(R.raw.phone_stars_to_dots, AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
+                    dotsDrawable = new RLottieDrawable(R.raw.phone_dots, AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
+                    dotsToStarsDrawable = new RLottieDrawable(R.raw.phone_dots_to_stars, AndroidUtilities.dp(size), AndroidUtilities.dp(size), true, null);
                 }
                 blueImageView = new RLottieImageView(context);
                 blueImageView.setAnimation(hintDrawable);
@@ -4141,9 +4143,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         private void applyLottieColors(RLottieDrawable drawable) {
             if (drawable != null) {
-                drawable.setLayerColor("Bubble.**", Theme.getColor(Theme.key_chats_actionBackground));
-                drawable.setLayerColor("Phone.**", Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-                drawable.setLayerColor("Note.**", Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+                drawable.setLayerColor("Bubble", Theme.getColor(Theme.key_chats_actionBackground));
+                drawable.setLayerColor("Phone", Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+                drawable.setLayerColor("Note", Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
             }
         }
 
@@ -7877,8 +7879,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 avatarEditor.playAnimation();
             });
 
-            cameraDrawable = new RLottieDrawable(R.raw.camera, String.valueOf(R.raw.camera), AndroidUtilities.dp(70), AndroidUtilities.dp(70), false, null);
-            cameraWaitDrawable = new RLottieDrawable(R.raw.camera_wait, String.valueOf(R.raw.camera_wait), AndroidUtilities.dp(70), AndroidUtilities.dp(70), false, null);
+            cameraDrawable = new RLottieDrawable(R.raw.camera, AndroidUtilities.dp(70), AndroidUtilities.dp(70), false, null);
+            cameraWaitDrawable = new RLottieDrawable(R.raw.camera_wait, AndroidUtilities.dp(70), AndroidUtilities.dp(70), false, null);
 
             avatarEditor = new RLottieImageView(context) {
                 @Override
@@ -10014,7 +10016,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
             button.setEnabled(true);
             button.setOnClickListener(null);
-            if (BuildVars.useInvoiceBilling()) {
+            if (BuildVars.IS_BILLING_UNAVAILABLE) {
+                // Paid login buys premium_days through a Telegram invoice, so it is a purchase
+                // entry point like any other. Same disabled button the no-price case below
+                // shows, instead of the "official app needed" sheet: nothing is on the fragment
+                // stack before login.
+                button.setVisibility(View.VISIBLE);
+                button.setLoading(false);
+                button.setEnabled(false);
+                button.setText(getString(R.string.Unavailable), false);
+            } else if (BuildVars.useInvoiceBilling()) {
                 if (!TextUtils.isEmpty(currency) && amount > 0) {
                     button.setVisibility(View.VISIBLE);
                     button.setLoading(false);

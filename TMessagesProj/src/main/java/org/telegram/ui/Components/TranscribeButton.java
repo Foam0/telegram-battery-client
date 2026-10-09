@@ -18,7 +18,6 @@ import android.os.SystemClock;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.style.ImageSpan;
-import android.util.Log;
 import android.util.StateSet;
 import android.view.MotionEvent;
 
@@ -28,7 +27,6 @@ import androidx.core.graphics.ColorUtils;
 import androidx.core.math.MathUtils;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 
-import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
@@ -43,14 +41,12 @@ import android.widget.Toast;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.TranslateController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.ChatMessageCell;
-import org.telegram.ui.PremiumPreviewFragment;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -95,7 +91,7 @@ public class TranscribeButton {
         this.pressBounds = new Rect(this.bounds);
         this.pressBounds.inset(dp(8), dp(8));
 
-        outIconDrawable = new RLottieDrawable(R.raw.transcribe_out, "transcribe_out", dp(26), dp(26));
+        outIconDrawable = new RLottieDrawable(R.raw.transcribe_out, dp(26), dp(26));
         outIconDrawable.setCurrentFrame(0);
         outIconDrawable.setCallback(parent);
         outIconDrawable.setOnFinishCallback(() -> {
@@ -106,7 +102,7 @@ public class TranscribeButton {
         }, 19);
         outIconDrawable.setAllowDecodeSingleFrame(true);
 
-        inIconDrawable = new RLottieDrawable(R.raw.transcribe_in, "transcribe_in", dp(26), dp(26));
+        inIconDrawable = new RLottieDrawable(R.raw.transcribe_in, dp(26), dp(26));
         inIconDrawable.setCurrentFrame(0);
         inIconDrawable.setCallback(parent);
         inIconDrawable.setMasterParent(parent);
@@ -286,13 +282,13 @@ public class TranscribeButton {
         }
         if (newColor) {
             inIconDrawable.beginApplyLayerColors();
-            inIconDrawable.setLayerColor("Artboard Outlines.**", this.iconColor);
+            inIconDrawable.setLayerColor("Artboard Outlines", this.iconColor);
             inIconDrawable.commitApplyLayerColors();
             inIconDrawable.setAllowDecodeSingleFrame(true);
             inIconDrawable.updateCurrentFrame(0, false);
             inIconDrawable.setAlpha(inIconDrawableAlpha = (int) (Color.alpha(color)));
             outIconDrawable.beginApplyLayerColors();
-            outIconDrawable.setLayerColor("Artboard Outlines.**", this.iconColor);
+            outIconDrawable.setLayerColor("Artboard Outlines", this.iconColor);
             outIconDrawable.commitApplyLayerColors();
             outIconDrawable.setAllowDecodeSingleFrame(true);
             outIconDrawable.updateCurrentFrame(0, false);
@@ -585,15 +581,28 @@ public class TranscribeButton {
         private RLottieDrawable lottie;
         private int lastColor;
         private Paint paint;
+        private final Drawable.Callback callback = new Callback() {
+            @Override
+            public void invalidateDrawable(@NonNull Drawable who) {
+                invalidateSelf();
+            }
+
+            @Override
+            public void scheduleDrawable(@NonNull Drawable who, @NonNull Runnable what, long when) {
+
+            }
+
+            @Override
+            public void unscheduleDrawable(@NonNull Drawable who, @NonNull Runnable what) {
+
+            }
+        };
+
         public LoadingPointsDrawable(TextPaint textPaint) {
             this.paint = textPaint;
             float fontSize = textPaint.getTextSize() * 0.89f;
-            lottie = new RLottieDrawable(R.raw.dots_loading, "dots_loading", (int) fontSize, (int) (fontSize * 1.25f)) {
-                @Override
-                protected boolean hasParentView() {
-                    return true;
-                }
-            };
+            lottie = new RLottieDrawable(R.raw.dots_loading, (int) fontSize, (int) (fontSize * 1.25f));
+            lottie.setCallback(callback);
             lottie.setAutoRepeat(1);
             lottie.setCurrentFrame((int) (SystemClock.elapsedRealtime() / 16f % 60f));
             lottie.setAllowDecodeSingleFrame(true);
@@ -602,7 +611,7 @@ public class TranscribeButton {
 
         public void setColor(int color) {
             lottie.beginApplyLayerColors();
-            lottie.setLayerColor("Comp 1.**", color);
+            lottie.setLayerColor("Comp 1", color);
             lottie.commitApplyLayerColors();
             lottie.setAllowDecodeSingleFrame(true);
             lottie.updateCurrentFrame(0, false);
@@ -679,7 +688,10 @@ public class TranscribeButton {
         long dialogId = DialogObject.getPeerDialogId(peer);
         int messageId = messageObject.messageOwner.id;
         if (open) {
-            if (messageObject.messageOwner.voiceTranscription != null && messageObject.messageOwner.voiceTranscriptionFinal) {
+            // [MG] isStale(): the stored text was transcribed on-device with a model
+            // or language the user has since changed, so re-run instead of re-opening.
+            if (messageObject.messageOwner.voiceTranscription != null && messageObject.messageOwner.voiceTranscriptionFinal
+                    && !it.belloworld.mercurygram.transcribe.MgWhisperTranscriber.isStale(messageObject)) {
                 TranscribeButton.openVideoTranscription(messageObject);
                 messageObject.messageOwner.voiceTranscriptionOpen = true;
                 MessagesStorage.getInstance(account).updateMessageVoiceTranscriptionOpen(dialogId, messageId, messageObject.messageOwner);
@@ -823,6 +835,11 @@ public class TranscribeButton {
                     TranscribeButton.openVideoTranscription(messageObject);
                     messageObject.messageOwner.voiceTranscriptionOpen = true;
                     messageObject.messageOwner.voiceTranscriptionFinal = true;
+                    // [MG] Stamp the model + language this text came from (negative, so it
+                    // can't be mistaken for a server transcription id) — the next tap
+                    // re-transcribes when the settings no longer match.
+                    messageObject.messageOwner.voiceTranscriptionId =
+                            it.belloworld.mercurygram.transcribe.MgWhisperTranscriber.currentStamp(account);
                     MessagesStorage.getInstance(account).updateMessageVoiceTranscription(dialogId, messageId, text, messageObject.messageOwner);
                     AndroidUtilities.runOnUIThread(() -> finishTranscription(messageObject, 0, text), Math.max(0, minDuration - duration));
                 } else {

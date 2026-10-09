@@ -56,11 +56,10 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.collection.LongSparseArray;
+import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.RecyclerView;
-
-import com.google.common.collect.Lists;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AndroidUtilities;
@@ -83,6 +82,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SharedPrefsHelper;
+import org.telegram.utils.settings.SharedSettings;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.browser.Browser;
@@ -141,9 +141,7 @@ import org.telegram.ui.bots.SetupEmojiStatusSheet;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -749,6 +747,12 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
         items.add(SettingCell.Factory.of(19, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
 
+        if (SharedSettings.experimentalSettingsAllowed.get()) {
+            items.add(UItem.asShadow(null));
+            items.add(UItem.asHeader("Experimental"));
+            items.add(SettingCell.Factory.of(24, 0xFFF45255, 0xFFDF3955, 0, getString(R.string.RoundVideoSettings)));
+        }
+
         if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
             items.add(UItem.asShadow(null));
             items.add(UItem.asHeader(getString(R.string.SettingsDebug)));
@@ -890,6 +894,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 }
                 break;
             }
+            case 24: {
+                presentFragment(new RoundVideoSettingsActivity());
+                break;
+            }
         }
     }
 
@@ -964,8 +972,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
     @NonNull
     private WindowInsetsCompat onApplyWindowInsets(@NonNull View v, @NonNull WindowInsetsCompat insets) {
-        final int statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
-        navigationBarHeight = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+        final Insets systemInsets = AndroidUtilities.getDefaultWindowInsets(insets, false);
+        navigationBarHeight = systemInsets.bottom;
+        final int statusBarHeight = systemInsets.top;
         listView.setPadding(0, statusBarHeight + dp(12), 0, navigationBarHeight + additionNavigationBarHeight);
         return WindowInsetsCompat.CONSUMED;
     }
@@ -1050,6 +1059,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
             counterView.setBackground(Theme.createRoundRectDrawable(dp(10), Theme.getColor(Theme.key_featuredStickers_addButton, resourcesProvider)));
             arrowView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayIcon, resourcesProvider), PorterDuff.Mode.SRC_IN));
+            emojiStatusDrawable.setColor(Theme.getColor(Theme.key_profile_verifiedBackground, resourcesProvider));
         }
 
         public void set(int account) {
@@ -1469,6 +1479,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 (SharedConfig.frameMetricsEnabled ? "hide frame metrics" : "show frame metrics"),
                 BuildVars.DEBUG_PRIVATE_VERSION ? (SharedConfig.shadowsInSections ? "disable shadows in settings" : "enable shadows in settings") : null,
                 BuildVars.DEBUG_PRIVATE_VERSION ? (SharedConfig.debugViewMetrics ? "disable debug view metrics" : "enable debug view metrics") : null,
+                (SharedSettings.experimentalSettingsAllowed.get() ? "hide experimental settings" : "show experimental settings"),
                 // [MG] Mercurygram Debug items
                 SharedConfig.disableSecureFlags ? "Enable Secure Flags" : "Disable Secure Flags",
                 SharedConfig.removeAdsAndProxySponsor ? "Enable Ads & Proxy Sponsor" : "Remove Ads & Proxy Sponsor"
@@ -1782,8 +1793,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 final SharedPreferences prefs = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
                 prefs.edit().putBoolean("debugViewMetrics", SharedConfig.debugViewMetrics = !SharedConfig.debugViewMetrics).apply();
             } else if (which == 42) {
-                SharedConfig.toggleDisableSecureFlags();
+                SharedSettings.experimentalSettingsAllowed.toggle();
+                listView.adapter.update(true);
             } else if (which == 43) {
+                SharedConfig.toggleDisableSecureFlags();
+            } else if (which == 44) {
                 SharedConfig.toggleRemoveAdsAndProxySponsor();
             }
         });

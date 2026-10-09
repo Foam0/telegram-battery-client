@@ -7,10 +7,10 @@
 #
 # Wraps changelog-diff.sh + OpenRouter
 # (https://openrouter.ai/api/v1/chat/completions). The model is read from
-# $OPENROUTER_MODEL (default `openrouter/free` — OpenRouter's free
-# auto-router). If the configured model returns 404 / "model not found"
-# (OpenRouter occasionally retires models), the request is retried once
-# against `openrouter/free` so a stale pin doesn't poison a release.
+# $OPENROUTER_MODEL (default `openrouter/free`, OpenRouter's free
+# auto-router). If the configured model fails for any reason (retired
+# model, upstream rate limit, provider outage), the request is retried once
+# against `openrouter/free` so a stale or busy pin doesn't poison a release.
 # Auth via $OPENROUTER_API_KEY; when unset the AI call is skipped entirely
 # (one less guaranteed 401) and the deterministic fallback runs immediately.
 # The model returns structured JSON; this script validates policy and renders
@@ -58,12 +58,12 @@ OPENROUTER_URL="https://openrouter.ai/api/v1/chat/completions"
 # when the upstream provider hits its concurrency cap), HTTP 502/503/504
 # (gateway hiccups), and curl-side network errors (DNS, TLS, timeout).
 # 401/403 (bad/missing key) and other 4xx bail immediately — won't recover
-# on retry. 404 / "model not found" trigger the outer model-fallback loop
-# (try $OPENROUTER_MODEL first, then $DEFAULT_MODEL). Backoff is short on
-# purpose — release pipeline is on the critical path, transient blips
-# usually clear inside 30-60s. On every non-recoverable empty response we
-# log HTTP status + truncated body so post-mortems don't require local
-# reproduction.
+# on retry. Every failure of the pinned model reaches the outer
+# model-fallback loop (try $OPENROUTER_MODEL first, then $DEFAULT_MODEL).
+# Backoff is short on purpose — release pipeline is on the critical
+# path, transient blips usually clear inside 30-60s. On every
+# non-recoverable empty response we log HTTP status + truncated body so
+# post-mortems don't require local reproduction.
 AI_MAX_ATTEMPTS="${AI_MAX_ATTEMPTS:-3}"
 AI_BACKOFFS=(0 15 45)  # cumulative wait BEFORE attempt N (0 = no wait first try)
 
@@ -216,12 +216,24 @@ render_body_json() {
           "<b>\(.title)</b><br>\n" +
           ([.bullets[].text | "• \(.)<br>"] | join("\n"));
 
-        (if $upstream_changed == "true" then
-          "Based on Telegram \($upstream).<br><br>\n"
-        else
-          ""
-        end) +
-        ([.sections | merge_sections | .[] | select((.bullets | length) > 0) | section] | join("<br>\n"))
+        ([.sections | merge_sections | .[] | select((.bullets | length) > 0) | section]
+          | join("<br>\n")) as $body
+        # A release with nothing to tell the user is a normal answer, not a
+        # failed one: say so, instead of dropping to the fallback and dumping
+        # class names at the reader.
+        | if $body == "" then
+            if $upstream_changed == "true" then
+              "Based on Telegram \($upstream).<br><br>\n<b>Improved</b><br>\n• Updated to the latest Telegram base.<br>"
+            else
+              "Maintenance release: rebased on latest upstream, no user-facing changes."
+            end
+          else
+            (if $upstream_changed == "true" then
+              "Based on Telegram \($upstream).<br><br>\n"
+            else
+              ""
+            end) + $body
+          end
     '
 }
 
@@ -245,8 +257,6 @@ validate_body_json() {
     if ! printf '%s' "$json" | jq -e '
         (.based_on_telegram | type == "boolean") and
         (.sections | type == "array") and
-        (.sections | length > 0) and
-        ([.sections[] | select((.bullets | type == "array") and (.bullets | length > 0))] | length > 0) and
         all(.sections[];
           (.title as $title | ["What'\''s New", "Improved", "Fixed", "Infrastructure"] | index($title) != null) and
           (.bullets | type == "array") and
@@ -315,11 +325,14 @@ fallback_body() {
     # a single What's New header — internal identifier leakage is the
     # explicit trade-off for never going stale across releases. The AI
     # path is the only place we phrase user-facing prose.
+    # "New method:" lines are raw Java signatures: noise to a reader, and the
+    # bulk of the block. Classes, mg_ flags and new strings at least name the
+    # feature, so the fallback keeps those and drops the signatures.
     local features
     features=$(awk '
         /^=== CODE FEATURES ===$/ { capture=1; next }
         /^=== / { capture=0 }
-        capture && NF { print }
+        capture && NF && $0 !~ /^New method: / { print }
     ' "$DIFF_FILE")
 
     if [[ -z "$features" || "$features" == "(none)" ]]; then
@@ -413,7 +426,11 @@ call_model() {
     local attempt RAW
     for attempt in $(seq 1 "$AI_MAX_ATTEMPTS"); do
         sleep "${AI_BACKOFFS[$((attempt - 1))]:-60}"
-        RAW=$(curl -sL --max-time 120 -X POST \
+        # 300s, not 120s: the free auto-router serves a ~100 KB request in
+        # 50-190s depending on which provider it lands on, so a 2-minute cap
+        # turned normal-but-slow answers into curl errors (HTTP 000) and
+        # dropped the release to the deterministic fallback.
+        RAW=$(curl -sL --max-time 300 -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $OPENROUTER_API_KEY" \
             --data-binary "@$REQ_FILE" \
@@ -461,22 +478,6 @@ normalize_body_json() {
     printf '%s' "$content" | perl -0pe 's/\A.*?(\{)/$1/s; s/(\})[^\}]*\z/$1/s'
 }
 
-is_model_not_found() {
-    # OpenRouter returns 404 for unknown models, and occasionally 400 with
-    # an error.message naming the model. Treat both as "swap to fallback".
-    if [[ "$HTTP" == "404" ]]; then
-        return 0
-    fi
-    if [[ "$HTTP" == "400" ]]; then
-        local msg
-        msg=$(printf '%s' "$RESP" | jq -r '.error.message // empty' 2>/dev/null || true)
-        if [[ "$msg" == *[Mm]odel* ]]; then
-            return 0
-        fi
-    fi
-    return 1
-}
-
 # Validation-aware resample loop. The OSS free models occasionally leak
 # forbidden vocab or drop a section even with strict json_schema. On
 # rejection we feed the previous draft + reason back as a follow-up user
@@ -491,8 +492,13 @@ else
     for vatt in $(seq 1 "$MAX_VALIDATE_ATTEMPTS"); do
         if call_model "$PRIMARY_MODEL"; then
             :
-        elif [[ "$PRIMARY_MODEL" != "$DEFAULT_MODEL" ]] && is_model_not_found; then
-            echo "model '$PRIMARY_MODEL' rejected (HTTP $HTTP) — retrying with $DEFAULT_MODEL" >&2
+        elif [[ "$PRIMARY_MODEL" != "$DEFAULT_MODEL" ]]; then
+            # Any failure of the pinned model, not just "model not found".
+            # A free-tier pin is rate-limited upstream far more often than it
+            # is retired, and a 429-exhausted primary used to drop straight to
+            # the identifier-dump fallback without the auto-router ever being
+            # tried.
+            echo "model '$PRIMARY_MODEL' failed (HTTP $HTTP), retrying with $DEFAULT_MODEL" >&2
             call_model "$DEFAULT_MODEL" || true
         fi
         BODY_JSON=$(printf '%s' "$RESP" | jq -r '.choices[0].message.content // empty' 2>/dev/null) || BODY_JSON=''

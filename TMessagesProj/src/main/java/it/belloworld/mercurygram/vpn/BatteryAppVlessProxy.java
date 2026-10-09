@@ -275,7 +275,8 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
                 int port = preferences.getInt("proxy_port", 1080);
                 boolean enabled = preferences.getBoolean("proxy_enabled", false) && address != null && address.length() > 0;
                 if (enabled) {
-                    ConnectionsManager.setProxySettings(true, address, port, username, password, secret);
+                    ConnectionsManager.setProxySettings(true,
+                            org.telegram.utils.proxy.ProxySettings.fromSharedPreferences(preferences));
                     SharedConfig.currentProxy = findProxyInList(address, port, username, password, secret);
                 } else {
                     ConnectionsManager.setProxySettings(false, "", 0, "", "", "");
@@ -296,11 +297,11 @@ public final class BatteryAppVlessProxy implements CommandServerHandler {
             if (info.mgInternal) {
                 continue;
             }
-            if (info.port == port
-                    && safeEquals(info.address, address)
-                    && safeEquals(info.username, username)
-                    && safeEquals(info.password, password)
-                    && safeEquals(info.secret, secret)) {
+            if (info.settings.getPort() == port
+                    && safeEquals(info.settings.getAddress(), address)
+                    && safeEquals(info.settings.getUser(), username)
+                    && safeEquals(info.settings.getPassword(), password)
+                    && safeEquals(info.settings.getSecret(), secret)) {
                 return info;
             }
         }

@@ -15,14 +15,21 @@
   "dns": {
     "servers": [
       {
+        "type": "udp",
+        "tag": "bootstrap-dns",
+        "server": "1.1.1.1",
+        "server_port": 53
+      },
+      {
         "type": "https",
         "tag": "remote-dns",
-        "server": "1.1.1.1",
+        "server": "cloudflare-dns.com",
         "server_port": 443,
         "path": "/dns-query",
-        "tls": {
-          "enabled": true,
-          "server_name": "cloudflare-dns.com"
+        "detour": "proxy",
+        "domain_resolver": {
+          "server": "bootstrap-dns",
+          "strategy": "prefer_ipv4"
         }
       }
     ],
@@ -38,7 +45,7 @@
       "users": [
         {
           "username": "tg-local",
-          "password": "change-me-before-use"
+          "password": "sample-password"
         }
       ]
     }
@@ -53,7 +60,7 @@
       "flow": "xtls-rprx-vision",
       "packet_encoding": "xudp",
       "domain_resolver": {
-        "server": "remote-dns",
+        "server": "bootstrap-dns",
         "strategy": "prefer_ipv4"
       },
       "tls": {
@@ -80,7 +87,7 @@
     "final": "proxy",
     "auto_detect_interface": true,
     "default_domain_resolver": {
-      "server": "remote-dns",
+      "server": "bootstrap-dns",
       "strategy": "prefer_ipv4"
     }
   }

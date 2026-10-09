@@ -332,6 +332,7 @@ public class RecyclerListView extends RecyclerView implements IBlur3Capture {
         private int count;
 
         private ArrayList<Integer> hashes = new ArrayList<>();
+        private boolean hashesComputed;
 
         public void cleanupCache() {
             if (sectionCache == null) {
@@ -449,9 +450,12 @@ public class RecyclerListView extends RecyclerView implements IBlur3Capture {
 
         public void update(boolean diff) {
             ArrayList<Integer> oldHashes = new ArrayList<>(hashes);
+            // on the first update there is nothing to diff against, the empty old list would
+            // make DiffUtil report inserts for sections the adapter has not counted yet
+            boolean hadHashes = hashesComputed;
             updateHashes();
 
-            if (diff) {
+            if (diff && hadHashes) {
                 DiffUtil.calculateDiff(new DiffUtil.Callback() {
                     @Override
                     public int getOldListSize() {
@@ -481,6 +485,7 @@ public class RecyclerListView extends RecyclerView implements IBlur3Capture {
         public void updateHashes() {
             cleanupCache();
 
+            hashesComputed = true;
             hashes.clear();
 
             for (int i = 0, N = internalGetSectionCount(); i < N; i++) {
@@ -3158,32 +3163,36 @@ public class RecyclerListView extends RecyclerView implements IBlur3Capture {
             //     canvas.drawColor(0x80FF00FF);
             }
         } else {
-            for (int a = 0, N = getItemDecorationCount(); a < N; a++) {
-                ItemDecoration itemDecoration = getItemDecorationAt(a);
-                if (itemDecoration instanceof IBlur3Capture) {
-                    if (itemDecoration == sectionsItemDecoration && !canCaptureSectionsDecorator) {
-                        continue;
-                    }
-                    final IBlur3Capture capture = (IBlur3Capture) itemDecoration;
-                    capture.capture(canvas, position);
-                }
-            }
-            for (int i = 0, N = getChildCount(); i < N; i++) {
-                final View child = getChildAt(i);
+            captureChildren(canvas, position, drawingTime);
+        }
+    }
 
-                final float left = child.getX();
-                final float top = child.getY();
-                final float right = left + child.getWidth();
-                final float bottom = top + child.getHeight();
-
-                if (!position.intersects(left, top, right, bottom)) {
+    protected void captureChildren(Canvas canvas, RectF position, long drawingTime) {
+        for (int a = 0, N = getItemDecorationCount(); a < N; a++) {
+            ItemDecoration itemDecoration = getItemDecorationAt(a);
+            if (itemDecoration instanceof IBlur3Capture) {
+                if (itemDecoration == sectionsItemDecoration && !canCaptureSectionsDecorator) {
                     continue;
                 }
-
-                ignoreClipChild = true;
-                drawChild(canvas, child, drawingTime);
-                ignoreClipChild = false;
+                final IBlur3Capture capture = (IBlur3Capture) itemDecoration;
+                capture.capture(canvas, position);
             }
+        }
+        for (int i = 0, N = getChildCount(); i < N; i++) {
+            final View child = getChildAt(i);
+
+            final float left = child.getX();
+            final float top = child.getY();
+            final float right = left + child.getWidth();
+            final float bottom = top + child.getHeight();
+
+            if (!position.intersects(left, top, right, bottom)) {
+                continue;
+            }
+
+            ignoreClipChild = true;
+            drawChild(canvas, child, drawingTime);
+            ignoreClipChild = false;
         }
     }
 

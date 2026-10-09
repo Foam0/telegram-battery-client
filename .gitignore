@@ -16,7 +16,7 @@ sessions/
 tmp_sensitive/
 last-config.json
 profiles.json
-/third_party/
+third_party/
 TMessagesProj/.cxx/
 TMessagesProj/jniLibs/
 TMessagesProj/jniRes/
@@ -33,16 +33,20 @@ TMessagesProj_App/afat/
 TMessagesProj_AppHockeyApp/afat/
 TMessagesProj_AppStandalone/afat/
 TMessagesProj_AppHuawei/afat/
+# jni/prebuild: upstream commits the static archives its build_*.sh scripts
+# produce (15 per ABI) plus the ABI-dependent ffmpeg headers. F-Droid cannot
+# ship binaries it did not build, so we run those same scripts over the pinned
+# submodules and treat everything they write as generated.
+TMessagesProj/jni/prebuild/lib/
+TMessagesProj/jni/prebuild/include/
+TMessagesProj/jni/prebuild/pkgconfig/
+TMessagesProj/jni/prebuild/build/
+# Call core wasm module as a C array, built by jni/build_wasm_core.sh.
+TMessagesProj/jni/voip/ReferenceCoreEmbedded.cpp
 API_KEYS
 .env
+# Written at the repo root by .github/actions/jni-cache-fingerprint, hashed
+# into the native-cache keys by the job that generated it. Never committed.
+.jni-cache-fingerprint
+.jni-cache-fingerprint.tmp
 TMessagesProj/src/main/assets/battery_default_vless_profiles.json
-# Local debug Firebase override. The hardened release Firebase client config is
-# intentionally tracked: Firebase Android API keys identify the client project
-# and are not server credentials.
-TMessagesProj/src/debug/res/values/battery_firebase.xml
-
-# Never publish backups or credentials, even when encrypted.
-config/private-configs.*
-firebase-adminsdk*.json
-service-account*.json
-*.p8

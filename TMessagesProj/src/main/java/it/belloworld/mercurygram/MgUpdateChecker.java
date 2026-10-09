@@ -51,6 +51,7 @@ public class MgUpdateChecker {
     private static final long CHECK_INTERVAL_PENDING = 5 * 60 * 1000;
 
     private static Boolean isFdroidBuildCached = null;
+    private static volatile String cachedInstallVersion;
     private static final AtomicBoolean isDownloading = new AtomicBoolean(false);
     private static final AtomicBoolean isDownloadingPlugin = new AtomicBoolean(false);
     private static volatile HttpURLConnection currentDownloadConn;
@@ -68,10 +69,6 @@ public class MgUpdateChecker {
     // versionName is set to the build's GitHub tag verbatim (see
     // gradle/mg-version.gradle), so PackageInfo.versionName carries the
     // real 5-dotted tag for sideloads as well as in-app-updater installs.
-    public static boolean isOnPreReleaseInstall() {
-        return isFiveDotted(currentInstallVersion());
-    }
-
     static String derivePrecedingStableTag(String tag) {
         if (tag == null) return null;
         String[] p = tag.split("\\.", -1);
@@ -83,7 +80,7 @@ public class MgUpdateChecker {
     }
 
     public static boolean acceptPreReleases() {
-        return isBetaChannel() || isOnPreReleaseInstall() || SharedConfig.acceptPreReleaseUpdates;
+        return isBetaChannel() || SharedConfig.acceptPreReleaseUpdates;
     }
 
     // True iff the user has deliberately regressed off the prerelease channel:
@@ -107,6 +104,27 @@ public class MgUpdateChecker {
 
     private static boolean isFiveDotted(String tag) {
         return tag != null && tag.split("\\.", -1).length >= 5;
+    }
+
+    /**
+     * True when this install may download and install APKs itself: the GitHub
+     * channel. F-Droid installs update through F-Droid and Google Play installs
+     * through Play (the Play build also drops REQUEST_INSTALL_PACKAGES).
+     */
+    public static boolean canSelfInstall() {
+        return !isFdroidBuild()
+                && !MgInstallSource.isPlayStore()
+                && MgInstallSource.declaresInstallPermission();
+    }
+
+    /**
+     * True when this install has some way to reach the Tor plugin: in-app on the
+     * GitHub channel, the catalog entry on F-Droid. Google Play has no plugin
+     * listing and a Play install must not be sent off to an APK download, so
+     * callers there say so instead of offering an install action.
+     */
+    public static boolean hasPluginInstallPath() {
+        return canSelfInstall() || isFdroidBuild();
     }
 
     public static boolean isFdroidBuild() {
@@ -160,33 +178,75 @@ public class MgUpdateChecker {
 
     // Rolls back from a 5-dotted Release-flavor beta (X.Y.Z.M.K, M >= 1) to
     // the X.Y.Z.M stable; both share MG_VC so PackageInstaller accepts it.
-    // No-ops on pre-stable installs (derivePrecedingStableTag → null).
-    public static void checkForDowngradeToStable() {
+    // Returns false without doing anything on pre-stable installs
+    // (derivePrecedingStableTag → null): X.Y.Z.0.K has no stable to fall back
+    // to, so the caller must not promise the user a download that never comes.
+    public static boolean checkForDowngradeToStable() {
         String targetTag = derivePrecedingStableTag(currentInstallVersion());
-        if (targetTag == null) return;
+        if (targetTag == null) return false;
         checkInternal(true, targetTag);
+        return true;
     }
 
-    // Tracks the last prerelease tag this install ran, and self-heals the
-    // opt-in flag when it detects a deliberate regress off that prerelease
-    // (see shouldClearOptInOnRegress()). Called at the start of every
+    // Sets the prerelease channel opt-in. mgLastPreReleaseTag always moves
+    // with it, recording whatever is installed right now, and that pairing is
+    // what makes both directions stick: an opt-out marks the running
+    // prerelease as already seen so the adoption below cannot undo it, and an
+    // opt-in on a stable drops the tag of an earlier stint so
+    // shouldClearOptInOnRegress() cannot self-clear it.
+    public static void setPreReleaseOptIn(boolean value) {
+        String cur = currentInstallVersion();
+        SharedConfig.setAcceptPreReleaseUpdates(value);
+        SharedConfig.setMgLastPreReleaseTag(isFiveDotted(cur) ? cur : "");
+        // A staged prerelease is no longer offered once opted out: hide its
+        // banner now instead of at the next update check.
+        MgUpdateInfo pending = value ? null : SharedConfig.getMgPendingUpdate();
+        if (pending != null && isFiveDotted(pending.tagName)) dropPendingUpdate();
+    }
+
+    // Keeps SharedConfig.acceptPreReleaseUpdates the single source of truth for
+    // the channel: adopts the flag when a new prerelease is running, and clears
+    // it when it detects a deliberate regress off one (see
+    // shouldClearOptInOnRegress()). Called at the start of every
     // checkInternal() so a stale opt-in stops re-offering the prerelease the
     // user already left, without any dedicated UI action from the user.
     private static void maybeAutoClearPreReleaseOptIn() {
         String cur = currentInstallVersion();
         if (isFiveDotted(cur)) {
-            if (!cur.equals(SharedConfig.mgLastPreReleaseTag)) {
-                SharedConfig.setMgLastPreReleaseTag(cur);
-            }
+            // Running a prerelease IS the opt-in, whatever brought it here
+            // (the toggle, a sideload, Obtainium). Once per tag, so a
+            // deliberate toggle-off is not flipped straight back on.
+            if (!cur.equals(SharedConfig.mgLastPreReleaseTag)) setPreReleaseOptIn(true);
         } else if (SharedConfig.acceptPreReleaseUpdates
                 && shouldClearOptInOnRegress(cur, SharedConfig.mgLastPreReleaseTag)) {
-            SharedConfig.setAcceptPreReleaseUpdates(false);
-            SharedConfig.setMgLastPreReleaseTag("");
+            setPreReleaseOptIn(false);
         }
     }
 
+    // Nothing newer on the current channel: a pending update staged earlier
+    // (e.g. a prerelease before the opt-out) is stale, drop it and hide the banner.
+    private static void markUpToDate() {
+        SharedConfig.mgLastUpdateCheckTime = System.currentTimeMillis();
+        if (SharedConfig.mgPendingUpdate != null) {
+            dropPendingUpdate();
+        } else {
+            SharedConfig.saveConfig();
+        }
+    }
+
+    private static void dropPendingUpdate() {
+        SharedConfig.clearMgPendingUpdate();
+        AndroidUtilities.runOnUIThread(() ->
+                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable));
+    }
+
     private static void checkInternal(boolean force, String pinnedTag) {
-        if (isFdroidBuild()) return;
+        if (!canSelfInstall()) return;
+
+        // Local reconciliation, no network: ahead of the auto-update and
+        // throttle gates so the channel flag tracks the running install at
+        // once instead of lagging a CHECK_INTERVAL behind it.
+        maybeAutoClearPreReleaseOptIn();
 
         if (!force && SharedConfig.disableAutoUpdate) return;
 
@@ -194,8 +254,6 @@ public class MgUpdateChecker {
         if (!force && Math.abs(System.currentTimeMillis() - SharedConfig.mgLastUpdateCheckTime) < interval) {
             return;
         }
-
-        maybeAutoClearPreReleaseOptIn();
 
         final boolean beta = isBetaChannel();
         final boolean listReleases = beta || acceptPreReleases();
@@ -233,9 +291,9 @@ public class MgUpdateChecker {
                     // GitHub orders /releases by created_at desc, not by version
                     // or published_at — scan the whole list and keep the
                     // highest-version eligible release instead of the first.
-                    // The Battery Client publishes stable and hardened .beta
-                    // APKs together, so beta installs accept either release
-                    // type but only consider releases containing their asset.
+                    // Battery Client publishes stable and hardened .beta APKs
+                    // together. A .beta install therefore accepts either
+                    // release type, but only when its exact ABI asset exists.
                     JSONArray releases = new JSONArray(body);
                     JSONObject best = null;
                     long[] bestVec = null;
@@ -267,8 +325,7 @@ public class MgUpdateChecker {
                         }
                     }
                     if (best == null) {
-                        SharedConfig.mgLastUpdateCheckTime = System.currentTimeMillis();
-                        SharedConfig.saveConfig();
+                        markUpToDate();
                         return;
                     }
                     release = best;
@@ -281,8 +338,7 @@ public class MgUpdateChecker {
                 // up-to-date check — current (5-dotted) > target (4-dotted of
                 // same base), so versionUpToDate would short-circuit.
                 if (pinnedTag == null && versionUpToDate(currentInstallVersion(), tagName)) {
-                    SharedConfig.mgLastUpdateCheckTime = System.currentTimeMillis();
-                    SharedConfig.saveConfig();
+                    markUpToDate();
                     return;
                 }
 
@@ -439,9 +495,9 @@ public class MgUpdateChecker {
      *  - Writes to cache/mg_tor_plugin.apk, not mg_update.apk, so a
      *    concurrent main updater download can't clobber and so a later
      *    main installUpdate(...) doesn't accidentally install the plugin.
-     * F-Droid channel callers must gate on {@link #isFdroidBuild()} before
-     * calling — F-Droid plugin is signed with a different cert; this method
-     * also short-circuits as a safety net.
+     * Store-channel callers must gate on {@link #canSelfInstall()} before
+     * calling: the F-Droid plugin is signed with a different cert and a Play
+     * install cannot sideload. This method also short-circuits as a safety net.
      */
     public static void downloadPlugin(ProgressCallback callback) {
         if (!isDownloadingPlugin.compareAndSet(false, true)) {
@@ -451,9 +507,9 @@ public class MgUpdateChecker {
             AndroidUtilities.runOnUIThread(() -> callback.onError("Already downloading"));
             return;
         }
-        if (isFdroidBuild()) {
+        if (!canSelfInstall()) {
             isDownloadingPlugin.set(false);
-            AndroidUtilities.runOnUIThread(() -> callback.onError("F-Droid channel"));
+            AndroidUtilities.runOnUIThread(() -> callback.onError("Store channel"));
             return;
         }
         if (Build.SUPPORTED_ABIS.length == 0) {
@@ -659,11 +715,12 @@ public class MgUpdateChecker {
     // currentInstallVersion() fallback to BuildVars.BUILD_VERSION_STRING
     // (3-dotted upstream form, e.g. "12.7.3") on PM exception, which
     // would otherwise produce a false-positive against any 4/5-dotted
-    // plugin tag. F-Droid channel returns false: the plugin's catalog
-    // drives its own update cadence and the signing certs differ so the
-    // in-app download path is not authoritative there anyway.
+    // plugin tag. Store channels return false: F-Droid's catalog drives
+    // its own update cadence and the signing certs differ, and a Play
+    // install cannot sideload at all, so the in-app download path is not
+    // authoritative on either.
     public static boolean isPluginOutdated(String pluginPkg) {
-        if (isFdroidBuild()) return false;
+        if (!canSelfInstall()) return false;
         String installed = installedPluginVersion(pluginPkg);
         if (installed == null) return false;
         String main = currentInstallVersion();
@@ -677,10 +734,14 @@ public class MgUpdateChecker {
     // PackageInfo carries the canonical 5-dotted/4-dotted tag for every
     // build path (CI release, CI beta, F-Droid, sideload).
     public static String currentInstallVersion() {
+        // Cached: installing a new APK kills the process, so versionName
+        // cannot change under us -- and checkInternal()'s reconciliation puts
+        // this on every LaunchActivity resume, a binder IPC each time.
+        if (cachedInstallVersion != null) return cachedInstallVersion;
         try {
             PackageInfo pi = ApplicationLoader.applicationContext.getPackageManager()
                     .getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
-            return pi.versionName;
+            return cachedInstallVersion = pi.versionName;
         } catch (Exception e) {
             return BuildVars.BUILD_VERSION_STRING;
         }

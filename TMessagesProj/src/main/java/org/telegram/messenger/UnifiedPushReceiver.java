@@ -1,5 +1,7 @@
 package org.telegram.messenger;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
@@ -12,15 +14,39 @@ import org.unifiedpush.android.connector.data.PushMessage;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Locale;
 
 import it.belloworld.mercurygram.WebPushDecryptor;
 
 public class UnifiedPushReceiver extends PushService {
 
-    private static long lastReceivedNotification = 0;
-    private static long numOfReceivedNotifications = 0;
-    private static long numDecryptSuccess = 0;
-    private static long numDecryptFailed = 0;
+    // Persisted, not plain statics: the interesting case is a push that never woke the app or a
+    // process the system killed, and in-memory counters are gone by the time the user goes looking.
+    private static final String STATS_PREFS = "mg_push_stats";
+    private static final String KEY_LAST_RECEIVED = "lastReceived";
+    private static final String KEY_RECEIVED = "received";
+    private static final String KEY_DECRYPTED = "decrypted";
+    private static final String KEY_DECRYPT_FAILED = "decryptFailed";
+    private static final String KEY_WAKE_UPS = "wakeUps";
+    // Last reason a distributor refused to register us, for the settings diagnostic: without it
+    // a failed registration is indistinguishable from one that never got an answer.
+    private static final String KEY_LAST_FAILURE = "lastFailure";
+    private static final String KEY_EVENT_LOG = "eventLog";
+    // Simple Push wake-ups carry no payload and only nudge the app to reconnect. One is enough
+    // for a whole burst: the first already resumed the connection and armed the 60 s keep-alive,
+    // so the next event arrives on the live socket. Without this, a busy account gets one
+    // wake-up every few seconds and the process never leaves the keep-alive window.
+    private static final long WAKEUP_THROTTLE_MS = 10_000;
+    private static volatile long lastWakeUp = 0;
+    // Short timeline of registration events for the settings diagnostic. A single "last
+    // failure" string cannot tell whether an endpoint arrived before or after the failure,
+    // which is exactly what a bug report about a missing endpoint needs.
+    private static final int EVENT_LOG_SIZE = 20;
+    private static ArrayDeque<String> eventLog;
 
     // Static WakeLock — prevents GC from finalizing/releasing it while async work is in progress.
     // Reference-counted: each onMessage() acquire increments, each completion release decrements.
@@ -45,24 +71,85 @@ public class UnifiedPushReceiver extends PushService {
         }
     }
 
+    private static SharedPreferences stats() {
+        return ApplicationLoader.applicationContext.getSharedPreferences(STATS_PREFS, Context.MODE_PRIVATE);
+    }
+
+    private static void bump(String key) {
+        SharedPreferences prefs = stats();
+        prefs.edit().putLong(key, prefs.getLong(key, 0) + 1).apply();
+    }
+
+    /** Wall clock, not elapsedRealtime: the counters outlive both the process and a reboot. */
     public static long getLastReceivedNotification() {
-        return lastReceivedNotification;
+        return stats().getLong(KEY_LAST_RECEIVED, 0);
     }
 
     public static long getNumOfReceivedNotifications() {
-        return numOfReceivedNotifications;
+        return stats().getLong(KEY_RECEIVED, 0);
     }
 
     public static long getNumDecryptSuccess() {
-        return numDecryptSuccess;
+        return stats().getLong(KEY_DECRYPTED, 0);
     }
 
     public static long getNumDecryptFailed() {
-        return numDecryptFailed;
+        return stats().getLong(KEY_DECRYPT_FAILED, 0);
+    }
+
+    public static long getNumWakeUps() {
+        return stats().getLong(KEY_WAKE_UPS, 0);
+    }
+
+    public static String getLastRegistrationFailure() {
+        return stats().getString(KEY_LAST_FAILURE, null);
+    }
+
+    private static void setLastRegistrationFailure(String reason) {
+        stats().edit().putString(KEY_LAST_FAILURE, reason).apply();
+    }
+
+    public static synchronized void resetStats() {
+        stats().edit().clear().apply();
+        eventLog = null;
+    }
+
+    private static ArrayDeque<String> eventLog() {
+        if (eventLog == null) {
+            eventLog = new ArrayDeque<>(EVENT_LOG_SIZE);
+            String saved = stats().getString(KEY_EVENT_LOG, "");
+            if (!saved.isEmpty()) {
+                eventLog.addAll(Arrays.asList(saved.split("\n")));
+            }
+        }
+        return eventLog;
+    }
+
+    public static synchronized void log(String event) {
+        ArrayDeque<String> log = eventLog();
+        if (log.size() == EVENT_LOG_SIZE) {
+            log.removeFirst();
+        }
+        log.addLast(new SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).format(new Date()) + " " + event);
+        stats().edit().putString(KEY_EVENT_LOG, TextUtils.join("\n", log)).apply();
+    }
+
+    public static synchronized String getEventLog() {
+        return TextUtils.join("\n", eventLog());
     }
 
     @Override
     public void onNewEndpoint(PushEndpoint endpoint, String instance) {
+        if (SharedConfig.disableUnifiedPush) {
+            // A distributor re-announcing its endpoint (reboot, distributor update, ntfy
+            // re-subscribe) would otherwise re-register both token types behind the toggle.
+            // Tell it to stop rather than merely ignoring it.
+            org.unifiedpush.android.connector.UnifiedPush.unregister(this, instance);
+            return;
+        }
+        log("endpoint: " + android.net.Uri.parse(endpoint.getUrl()).getHost());
+        setLastRegistrationFailure(null);
+        it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.resetRegistrationBackoff();
         Utilities.globalQueue.postRunnable(() -> {
             SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
             registerEndpointUrl(endpoint.getUrl());
@@ -75,6 +162,7 @@ public class UnifiedPushReceiver extends PushService {
                     }
                 }
             });
+            it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.notifyStateChanged();
         });
     }
 
@@ -84,13 +172,24 @@ public class UnifiedPushReceiver extends PushService {
         }
 
         SharedConfig.setUnifiedPushEndpointUrl(endpointUrl);
+        if (FcmPushProvider.INSTANCE.hasServices()) {
+            return;
+        }
         SharedConfig.ensureWebPushKeys();
 
-        String gateway = SharedConfig.unifiedPushGateway;
-        if (!gateway.endsWith("/")) gateway += "/";
+        String gateway = it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor.gatewayBase();
 
         try {
-            String gatewayUrl = gateway + "aesgcm?e=" + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
+            // The embedded FCM distributor already points at the gateway's /fcm route,
+            // which folds the headers itself and signs the push for FCM. Wrapping it in
+            // /aesgcm would fold twice and strip the VAPID signing.
+            boolean fcm = it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor.isFcmEndpoint(endpointUrl);
+            if (fcm && !SharedConfig.mgEmbeddedFcmChosen) {
+                SharedConfig.setMgEmbeddedFcmChosen(true);
+            }
+            String gatewayUrl = fcm
+                    ? endpointUrl
+                    : gateway + "aesgcm?e=" + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
             String p256dh = android.util.Base64.encodeToString(SharedConfig.webPushPublicKey,
                     android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP);
             String auth = android.util.Base64.encodeToString(SharedConfig.webPushAuthSecret,
@@ -104,7 +203,9 @@ public class UnifiedPushReceiver extends PushService {
             tokenObj.put("keys", keys);
             PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, tokenObj.toString());
 
-            String simplePushUrl = gateway + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
+            String simplePushUrl = fcm
+                    ? endpointUrl
+                    : gateway + URLEncoder.encode(endpointUrl, StandardCharsets.UTF_8.name());
             it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.sendSimplePushRegistration(simplePushUrl);
         } catch (Exception e) {
             FileLog.e(e);
@@ -115,8 +216,8 @@ public class UnifiedPushReceiver extends PushService {
     public void onMessage(PushMessage message, String instance) {
         final long receiveTime = SystemClock.elapsedRealtime();
 
-        lastReceivedNotification = receiveTime;
-        numOfReceivedNotifications++;
+        stats().edit().putLong(KEY_LAST_RECEIVED, System.currentTimeMillis()).apply();
+        bump(KEY_RECEIVED);
 
         // Completion-based WakeLock: released when async work finishes,
         // hard 30s timeout as safety net. Reference-counted so concurrent
@@ -124,11 +225,24 @@ public class UnifiedPushReceiver extends PushService {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         acquireWakeLock(pm);
 
-        // Try WebPush decryption first
-        if (SharedConfig.webPushPrivateKey != null && SharedConfig.webPushPublicKey != null && SharedConfig.webPushAuthSecret != null) {
+        final byte[] content = message.getContent();
+        if (!WebPushDecryptor.looksLikeWebPush(content)) {
+            // Simple Push (token type 4): a bare wake-up with no payload, not a decrypt failure.
+            log("wake-up");
+            bump(KEY_WAKE_UPS);
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("UP wake-up (simple push)");
+            }
+            if (receiveTime - lastWakeUp < WAKEUP_THROTTLE_MS) {
+                releaseWakeLock();
+                return;
+            }
+            lastWakeUp = receiveTime;
+        } else if (SharedConfig.webPushPrivateKey != null && SharedConfig.webPushPublicKey != null && SharedConfig.webPushAuthSecret != null) {
+            // Try WebPush decryption first
             try {
                 byte[] plaintext = WebPushDecryptor.decrypt(
-                        message.getContent(),
+                        content,
                         SharedConfig.webPushPrivateKey,
                         SharedConfig.webPushPublicKey,
                         SharedConfig.webPushAuthSecret
@@ -136,7 +250,8 @@ public class UnifiedPushReceiver extends PushService {
                 // Decrypted payload is JSON {"p":"<base64url-mtproto>"}, same as FCM
                 org.json.JSONObject payloadJson = new org.json.JSONObject(new String(plaintext, StandardCharsets.UTF_8));
                 String encoded = payloadJson.getString("p");
-                numDecryptSuccess++;
+                bump(KEY_DECRYPTED);
+                log("push");
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("WP START PROCESSING (decrypted)");
                 }
@@ -154,7 +269,8 @@ public class UnifiedPushReceiver extends PushService {
                 });
                 return;
             } catch (Exception e) {
-                numDecryptFailed++;
+                bump(KEY_DECRYPT_FAILED);
+                log("push (decrypt failed)");
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("WP DECRYPT ERROR, falling back to wake-up: " + e.getMessage());
                 }
@@ -227,21 +343,37 @@ public class UnifiedPushReceiver extends PushService {
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("Failed to get endpoint: " + reason);
         }
-        SharedConfig.pushStringStatus = "__UNIFIEDPUSH_FAILED__";
-        Utilities.globalQueue.postRunnable(() -> {
-            SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
-            PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, null);
-            it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.unregisterSimplePush();
-        });
+        onRegistrationLost(String.valueOf(reason));
     }
 
     @Override
     public void onUnregistered(String instance) {
-        SharedConfig.pushStringStatus = "__UNIFIEDPUSH_FAILED__";
+        onRegistrationLost("unregistered by the distributor");
+    }
+
+    /**
+     * The connector has already dropped the token and the saved distributor by the time this
+     * runs. Revoking both tokens at Telegram leaves SharedConfig.pushString empty, which is
+     * what lets UnifiedPushListenerServiceProvider.ensureRegistered() register again on the
+     * next reconnect instead of the next cold start.
+     */
+    private static void onRegistrationLost(String reason) {
+        log(reason);
+        if (SharedConfig.pushType == PushListenerController.PUSH_TYPE_WEB) {
+            SharedConfig.pushStringStatus = "__UNIFIEDPUSH_FAILED__";
+        }
+        setLastRegistrationFailure(reason);
+        // Without this the settings screen keeps claiming it is waiting for an endpoint that
+        // will never arrive.
+        it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.notifyStateChanged();
         Utilities.globalQueue.postRunnable(() -> {
             SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
-            PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, null);
-            it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.unregisterSimplePush();
+            // Revoke only UnifiedPush tokens; a late distributor callback
+            // must leave the native Firebase token and registration intact.
+            it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider.revokeServerTokens();
+            if (SharedConfig.pushType == PushListenerController.PUSH_TYPE_WEB) {
+                PushListenerController.sendRegistrationToServer(PushListenerController.PUSH_TYPE_WEB, null);
+            }
         });
     }
 }

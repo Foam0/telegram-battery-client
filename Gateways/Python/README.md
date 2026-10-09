@@ -1,7 +1,12 @@
 # Mercurygram Python Gateway
 
 Reference implementation of the Mercurygram WebPush/UnifiedPush gateway.
-The production deployment uses the Rust gateway (`Gateways/Rust/`).
+The production deployment uses the Rust gateway, which lives in its own
+repository: https://github.com/Mercurygram/aesgcm-proxy
+
+This script covers the two UnifiedPush routes only. It has no `/fcm` route and
+does not sign with VAPID, so the built-in "Google FCM" distributor entry needs
+the Rust proxy or the Cloudflare Worker (`Gateways/CloudflareWorker/`).
 
 ## Requirements
 
@@ -17,7 +22,7 @@ uv run gateway.py
 For production, bind to a UNIX socket:
 
 ```bash
-uv run gateway.py --uds /run/p2p-gateway.sock
+uv run gateway.py --uds /run/aesgcm-proxy.sock
 ```
 
 All options:

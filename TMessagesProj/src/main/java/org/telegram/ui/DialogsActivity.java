@@ -86,12 +86,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
+import androidx.core.graphics.Insets;
 import androidx.core.math.MathUtils;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.LinearSmoothScrollerCustom;
+import org.telegram.ui.recyclerview.LinearSmoothScrollerCustom;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.ViewPager;
 
@@ -283,6 +284,8 @@ import me.vkryl.android.util.ClickHelper;
 
 import it.belloworld.mercurygram.HiddenAccountHelper;
 import it.belloworld.mercurygram.MgDefaultFolder;
+import it.belloworld.mercurygram.MgPins;
+import it.belloworld.mercurygram.folders.MgFolders;
 
 public class DialogsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, FloatingDebugProvider, FactorAnimator.Target, MainTabsActivity.TabFragmentDelegate {
     private final int ADDITIONAL_LIST_HEIGHT_DP = Build.VERSION.SDK_INT >= 31 ? 48 : 0;
@@ -1121,7 +1124,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     blurredView.draw(canvas);
                 }
             }
-            if (!hasMainTabs) {
+            if (!hasMainTabs && communityId == 0) {
                 AndroidUtilities.drawNavigationBarProtection(canvas, this, getThemedColor(Theme.key_windowBackgroundWhite), navigationBarHeight);
             }
             wasDrawn = true;
@@ -1234,6 +1237,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             int keyboardSize = measureKeyboardHeight();
             setBottomClip(paddingBottom);
 
+            final int W = getMeasuredWidth();
+            final int H = getMeasuredHeight();
+
             for (int i = 0; i < count; i++) {
                 final View child = getChildAt(i);
                 if (child == null || child.getVisibility() == GONE) {
@@ -1257,10 +1263,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
                 switch (absoluteGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
                     case Gravity.CENTER_HORIZONTAL:
-                        childLeft = (r - l - width) / 2 + lp.leftMargin - lp.rightMargin;
+                        childLeft = (W - width) / 2 + lp.leftMargin - lp.rightMargin;
                         break;
                     case Gravity.RIGHT:
-                        childLeft = r - width - lp.rightMargin;
+                        childLeft = W - width - lp.rightMargin;
                         break;
                     case Gravity.LEFT:
                     default:
@@ -1272,10 +1278,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         childTop = lp.topMargin + getPaddingTop();
                         break;
                     case Gravity.CENTER_VERTICAL:
-                        childTop = ((b - paddingBottom) - t - height) / 2 + lp.topMargin - lp.bottomMargin;
+                        childTop = ((H - paddingBottom) - height) / 2 + lp.topMargin - lp.bottomMargin;
                         break;
                     case Gravity.BOTTOM:
-                        childTop = ((b - paddingBottom) - t) - height - lp.bottomMargin;
+                        childTop = ((H - paddingBottom)) - height - lp.bottomMargin;
                         break;
                     default:
                         childTop = lp.topMargin;
@@ -2826,7 +2832,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
 
     private NotificationCenter.ObserversGroup observersGroup;
-    private NotificationCenter.ObserversGroup globalObserversGroup;
 
     @Override
     public boolean onFragmentCreate() {
@@ -2887,15 +2892,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
 
         observersGroup = getNotificationCenter().createObserversGroup(this);
-        globalObserversGroup = NotificationCenter.getGlobalInstance().createObserversGroup(this);
 
         if (searchString == null) {
             currentConnectionState = getConnectionsManager().getConnectionState();
 
-            globalObserversGroup.add(NotificationCenter.emojiLoaded);
+            observersGroup.addGlobal(NotificationCenter.emojiLoaded);
             if (!onlySelect) {
-                globalObserversGroup.add(NotificationCenter.closeSearchByActiveAction);
-                globalObserversGroup.add(NotificationCenter.proxySettingsChanged);
+                observersGroup.addGlobal(NotificationCenter.closeSearchByActiveAction);
+                observersGroup.addGlobal(NotificationCenter.proxySettingsChanged);
                 observersGroup.add(NotificationCenter.filterSettingsUpdated);
                 observersGroup.add(NotificationCenter.dialogsUnreadCounterChanged);
             }
@@ -2927,7 +2931,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 .add(NotificationCenter.currentUserPremiumStatusChanged)
                 .add(NotificationCenter.mainUserInfoChanged);
 
-            globalObserversGroup.add(NotificationCenter.didSetPasscode);
+            observersGroup.addGlobal(NotificationCenter.didSetPasscode);
         }
         observersGroup
             .add(NotificationCenter.messagesDeleted)
@@ -3074,10 +3078,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (observersGroup != null) {
             observersGroup.removeAllObservers();
             observersGroup = null;
-        }
-        if (globalObserversGroup != null) {
-            globalObserversGroup.removeAllObservers();
-            globalObserversGroup = null;
         }
 
         if (commentView != null) {
@@ -3774,7 +3774,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     final boolean finalMuteAll = muteAll;
 
                     final MessagesController.DialogFilter finalFilter = filter;
+                    // Mercurygram: the All chats badge follows "Include muted chats", and so does its "Mark all as read"
+                    final boolean skipMuted = defaultTab && !getNotificationsController().showBadgeMuted;
                     for (int i = 0; i < dialogs.size(); i++) {
+                        if (skipMuted && isMutedWithoutMentions(dialogs.get(i))) {
+                            continue;
+                        }
                         if (dialogs.get(i).unread_mark || dialogs.get(i).unread_count > 0) {
                             hasUnread = true;
                         }
@@ -3831,7 +3836,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                 BulletinFactory.createMuteBulletin(DialogsActivity.this, finalMuteAll, count, null).show();
                             })
                             .addIf(hasUnread, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAllAsRead), () -> {
-                                markDialogsAsRead(dialogs);
+                                markDialogsAsRead(dialogs, skipMuted);
                             })
                             .addIf(hasShare, R.drawable.msg_share, FilterCreateActivity.withNew(filter != null && filter.isMyChatlist() ? -1 : 0, LocaleController.getString(R.string.LinkActionShare), true), () -> {
                                 if (shareEmpty[0]) {
@@ -3944,7 +3949,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                 currentCount = 0;
                             }
                             int totalCount = currentCount + alwaysShow.size();
-                            if ((totalCount > getMessagesController().dialogFiltersChatsLimitDefault && !getUserConfig().isPremium()) || totalCount > getMessagesController().dialogFiltersChatsLimitPremium) {
+                            if (!MgFolders.isMercurygram(filter) && ((totalCount > getMessagesController().dialogFiltersChatsLimitDefault && !getUserConfig().isPremium()) || totalCount > getMessagesController().dialogFiltersChatsLimitPremium)) {
                                 showDialog(new LimitReachedBottomSheet(DialogsActivity.this, fragmentView.getContext(), LimitReachedBottomSheet.TYPE_CHATS_IN_FOLDER, currentAccount, null));
                                 return;
                             }
@@ -3952,8 +3957,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         if (filter != null) {
                             if (checked) {
                                 for (int a = 0; a < selectedDialogs.size(); a++) {
-                                    filter.neverShow.add(selectedDialogs.get(a));
-                                    filter.alwaysShow.remove(selectedDialogs.get(a));
+                                    Long did = selectedDialogs.get(a);
+                                    filter.neverShow.add(did);
+                                    filter.alwaysShow.remove(did);
+                                    filter.pinnedDialogs.delete(did);
+                                }
+                                if (filter.isChatlist()) {
+                                    filter.neverShow.clear();
                                 }
                                 FilterCreateActivity.saveFilterToServer(filter, filter.flags, filter.name, filter.entities, filter.title_noanimate, filter.color, filter.alwaysShow, filter.neverShow, filter.pinnedDialogs, false, false, true, true, false, DialogsActivity.this, null);
                                 long did;
@@ -4849,7 +4859,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     topPanelLayout.setViewVisible(fragmentLocationContextViewWrapper, visibility == VISIBLE);
                 }
             };
-            fragmentLocationContextView.isInsideBubble = true;
             fragmentLocationContextViewWrapper.addView(fragmentLocationContextView);
 
             fragmentContextView = new FragmentContextView(context, this, false) {
@@ -4858,8 +4867,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     topPanelLayout.setViewVisible(fragmentContextViewWrapper, visibility == VISIBLE);
                 }
             };
-            fragmentContextView.isInsideBubble = true;
             fragmentContextViewWrapper.addView(fragmentContextView);
+            topPanelLayout.setCallFragmentContextView(fragmentContextView);
 
             dialogsHintCell = new DialogsHintCell(context);
             dialogsHintCell.setBackground(Theme.getSelectorDrawable(false));
@@ -8060,7 +8069,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
 
 
-            if ((!getMessagesController().isForum(dialogId) || isBotForumWithEmptyTopics(dialogId)) && (!selectedDialogs.isEmpty() || (initialDialogsType == DIALOGS_TYPE_FORWARD && selectAlertString != null))) {
+            if ((!getMessagesController().isForum(dialogId) && !getMessagesController().isCommunity(dialogId) || isBotForumWithEmptyTopics(dialogId)) && (!selectedDialogs.isEmpty() || (initialDialogsType == DIALOGS_TYPE_FORWARD && selectAlertString != null))) {
                 if (!selectedDialogs.contains(dialogId) && !checkCanWrite(dialogId)) {
                     return;
                 }
@@ -8751,7 +8760,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             int maxPinnedCount;
             if (containsFilter && filter != null) {
-                maxPinnedCount = 100 - filter.alwaysShow.size();
+                maxPinnedCount = MgFolders.maxPinned(getMessagesController(), getUserConfig().isPremium(), filter, pinnedCount); // MG: pinned chats already sit in alwaysShow, and the cap is the chats-per-folder limit
             } else if (folderId != 0 || filter != null) {
                 if (getUserConfig().isPremium()) {
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountPremium;
@@ -8759,11 +8768,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountDefault;
                 }
             } else {
-                if (getUserConfig().isPremium()) {
-                    maxPinnedCount = getMessagesController().maxPinnedDialogsCountPremium;
-                } else {
-                    maxPinnedCount = getMessagesController().maxPinnedDialogsCountDefault;
-                }
+                maxPinnedCount = MgPins.maxPinned(currentAccount); // MG: All chats takes as many pins as a folder does
             }
             hasPinAction[0] = !(newPinnedSecretCount + pinnedSecretCount > maxPinnedCount || newPinnedCount + pinnedCount - alreadyAdded > maxPinnedCount);
         }
@@ -9150,6 +9155,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             movingDialogFilters.clear();
         }
         if (movingWas) {
+            MgPins.saveOrder(currentAccount); // MG: one write per drag, not one per row crossed
             getMessagesController().reorderPinnedDialogs(folderId, null, 0);
             movingWas = false;
         }
@@ -9287,7 +9293,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             int maxPinnedCount;
             if (containsFilter) {
-                maxPinnedCount = 100 - filter.alwaysShow.size();
+                maxPinnedCount = MgFolders.maxPinned(getMessagesController(), getUserConfig().isPremium(), filter, pinnedCount); // MG: pinned chats already sit in alwaysShow, and the cap is the chats-per-folder limit
             } else if (folderId != 0 || filter != null) {
                 if (UserConfig.getInstance(currentAccount).isPremium()) {
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountPremium;
@@ -9295,15 +9301,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountDefault;
                 }
             } else {
-                maxPinnedCount = getUserConfig().isPremium() ? getMessagesController().dialogFiltersPinnedLimitPremium : getMessagesController().dialogFiltersPinnedLimitDefault;
+                maxPinnedCount = MgPins.maxPinned(currentAccount); // MG: All chats takes as many pins as a folder does
             }
             if (newPinnedSecretCount + pinnedSecretCount > maxPinnedCount || newPinnedCount + pinnedCount - alreadyAdded > maxPinnedCount) {
-                if (folderId != 0 || filter != null) {
-                    AlertsCreator.showSimpleAlert(DialogsActivity.this, LocaleController.formatString("PinFolderLimitReached", R.string.PinFolderLimitReached, LocaleController.formatPluralString("Chats", maxPinnedCount)));
-                } else {
-                    LimitReachedBottomSheet limitReachedBottomSheet = new LimitReachedBottomSheet(this, getParentActivity(), LimitReachedBottomSheet.TYPE_PIN_DIALOGS, currentAccount, null);
-                    showDialog(limitReachedBottomSheet);
-                }
+                // MG: the same plain alert everywhere, the All chats cap is no longer the one Premium doubles
+                AlertsCreator.showSimpleAlert(DialogsActivity.this, LocaleController.formatString("PinFolderLimitReached", R.string.PinFolderLimitReached, LocaleController.formatPluralString("Chats", maxPinnedCount)));
                 return;
             }
         } else if (action == community_ungroup) {
@@ -9643,7 +9645,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         getMessagesController().markDialogAsUnread(did, null, 0);
     }
 
-    private void markDialogsAsRead(ArrayList<TLRPC.Dialog> dialogs) {
+    // Mercurygram: what Telegram Desktop skips in "Mark all as read" when muted chats are not counted
+    private boolean isMutedWithoutMentions(TLRPC.Dialog dialog) {
+        return dialog.unread_mentions_count == 0 && getMessagesController().isDialogMuted(dialog.id, 0);
+    }
+
+    private void markDialogsAsRead(ArrayList<TLRPC.Dialog> dialogs, boolean skipMuted) {
         debugLastUpdateAction = 2;
         int selectedDialogIndex = -1;
 
@@ -9652,11 +9659,22 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         for (int i = 0; i < dialogs.size(); i++) {
             long did = dialogs.get(i).id;
             TLRPC.Dialog dialog = dialogs.get(i);
+            if (skipMuted && isMutedWithoutMentions(dialog)) {
+                continue;
+            }
             if (getMessagesController().isForum(did) || getMessagesController().isMonoForumWithManageRights(did)) {
                 getMessagesController().markAllTopicsAsRead(did);
             }
-            getMessagesController().markMentionsAsRead(did, 0);
-            getMessagesController().markDialogAsRead(did, dialog.top_message, dialog.top_message, dialog.last_message_date, false, 0, 0, true, 0);
+            // Mercurygram: send requests only for what is unread, as Telegram Desktop does.
+            // A readHistory and a readMentions for every dialog of the tab, read or not,
+            // flood-waits a large account for minutes. Forum topics are filtered the same
+            // way in markAllTopicsAsRead.
+            if (dialog.unread_mentions_count > 0) {
+                getMessagesController().markMentionsAsRead(did, 0);
+            }
+            if (dialog.unread_count > 0 || dialog.unread_mark) {
+                getMessagesController().markDialogAsRead(did, dialog.top_message, dialog.top_message, dialog.last_message_date, false, 0, 0, true, 0);
+            }
         }
         if (selectedDialogIndex >= 0) {
             frozenDialogsList.remove(selectedDialogIndex);
@@ -10002,7 +10020,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
         }
         if (addToFolderItem != null) {
-            if (folderId == 1 || filterTabsView != null && getFilterTabsVisibilityFactor(false) > 0.5f && filterTabsView.currentTabIsDefault() && !FiltersListBottomSheet.getCanAddDialogFilters(this, selectedDialogs).isEmpty()) {
+            if (folderId == 1 || filterTabsView != null && getFilterTabsVisibilityFactor(false) > 0.5f && !FiltersListBottomSheet.getCanAddDialogFilters(this, selectedDialogs).isEmpty()) {
                 addToFolderItem.setVisibility(View.VISIBLE);
             } else {
                 addToFolderItem.setVisibility(View.GONE);
@@ -10648,7 +10666,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && (mask & MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE) != 0) {
                 filterTabsView.checkTabsCounter();
             }
-            if (communityId != 0 ) {
+            // the avatar view is only created for the community chat list, not for the picker
+            if (communityId != 0 && communityAvatarImage != null) {
                 if ((mask & MessagesController.UPDATE_MASK_CHAT) != 0 || (mask & MessagesController.UPDATE_MASK_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_CHAT_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_CHAT_NAME) != 0) {
                     community = getMessagesController().getChat(communityId);
                     actionBar.setTitle(DialogObject.getName(community));
@@ -11717,6 +11736,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     public boolean isArchive() {
         return folderId == 1;
+    }
+
+    public boolean isCommunity() {
+        return communityId != 0;
     }
 
     public int getType() {
@@ -13870,8 +13893,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private WindowInsetsCompat onApplyWindowInsets(@NonNull View v, @NonNull WindowInsetsCompat insets) {
         windowInsetsStateHolder.setInsets(insets);
 
-        statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
-        navigationBarHeight = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+        final Insets systemInsets = AndroidUtilities.getDefaultWindowInsets(insets, false);
+        statusBarHeight = systemInsets.top;
+        navigationBarHeight = systemInsets.bottom;
         final int imeInsetHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
         if (this.imeInsetHeight != imeInsetHeight) {
             this.imeInsetHeight = imeInsetHeight;
