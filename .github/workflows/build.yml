@@ -172,6 +172,7 @@ jobs:
           fi
 
           python3 scripts/check-firebase-apk.py "$source_apk" "$aapt"
+          python3 scripts/check-client-localization.py "$source_apk"
 
           cp "$source_apk" "$release_apk"
           sha256sum "$release_apk"
