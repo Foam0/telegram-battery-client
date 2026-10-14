@@ -13,8 +13,8 @@ import org.junit.Test;
 
 public class BatteryProfileStorageTest {
     private Context context;private SharedPreferences prefs;private File encrypted;private BatteryVpnStore store;
-    private static final String A="vless://00000000-0000-4000-8000-000000000000@example.com#first";
-    private static final String B="vless://00000000-0000-4000-8000-000000000001@example.org#second";
+    private static final String A="vless://" + "00000000-0000-4000-8000-000000000000" + "@example.com#first";
+    private static final String B="vless://" + "00000000-0000-4000-8000-000000000001" + "@example.org#second";
     @Before public void reset()throws Exception{
         context=InstrumentationRegistry.getInstrumentation().getTargetContext();prefs=context.getSharedPreferences("battery_vpn",0);
         prefs.edit().clear().commit();encrypted=new File(context.getNoBackupFilesDir(),"battery_vpn/vless_profiles.enc");

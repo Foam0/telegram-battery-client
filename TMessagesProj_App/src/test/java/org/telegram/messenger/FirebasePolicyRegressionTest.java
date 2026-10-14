@@ -6,6 +6,9 @@ import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.messaging.FirebaseMessaging;
+import org.robolectric.shadows.ShadowLooper;
 import com.google.android.gms.common.GoogleApiAvailabilityLight;
 import it.belloworld.mercurygram.push.MgEmbeddedFcmDistributor;
 import it.belloworld.mercurygram.push.UnifiedPushListenerServiceProvider;
@@ -18,7 +21,7 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(application=Application.class,sdk=30)
+@Config(application=Application.class,sdk=30,shadows=PushRegistrationRegressionTest.ImmediateQueue.class)
 public class FirebasePolicyRegressionTest {
     private Context context;
     @Before public void setUp(){
@@ -90,4 +93,47 @@ public class FirebasePolicyRegressionTest {
         assertTrue(b.batteryAccountNotificationsEnabled);assertTrue(b.batteryAccountNotificationSound);assertFalse(b.batteryAccountNotificationVibrate);
         assertEquals(32,UserConfig.MAX_ACCOUNT_COUNT);
     }
+    @Test public void firebaseFailureUsesBackoffAndNeverTurnsOnBackgroundPolling(){
+        FirebaseMessaging firebase=mock(FirebaseMessaging.class);
+        try(MockedStatic<FirebaseMessaging> api=mockStatic(FirebaseMessaging.class);
+            MockedStatic<PushListenerController> registration=mockStatic(PushListenerController.class);
+            MockedStatic<MgEmbeddedFcmDistributor> distributors=mockStatic(MgEmbeddedFcmDistributor.class)){
+            api.when(FirebaseMessaging::getInstance).thenReturn(firebase);
+            FcmPushProvider.fallbackToUnifiedPush();
+            assertTrue(context.getSharedPreferences("battery_fcm",0).getLong("disabledUntil",0)>System.currentTimeMillis());
+            SharedPreferences fallback=MessagesController.getGlobalNotificationsSettings();
+            assertFalse(fallback.getBoolean("pushService",false));assertFalse(fallback.getBoolean("pushConnection",false));
+            registration.verify(()->PushListenerController.sendRegistrationToServer(2,null));
+        }
+    }
+    @Test public void legacyBackgroundFallbackIsRemovedOnlyOnce(){
+        FirebaseMessaging firebase=mock(FirebaseMessaging.class);
+        try(MockedStatic<FirebaseMessaging> api=mockStatic(FirebaseMessaging.class)){
+            api.when(FirebaseMessaging::getInstance).thenReturn(firebase);
+            SharedPreferences fallback=MessagesController.getGlobalNotificationsSettings();
+            fallback.edit().putBoolean("pushService",true).putBoolean("pushConnection",true).commit();
+            FcmPushProvider.onPreferenceChanged(true);
+            assertFalse(fallback.getBoolean("pushService",true));assertFalse(fallback.getBoolean("pushConnection",true));
+            fallback.edit().putBoolean("pushService",true).putBoolean("pushConnection",true).commit();
+            FcmPushProvider.onPreferenceChanged(true);
+            assertTrue(fallback.getBoolean("pushService",false));assertTrue(fallback.getBoolean("pushConnection",false));
+        }
+    }
+    @Test public void legacyTokenMigrationRotatesOnceThenReusesTheCachedToken(){
+        SharedConfig.enableFirebasePush=true;
+        FirebaseMessaging firebase=mock(FirebaseMessaging.class);
+        when(firebase.deleteToken()).thenReturn(Tasks.forResult(null));
+        when(firebase.getToken()).thenReturn(Tasks.forResult("new-token"));
+        try(MockedStatic<FirebaseMessaging> api=mockStatic(FirebaseMessaging.class);
+            MockedStatic<PushListenerController> registration=mockStatic(PushListenerController.class)){
+            api.when(FirebaseMessaging::getInstance).thenReturn(firebase);
+            FcmPushProvider.INSTANCE.onRequestPushToken();ShadowLooper.idleMainLooper();
+            verify(firebase,times(1)).deleteToken();verify(firebase,times(1)).getToken();
+            assertTrue(context.getSharedPreferences("battery_fcm",0).getBoolean("sdk25TokenRefreshedV1",false));
+            FcmPushProvider.INSTANCE.onRequestPushToken();ShadowLooper.idleMainLooper();
+            verify(firebase,times(1)).deleteToken();verify(firebase,times(2)).getToken();
+            registration.verify(()->PushListenerController.sendRegistrationToServer(2,"new-token"),times(2));
+        }
+    }
+
 }

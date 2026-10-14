@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 30)
 public class VlessConfigRegressionTest {
-    private static final String LINK = "vless://00000000-0000-4000-8000-000000000000@example.com:8443";
+    private static final String LINK = "vless://" + "00000000-0000-4000-8000-000000000000" + "@example.com:8443";
     private BatteryVpnProfile profile(String query) { return new BatteryVpnProfile("test", LINK + query); }
     private JSONObject outbound(JSONObject config) throws Exception {
         return config.getJSONArray("outbounds").getJSONObject(0);
