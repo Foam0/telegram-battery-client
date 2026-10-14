@@ -29,21 +29,23 @@ class TelegramBuildAppPlugin : Plugin<Project> {
                 // (localeFilters), every localized value is read back from the
                 // generated localization_<tag>.bin, so MG keys have to go
                 // through this task too or they only ever render in English.
+                // Battery Client labels need the same binary namespace; Android
+                // XML resources alone are not a LocaleController fallback.
                 stringsXml.from(
                     telegramModule.fileTree("src/main/res/values") {
-                        include("strings.xml", "mg_strings.xml")
+                        include("strings.xml", "mg_strings.xml", "battery_client_strings.xml")
                     },
                     project.fileTree("src/main/res/values") {
-                        include("strings.xml", "mg_strings.xml")
+                        include("strings.xml", "mg_strings.xml", "battery_client_strings.xml")
                     }
                 )
 
                 localizationFiles.from(
                     telegramModule.fileTree("src/main/res") {
-                        include("values-*/strings.xml", "values-*/mg_strings.xml")
+                        include("values-*/strings.xml", "values-*/mg_strings.xml", "values-*/battery_client_strings.xml")
                     },
                     project.fileTree("src/main/res") {
-                        include("values-*/strings.xml", "values-*/mg_strings.xml")
+                        include("values-*/strings.xml", "values-*/mg_strings.xml", "values-*/battery_client_strings.xml")
                     }
                 )
 
