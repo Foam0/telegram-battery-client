@@ -97,7 +97,9 @@ public class FirebasePolicyRegressionTest {
         FirebaseMessaging firebase=mock(FirebaseMessaging.class);
         try(MockedStatic<FirebaseMessaging> api=mockStatic(FirebaseMessaging.class);
             MockedStatic<PushListenerController> registration=mockStatic(PushListenerController.class);
-            MockedStatic<MgEmbeddedFcmDistributor> distributors=mockStatic(MgEmbeddedFcmDistributor.class)){
+            MockedStatic<MgEmbeddedFcmDistributor> distributors=mockStatic(MgEmbeddedFcmDistributor.class);
+            MockedStatic<MessagesController> messages=mockStatic(MessagesController.class)){
+            messages.when(MessagesController::getGlobalNotificationsSettings).thenReturn(context.getSharedPreferences("Notifications",0));
             api.when(FirebaseMessaging::getInstance).thenReturn(firebase);
             FcmPushProvider.fallbackToUnifiedPush();
             assertTrue(context.getSharedPreferences("battery_fcm",0).getLong("disabledUntil",0)>System.currentTimeMillis());
@@ -108,7 +110,9 @@ public class FirebasePolicyRegressionTest {
     }
     @Test public void legacyBackgroundFallbackIsRemovedOnlyOnce(){
         FirebaseMessaging firebase=mock(FirebaseMessaging.class);
-        try(MockedStatic<FirebaseMessaging> api=mockStatic(FirebaseMessaging.class)){
+        try(MockedStatic<FirebaseMessaging> api=mockStatic(FirebaseMessaging.class);
+            MockedStatic<MessagesController> messages=mockStatic(MessagesController.class)){
+            messages.when(MessagesController::getGlobalNotificationsSettings).thenReturn(context.getSharedPreferences("Notifications",0));
             api.when(FirebaseMessaging::getInstance).thenReturn(firebase);
             SharedPreferences fallback=MessagesController.getGlobalNotificationsSettings();
             fallback.edit().putBoolean("pushService",true).putBoolean("pushConnection",true).commit();
