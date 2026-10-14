@@ -34,6 +34,8 @@ jobs:
         run: |
           base=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
           ./gradlew -PMG_BUILD_TAG="${base}.0.99" :TMessagesProj_App:testAfatFdArm64HardenedUnitTest --no-daemon
+      - name: Require executed passing unit tests
+        run: python3 scripts/check-client-test-results.py TMessagesProj_App/build/test-results/testAfatFdArm64HardenedUnitTest --minimum 33
       - name: Upload unit test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -69,6 +71,8 @@ jobs:
         run: |
           base=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
           ./gradlew -PMG_BUILD_TAG="${base}.0.99" :BatteryStorageTests:api30DebugAndroidTest --no-daemon
+      - name: Require executed passing Android tests
+        run: python3 scripts/check-client-test-results.py BatteryStorageTests/build/outputs/androidTest-results --minimum 9
       - name: Upload Android test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
