@@ -39,3 +39,6 @@ dependencyResolutionManagement {
 
 gradle.ext.androidxMediaModulePrefix = 'TMessagesProj_Modules:media3:media-'
 apply from: file("$mediaModuleDir/core_settings.gradle")
+
+// Isolated test app exercises the actual Android Keystore profile store.
+include ':BatteryStorageTests'
