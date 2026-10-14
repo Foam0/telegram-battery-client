@@ -1,0 +1,83 @@
+name: Battery Client regression tests
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: ['codex/battery-regression-tests']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.25.3'
+          cache: false
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Prepare test-only configuration
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+          printf 'APP_ID = 0\nAPP_HASH = 00000000000000000000000000000000\n' > API_KEYS
+      - name: Test production client logic and resource lookup
+        run: |
+          base=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
+          ./gradlew -PMG_BUILD_TAG="${base}.0.99" :TMessagesProj_App:testAfatFdArm64HardenedUnitTest --no-daemon
+      - name: Require executed passing unit tests
+        run: python3 scripts/check-client-test-results.py TMessagesProj_App/build/test-results/testAfatFdArm64HardenedUnitTest --minimum 33
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: client-unit-tests
+          path: |
+            TMessagesProj_App/build/reports/tests/
+            TMessagesProj_App/build/test-results/
+  android-store:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Prepare test-only configuration
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'emulator' 'system-images;android-30;default;x86_64'
+          printf 'APP_ID = 0\nAPP_HASH = 00000000000000000000000000000000\n' > API_KEYS
+      - name: Test real Android Keystore and profile migrations
+        run: |
+          base=$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties)
+          ./gradlew -PMG_BUILD_TAG="${base}.0.99" :BatteryStorageTests:api30DebugAndroidTest --no-daemon
+      - name: Require executed passing Android tests
+        run: python3 scripts/check-client-test-results.py BatteryStorageTests/build/outputs/androidTest-results --minimum 9
+      - name: Upload Android test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: client-android-storage-tests
+          path: |
+            BatteryStorageTests/build/reports/androidTests/
+            BatteryStorageTests/build/outputs/androidTest-results/

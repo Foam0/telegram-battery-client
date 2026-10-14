@@ -5,6 +5,7 @@ import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
 import com.drew.metadata.mov.QuickTimeDirectory;
+import com.drew.metadata.mp4.Mp4Directory;
 import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
 
 import org.telegram.messenger.FileLog;
@@ -64,6 +65,11 @@ final class Mp4MetadataReport {
     }
 
     private static Date findCreationDate(Metadata metadata) {
+        Mp4Directory mp4 = metadata.getFirstDirectoryOfType(Mp4Directory.class);
+        Date mp4Date = mp4 == null ? null : mp4.getDate(Mp4Directory.TAG_CREATION_TIME);
+        if (isMeaningful(mp4Date)) {
+            return mp4Date;
+        }
         QuickTimeDirectory movie = metadata.getFirstDirectoryOfType(QuickTimeDirectory.class);
         Date date = movie == null ? null : movie.getDate(QuickTimeDirectory.TAG_CREATION_TIME);
         if (isMeaningful(date)) {

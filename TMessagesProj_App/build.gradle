@@ -18,12 +18,25 @@ configurations.all {
 }
 
 dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation files('../TMessagesProj/libs/libbox.aar')
+    testImplementation 'org.robolectric:robolectric:4.17'
+    testImplementation 'org.mockito:mockito-core:5.20.0'
+    testImplementation 'com.google.firebase:firebase-messaging:25.1.2'
+    testImplementation 'org.unifiedpush.android:connector:3.0.10'
+    testImplementation 'org.unifiedpush.android:embedded-fcm-distributor:3.0.0'
     implementation project(':TMessagesProj')
     implementation 'androidx.multidex:multidex:2.0.1'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
 
 android {
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            maxHeapSize = '4g'
+        }
+    }
     compileSdkVersion 36
     buildToolsVersion '36.0.0'
 

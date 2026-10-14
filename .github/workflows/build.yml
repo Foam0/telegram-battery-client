@@ -19,7 +19,11 @@ permissions:
   contents: read
 
 jobs:
+  regression-tests:
+    uses: ./.github/workflows/client-tests.yml
+
   build-arm64-beta:
+    needs: regression-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     environment:

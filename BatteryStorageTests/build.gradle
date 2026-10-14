@@ -1,0 +1,40 @@
+// Test-only app compiles the production profile store directly. No copy of its
+// implementation, Telegram login, release credentials, or native code is used.
+apply plugin: 'com.android.application'
+android {
+    namespace 'it.belloworld.mercurygram.storage.tests'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'it.belloworld.mercurygram.storage.tests'
+        minSdk 24
+        targetSdk 36
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    sourceSets.main.java.srcDirs = ["$buildDir/generated/productionStore"]
+    testOptions.managedDevices.localDevices {
+        api30 {
+            device = 'Pixel 5'
+            apiLevel = 30
+            systemImageSource = 'aosp'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+dependencies {
+    androidTestImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+}
+
+tasks.register('copyProductionStore', Sync) {
+    from '../TMessagesProj/src/main/java'
+    include 'it/belloworld/mercurygram/vpn/BatteryVpnStore.java'
+    include 'it/belloworld/mercurygram/vpn/BatteryVpnProfile.java'
+    include 'it/belloworld/mercurygram/vpn/VlessUriParser.java'
+    include 'it/belloworld/mercurygram/vpn/ParsedVless.java'
+    into "$buildDir/generated/productionStore"
+}
+tasks.named('preBuild').configure { dependsOn 'copyProductionStore' }
